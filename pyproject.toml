@@ -13,4 +13,4 @@ select = ["E", "F", "W", "I"]
 ignore = ["E501"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["accounts", "clients", "core", "intake", "projects"]
+known-first-party = ["accounts", "clients", "core", "documents", "intake", "projects"]

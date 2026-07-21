@@ -110,6 +110,30 @@ a:hover {
     margin: 0;
 }
 
+.header-timer {
+    margin-left: auto;
+    margin-right: 1rem;
+}
+
+.header-timer__running {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    color: #fff;
+}
+
+.header-timer__running a {
+    color: #fff;
+    font-weight: 700;
+    text-decoration: none;
+}
+
+.timer-clock {
+    font-variant-numeric: tabular-nums;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+}
+
 .company-logo {
     width: 36px;
     height: 36px;
@@ -257,6 +281,18 @@ a:hover {
 .note-body { margin-bottom: 0.5rem; }
 .note-meta { display: flex; gap: 0.75rem; margin-bottom: 0.75rem; color: #6c7d8d; font-size: 0.8rem; }
 .note-source { padding: 1rem 1.25rem; background: #f5f8fa; border-left: 4px solid #7b9ab5; }
+.running-card { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 1rem 1.25rem; margin-bottom: 1rem; color: #17324d; background: #e7f4eb; border: 1px solid #b9dbc4; border-radius: 0.65rem; }
+.running-card small { display: block; color: #587064; }
+.running-actions { display: flex; align-items: center; gap: 1rem; }
+.running-actions .timer-clock { font-size: 1.4rem; }
+.running-actions form { margin: 0; }
+.filter-bar { display: flex; align-items: end; flex-wrap: wrap; gap: 0.75rem; margin-bottom: 1rem; }
+.filter-bar .form-field { min-width: 150px; }
+.time-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 1rem; padding: 0.9rem 0; border-bottom: 1px solid #e8edf1; }
+.time-row:last-child { border-bottom: 0; }
+.time-row small { display: block; margin-top: 0.2rem; color: #6c7d8d; }
+.time-value { min-width: 115px; text-align: right; }
+.pagination-nav { display: flex; justify-content: center; gap: 1rem; padding: 1rem; }
 .form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; max-width: 960px; }
 .form-field { min-width: 0; }
 .form-field label { display: block; margin-bottom: 0.3rem; font-weight: 600; }
@@ -389,5 +425,29 @@ button[type="submit"]:not(.btn):hover {
 
     .auth-main {
         margin-top: 2rem;
+    }
+
+    .app-header {
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
+
+    .header-timer {
+        order: 3;
+        width: 100%;
+        margin: 0;
+    }
+
+    .header-timer__running {
+        justify-content: center;
+    }
+
+    .time-row {
+        grid-template-columns: 1fr auto;
+    }
+
+    .time-row > .btn {
+        grid-column: 1 / -1;
+        justify-self: start;
     }
 }

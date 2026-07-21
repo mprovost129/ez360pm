@@ -28,6 +28,7 @@ locked decision requires an explicit update to the product specification.
 | Use explicit transactional services, not signals, for financial/state changes | makes ordering, locking, repetition, and tests visible |
 | Add `DocumentDelivery` | recipient selection and send history otherwise have no durable representation |
 | Use a locked sequence record for generated numbers | avoids collision-prone `max + 1` logic and remains SaaS-safe |
+| Add `TimeEntry.line_item` with the Phase 3 documents migration | avoids a premature cross-app placeholder; Phase 2 exposes no invoicing action |
 | Treat the accepted Document fields as the durable acceptance record | accepted proposals are immutable and permanent; avoid duplicate acceptance storage |
 | Use `PROTECT` around financial history | prevents accidental cascade deletion of audit records |
 | Store timestamps in UTC and localize at presentation boundaries | required for durable timers and consistent server behavior |

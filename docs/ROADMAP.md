@@ -57,13 +57,13 @@ The architecture, relationships, and screen map are detailed in:
 
 ### Implementation status - 2026-07-21
 
-- **Phases 0-1 code: complete and tested.** Thirty-six account, isolation,
-  intake, client/contact, project, command, health, and dashboard tests pass on
-  PostgreSQL. Lint, dependency, Django system checks, migration-drift checks, and
-  the deployment check pass.
+- **Phases 0-2 code: complete and tested.** Forty-seven account, isolation,
+  intake, client/contact, project, timer/time-entry, command, health, and dashboard
+  tests pass on PostgreSQL. Lint, dependency, Django system checks,
+  migration-drift checks, and the deployment check pass.
 - **Phase 0 operations: pending.** Bootstrap the real owner with an environment-
   supplied password and deploy the authenticated shell.
-- **Next code milestone:** Phase 2 durable time tracking.
+- **Next code milestone:** Phase 3 invoices and manual payments.
 
 ### Workflow traceability
 
@@ -121,7 +121,7 @@ A new call can be captured with only note text, converted into a client with a
 primary contact, attached to a newly numbered lead project, and archived without
 losing the original intake wording.
 
-### Phase 2 - Durable time tracking
+### Phase 2 - Durable time tracking (code complete)
 
 **Goal:** make EZ360PM the source of truth for project time.
 

@@ -1,0 +1,18 @@
+{% extends 'base.html' %}
+
+{% block title %}Start timer | EZ360PM{% endblock %}
+
+{% block content %}
+<div class="page-heading"><h1>Start timer</h1></div>
+<form method="post" class="content-card form-grid narrow-card" novalidate>
+    {% csrf_token %}
+    {{ form.non_field_errors }}
+    {% for field in form %}
+    <div class="form-field{% if field.errors %} form-field--error{% endif %}">
+        {% if field.field.widget.input_type == 'checkbox' %}<label class="checkbox-label">{{ field }} {{ field.label }}</label>{% else %}<label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{% endif %}
+        {{ field.errors }}
+    </div>
+    {% endfor %}
+    <div class="form-actions"><button class="btn btn-success" type="submit"><i class="bi bi-play-fill" aria-hidden="true"></i> Start timer</button></div>
+</form>
+{% endblock %}

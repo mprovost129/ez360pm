@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import views
+from . import time_views, views
 
 app_name = "projects"
 
@@ -10,5 +10,9 @@ urlpatterns = [
     path("<int:pk>/", views.ProjectDetailView.as_view(), name="detail"),
     path("<int:pk>/edit/", views.ProjectUpdateView.as_view(), name="update"),
     path("<int:pk>/delete/", views.ProjectDeleteView.as_view(), name="delete"),
+    path("time/", time_views.TimeEntryListView.as_view(), name="time-list"),
+    path("time/start/", time_views.TimerStartView.as_view(), name="timer-start"),
+    path("time/stop/", time_views.timer_stop, name="timer-stop"),
+    path("time/new/", time_views.TimeEntryCreateView.as_view(), name="time-create"),
+    path("time/<int:pk>/edit/", time_views.TimeEntryUpdateView.as_view(), name="time-update"),
 ]
-

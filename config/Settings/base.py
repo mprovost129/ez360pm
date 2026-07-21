@@ -28,6 +28,7 @@ INSTALLED_APPS = [
     'clients.apps.ClientsConfig',
     'projects.apps.ProjectsConfig',
     'intake.apps.IntakeConfig',
+    'documents.apps.DocumentsConfig',
     'core.apps.CoreConfig',
 ]
 
@@ -67,6 +68,7 @@ TEMPLATES = [
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
                 'intake.context_processors.quick_note',
+                'projects.context_processors.running_timer',
             ],
         },
     },

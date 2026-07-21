@@ -161,6 +161,14 @@ PDFs, and dashboards use the same definitions.
 | Overdue | non-void invoice with balance > 0 and due date before local today |
 | Received revenue | sum of Payment amounts in the selected received-date period |
 
+## Implementation staging
+
+Phase 2 creates `TimeEntry` with its timer, reporting, status, and billing flags.
+The nullable `line_item` relationship is intentionally added in the Phase 3
+documents migration, when `LineItem` first exists. No time can be marked invoiced
+through the Phase 2 interface, so this staging does not create an unattached
+invoiced state in normal use.
+
 ## Document subtype validation
 
 One `Document` table intentionally serves proposals and invoices. Validation must

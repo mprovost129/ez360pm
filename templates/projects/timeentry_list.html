@@ -1,0 +1,57 @@
+{% extends 'base.html' %}
+
+{% block title %}Time | EZ360PM{% endblock %}
+
+{% block content %}
+<div class="page-heading">
+    <h1>Time</h1>
+    <div class="button-group">
+        <a class="btn btn-success" href="{% url 'projects:timer-start' %}">Start timer</a>
+        <a class="btn btn-primary" href="{% url 'projects:time-create' %}">Add manual entry</a>
+    </div>
+</div>
+
+{% if running_time_entry %}
+<section class="running-card" data-running-timer data-timer-start="{{ running_time_entry.start_time|date:'c' }}">
+    <div>
+        <p class="eyebrow">Timer running</p>
+        <strong>{{ running_time_entry.project.number }} · {{ running_time_entry.project.name }}</strong>
+        {% if running_time_entry.description %}<small>{{ running_time_entry.description }}</small>{% endif %}
+    </div>
+    <div class="running-actions">
+        <span class="timer-clock" data-timer-clock>00:00:00</span>
+        <form method="post" action="{% url 'projects:timer-stop' %}">{% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}"><button class="btn btn-danger" type="submit">Stop</button></form>
+    </div>
+</section>
+{% endif %}
+
+<form method="get" class="content-card filter-bar">
+    {% for field in filter_form %}<div class="form-field"><label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}</div>{% endfor %}
+    <button class="btn btn-light" type="submit">Filter</button>
+    <a class="btn btn-link" href="{% url 'projects:time-list' %}">Clear</a>
+</form>
+
+<section class="content-card time-ledger">
+    {% for entry in time_entries %}
+    <article class="time-row">
+        <div>
+            <strong><a href="{% url 'projects:detail' entry.project.pk %}">{{ entry.project.number }} · {{ entry.project.name }}</a></strong>
+            <small>{{ entry.start_time|date:'M j, Y g:i a' }}{% if entry.description %} · {{ entry.description }}{% endif %}</small>
+        </div>
+        <div class="time-value">
+            {% if entry.is_running %}<span class="status-badge">Running</span>{% else %}<strong>{{ entry.duration_hours }} h</strong>{% endif %}
+            <small>{% if entry.billable %}Billable{% else %}Non-billable{% endif %} · {{ entry.get_status_display }}</small>
+        </div>
+        {% if not entry.is_running and entry.status == 'logged' %}<a class="btn btn-sm btn-light" href="{% url 'projects:time-update' entry.pk %}">Edit</a>{% endif %}
+    </article>
+    {% empty %}<div class="empty-state">No time entries match these filters.</div>{% endfor %}
+</section>
+
+{% if is_paginated %}
+<nav class="pagination-nav" aria-label="Time entry pages">
+    {% if page_obj.has_previous %}<a href="?page={{ page_obj.previous_page_number }}">Previous</a>{% endif %}
+    <span>Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+    {% if page_obj.has_next %}<a href="?page={{ page_obj.next_page_number }}">Next</a>{% endif %}
+</nav>
+{% endif %}
+{% endblock %}

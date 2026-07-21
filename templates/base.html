@@ -20,6 +20,21 @@
             {% endif %}
             <span>{{ user.company.name }}</span>
         </a>
+        <div class="header-timer">
+            {% if running_time_entry %}
+            <div class="header-timer__running" data-running-timer data-timer-start="{{ running_time_entry.start_time|date:'c' }}">
+                <a href="{% url 'projects:detail' running_time_entry.project.pk %}">{{ running_time_entry.project.number }}</a>
+                <span class="timer-clock" data-timer-clock>00:00:00</span>
+                <form method="post" action="{% url 'projects:timer-stop' %}">
+                    {% csrf_token %}
+                    <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                    <button class="btn btn-sm btn-danger" type="submit">Stop</button>
+                </form>
+            </div>
+            {% else %}
+            <a class="btn btn-sm btn-success" href="{% url 'projects:timer-start' %}"><i class="bi bi-play-fill" aria-hidden="true"></i> Start timer</a>
+            {% endif %}
+        </div>
         <div class="d-flex align-items-center gap-3">
             <span class="text-light small d-none d-sm-inline">{{ user.get_short_name|default:user.email }}</span>
             <form method="post" action="{% url 'accounts:logout' %}">
@@ -45,6 +60,7 @@
                 <a class="nav-link" href="{% url 'intake:list' %}"><i class="bi bi-inbox" aria-hidden="true"></i>Notes</a>
                 <a class="nav-link" href="{% url 'clients:list' %}"><i class="bi bi-people" aria-hidden="true"></i>Clients</a>
                 <a class="nav-link" href="{% url 'projects:list' %}"><i class="bi bi-house-door" aria-hidden="true"></i>Projects</a>
+                <a class="nav-link" href="{% url 'projects:time-list' %}"><i class="bi bi-clock" aria-hidden="true"></i>Time</a>
                 {% if user.is_staff %}
                 <a class="nav-link" href="{% url 'admin:index' %}">
                     <i class="bi bi-gear" aria-hidden="true"></i>

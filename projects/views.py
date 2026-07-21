@@ -44,6 +44,13 @@ class ProjectDetailView(LoginRequiredMixin, CompanyScopedQuerysetMixin, DetailVi
             "notes",
         )
 
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["recent_time_entries"] = self.object.time_entries.filter(
+            user=self.request.user
+        )[:10]
+        return context
+
 
 class ProjectCreateView(LoginRequiredMixin, CompanyFormMixin, CreateView):
     model = Project

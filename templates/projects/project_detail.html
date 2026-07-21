@@ -5,7 +5,10 @@
 {% block content %}
 <div class="page-heading">
     <div><p class="eyebrow">{{ project.number }} · {{ project.get_status_display }}</p><h1>{{ project.name }}</h1></div>
-    <a class="btn btn-light" href="{% url 'projects:update' project.pk %}">Edit project</a>
+    <div class="button-group">
+        {% if project.accepts_time and not running_time_entry %}<a class="btn btn-success" href="{% url 'projects:timer-start' %}?project={{ project.pk }}">Start timer</a>{% endif %}
+        <a class="btn btn-light" href="{% url 'projects:update' project.pk %}">Edit project</a>
+    </div>
 </div>
 <div class="detail-grid">
     <section class="content-card">
@@ -25,6 +28,8 @@
         {% if project.hourly_rate is not None %}<p><strong>${{ project.hourly_rate|floatformat:2 }}</strong> / hour</p>{% endif %}
         {% if project.fixed_fee is not None %}<p><strong>${{ project.fixed_fee|floatformat:2 }}</strong> fixed fee</p>{% endif %}
         {% if project.estimated_hours is not None %}<p>{{ project.estimated_hours|floatformat:2 }} estimated hours</p>{% endif %}
+        <p><strong>{{ project.actual_hours }} actual hours</strong></p>
+        {% if project.effective_hourly_rate is not None %}<p>${{ project.effective_hourly_rate }} effective hourly rate</p>{% endif %}
     </section>
     <section class="content-card">
         <h2>Description</h2>
@@ -33,6 +38,12 @@
     <section class="content-card detail-wide">
         <h2>Notes</h2>
         {% for note in project.notes.all %}<div class="detail-row"><span>{{ note.body|linebreaksbr }}</span><small>{{ note.created_at|date:'M j, Y g:i a' }}</small></div>{% empty %}<p class="muted">No attached notes.</p>{% endfor %}
+    </section>
+    <section class="content-card detail-wide">
+        <div class="section-heading"><h2>Recent time</h2><a href="{% url 'projects:time-list' %}?project={{ project.pk }}">View all time</a></div>
+        {% for entry in recent_time_entries %}
+        <div class="detail-row"><span><strong>{{ entry.start_time|date:'M j, Y g:i a' }}</strong>{% if entry.description %}<small>{{ entry.description }}</small>{% endif %}</span><span>{% if entry.is_running %}Running{% else %}{{ entry.duration_hours }} h{% endif %}</span></div>
+        {% empty %}<p class="muted">No time recorded.</p>{% endfor %}
     </section>
 </div>
 {% endblock %}

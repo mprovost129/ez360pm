@@ -1,8 +1,12 @@
-from decimal import Decimal
+from datetime import timedelta
+from decimal import ROUND_HALF_UP, Decimal
 
+from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.core.validators import MinValueValidator
 from django.db import models
+from django.db.models import F, Q
+from django.utils import timezone
 
 from accounts.models import Company, CompanyOwnedModel
 from clients.models import Client
@@ -115,6 +119,41 @@ class Project(CompanyOwnedModel):
     def __str__(self):
         return f"{self.number} - {self.name}"
 
+    @property
+    def actual_duration(self):
+        durations = (
+            self.time_entries.filter(end_time__isnull=False)
+            .values_list("start_time", "end_time")
+            .iterator()
+        )
+        return sum((end - start for start, end in durations), timedelta())
+
+    @property
+    def actual_hours(self):
+        microseconds = self.actual_duration // timedelta(microseconds=1)
+        hours = Decimal(microseconds) / Decimal("3600000000")
+        return hours.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+    @property
+    def effective_hourly_rate(self):
+        if self.billing_type != self.BillingType.FLAT_FEE or not self.fixed_fee:
+            return None
+        hours = self.actual_hours
+        if not hours:
+            return None
+        return (self.fixed_fee / hours).quantize(
+            Decimal("0.01"),
+            rounding=ROUND_HALF_UP,
+        )
+
+    @property
+    def accepts_time(self):
+        return self.status in {
+            self.Status.LEAD,
+            self.Status.APPROVED,
+            self.Status.ACTIVE,
+        }
+
 
 class ProjectNumberSequence(models.Model):
     company = models.ForeignKey(
@@ -139,3 +178,83 @@ class ProjectNumberSequence(models.Model):
 
     def __str__(self):
         return f"{self.company}: {self.period}/{self.last_value}"
+
+
+class TimeEntry(CompanyOwnedModel):
+    class Status(models.TextChoices):
+        LOGGED = "logged", "Logged"
+        INVOICED = "invoiced", "Invoiced"
+
+    project = models.ForeignKey(
+        Project,
+        on_delete=models.PROTECT,
+        related_name="time_entries",
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="time_entries",
+    )
+    start_time = models.DateTimeField()
+    end_time = models.DateTimeField(blank=True, null=True)
+    description = models.CharField(max_length=255, blank=True)
+    billable = models.BooleanField(default=True)
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.LOGGED,
+    )
+
+    class Meta:
+        ordering = ("-start_time", "-pk")
+        constraints = [
+            models.UniqueConstraint(
+                fields=("user",),
+                condition=Q(end_time__isnull=True),
+                name="projects_one_running_timer_per_user",
+            ),
+            models.CheckConstraint(
+                condition=Q(end_time__isnull=True) | Q(end_time__gt=F("start_time")),
+                name="projects_time_end_after_start",
+            ),
+            models.CheckConstraint(
+                condition=Q(end_time__isnull=False) | Q(status="logged"),
+                name="projects_running_time_is_logged",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=("company", "project", "start_time")),
+            models.Index(fields=("company", "status", "billable")),
+        ]
+
+    def clean(self):
+        super().clean()
+        errors = {}
+        if self.project_id and self.project.company_id != self.company_id:
+            errors["project"] = "Project must belong to the same company."
+        if self.user_id and self.user.company_id != self.company_id:
+            errors["user"] = "User must belong to the same company."
+        if self.end_time and self.start_time and self.end_time <= self.start_time:
+            errors["end_time"] = "End time must be after start time."
+        if self.end_time is None and self.status != self.Status.LOGGED:
+            errors["status"] = "A running timer must be logged, not invoiced."
+        if errors:
+            raise ValidationError(errors)
+
+    @property
+    def is_running(self):
+        return self.end_time is None
+
+    @property
+    def duration(self):
+        effective_end = self.end_time or timezone.now()
+        return max(effective_end - self.start_time, timedelta())
+
+    @property
+    def duration_hours(self):
+        microseconds = self.duration // timedelta(microseconds=1)
+        hours = Decimal(microseconds) / Decimal("3600000000")
+        return hours.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+    def __str__(self):
+        return f"{self.project.number}: {self.description or 'Time entry'}"
