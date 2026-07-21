@@ -7,6 +7,10 @@
     <div><p class="eyebrow">{{ project.number }} · {{ project.get_status_display }}</p><h1>{{ project.name }}</h1></div>
     <div class="button-group">
         {% if project.accepts_time and not running_time_entry %}<a class="btn btn-success" href="{% url 'projects:timer-start' %}?project={{ project.pk }}">Start timer</a>{% endif %}
+        {% if project.status == 'lead' %}<a class="btn btn-primary" href="{% url 'proposals:create' %}?project={{ project.pk }}">New proposal</a>{% endif %}
+        <a class="btn btn-primary" href="{% url 'documents:invoice-create' %}?project={{ project.pk }}">New invoice</a>
+        {% if can_start_without_retainer %}<form method="post" action="{% url 'projects:start-without-retainer' project.pk %}">{% csrf_token %}<button class="btn btn-success" type="submit">Start without retainer</button></form>{% endif %}
+        {% if can_complete %}<form method="post" action="{% url 'projects:complete' project.pk %}">{% csrf_token %}<button class="btn btn-success" type="submit">Mark complete</button></form>{% endif %}
         <a class="btn btn-light" href="{% url 'projects:update' project.pk %}">Edit project</a>
     </div>
 </div>
@@ -44,6 +48,14 @@
         {% for entry in recent_time_entries %}
         <div class="detail-row"><span><strong>{{ entry.start_time|date:'M j, Y g:i a' }}</strong>{% if entry.description %}<small>{{ entry.description }}</small>{% endif %}</span><span>{% if entry.is_running %}Running{% else %}{{ entry.duration_hours }} h{% endif %}</span></div>
         {% empty %}<p class="muted">No time recorded.</p>{% endfor %}
+    </section>
+    <section class="content-card detail-wide">
+        <div class="section-heading"><h2>Proposals</h2><a href="{% url 'proposals:list' %}?project={{ project.pk }}">View all proposals</a></div>
+        {% for proposal in project.documents.all %}{% if proposal.doc_type == 'proposal' %}<a class="item-row" href="{% url 'proposals:detail' proposal.pk %}"><span><strong>{{ proposal.number }}</strong><small>{{ proposal.get_status_display }} · ${{ proposal.total }}</small></span><i class="bi bi-chevron-right" aria-hidden="true"></i></a>{% endif %}{% empty %}<p class="muted">No proposals.</p>{% endfor %}
+    </section>
+    <section class="content-card detail-wide">
+        <div class="section-heading"><h2>Invoices</h2><a href="{% url 'documents:invoice-list' %}?project={{ project.pk }}">View all invoices</a></div>
+        {% for invoice in project.documents.all %}{% if invoice.doc_type == 'invoice' %}<a class="item-row" href="{% url 'documents:invoice-detail' invoice.pk %}"><span><strong>{{ invoice.number }}</strong><small>{{ invoice.get_status_display }} · ${{ invoice.total }}</small></span><i class="bi bi-chevron-right" aria-hidden="true"></i></a>{% endif %}{% empty %}<p class="muted">No invoices.</p>{% endfor %}
     </section>
 </div>
 {% endblock %}

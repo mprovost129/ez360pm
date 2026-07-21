@@ -1,0 +1,170 @@
+from django import forms
+
+from clients.models import Client
+from core.forms import CompanyScopedModelForm
+from projects.models import Project, TimeEntry
+
+from .models import Document, LineItem, Payment
+from .services import create_invoice, record_payment, save_line_item, update_payment
+
+
+class InvoiceCreateForm(CompanyScopedModelForm):
+    number = forms.CharField(
+        max_length=30,
+        required=False,
+        help_text="Leave blank to generate the next invoice number.",
+    )
+
+    class Meta:
+        model = Document
+        fields = (
+            "project",
+            "invoice_kind",
+            "number",
+            "issue_date",
+            "due_date",
+            "terms",
+            "notes",
+            "accept_payments",
+        )
+        widgets = {
+            "issue_date": forms.DateInput(attrs={"type": "date"}),
+            "due_date": forms.DateInput(attrs={"type": "date"}),
+            "terms": forms.Textarea(attrs={"rows": 3}),
+            "notes": forms.Textarea(attrs={"rows": 3}),
+        }
+
+    def __init__(self, *args, company=None, **kwargs):
+        super().__init__(*args, company=company, **kwargs)
+        self.instance.doc_type = Document.Type.INVOICE
+        self.fields["project"].queryset = Project.objects.for_company(company)
+        self.fields["accept_payments"].initial = company.accept_payments_default
+        self.fields["invoice_kind"].initial = Document.InvoiceKind.FINAL
+
+    def save(self, commit=True):
+        if not commit:
+            raise ValueError("InvoiceCreateForm must be saved with commit=True.")
+        project = self.cleaned_data["project"]
+        data = {
+            field: self.cleaned_data[field]
+            for field in self.Meta.fields
+            if field != "project"
+        }
+        self.instance = create_invoice(
+            company=self.company,
+            project=project,
+            invoice_data=data,
+        )
+        return self.instance
+
+
+class InvoiceEditForm(CompanyScopedModelForm):
+    class Meta:
+        model = Document
+        fields = ("number", "issue_date", "due_date", "terms", "notes", "accept_payments")
+        widgets = {
+            "issue_date": forms.DateInput(attrs={"type": "date"}),
+            "due_date": forms.DateInput(attrs={"type": "date"}),
+            "terms": forms.Textarea(attrs={"rows": 3}),
+            "notes": forms.Textarea(attrs={"rows": 3}),
+        }
+
+
+class LineItemForm(forms.ModelForm):
+    class Meta:
+        model = LineItem
+        fields = ("description", "rate", "quantity", "tax_rate")
+
+    def __init__(self, *args, document, **kwargs):
+        self.document = document
+        super().__init__(*args, **kwargs)
+
+    def save(self, commit=True):
+        if not commit:
+            raise ValueError("LineItemForm must be saved with commit=True.")
+        data = {field: self.cleaned_data[field] for field in self.Meta.fields}
+        self.instance = save_line_item(
+            document=self.document,
+            line=self.instance if self.instance.pk else None,
+            line_data=data,
+        )
+        return self.instance
+
+
+class TimeAttachmentForm(forms.Form):
+    entries = forms.ModelMultipleChoiceField(
+        queryset=TimeEntry.objects.none(),
+        widget=forms.CheckboxSelectMultiple,
+    )
+    grouping = forms.ChoiceField(
+        choices=(
+            ("individual", "One line per time entry"),
+            ("description", "Group identical descriptions"),
+            ("combined", "One combined line"),
+        )
+    )
+
+    def __init__(self, *args, invoice, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["entries"].queryset = TimeEntry.objects.filter(
+            company=invoice.company,
+            project=invoice.project,
+            end_time__isnull=False,
+            billable=True,
+            status=TimeEntry.Status.LOGGED,
+            line_item__isnull=True,
+        )
+
+
+class PaymentForm(forms.ModelForm):
+    class Meta:
+        model = Payment
+        fields = ("amount", "method", "received_at", "reference")
+        widgets = {"received_at": forms.DateInput(attrs={"type": "date"})}
+
+    def __init__(self, *args, invoice, **kwargs):
+        self.invoice = invoice
+        super().__init__(*args, **kwargs)
+        if not self.instance.pk:
+            self.fields["amount"].initial = invoice.outstanding_balance
+
+    def clean_amount(self):
+        amount = self.cleaned_data["amount"]
+        other_paid = self.invoice.amount_paid
+        if self.instance.pk:
+            other_paid -= self.instance.amount
+        if other_paid + amount > self.invoice.total:
+            raise forms.ValidationError("Payments cannot exceed the invoice total.")
+        return amount
+
+    def save(self, commit=True):
+        if not commit:
+            raise ValueError("PaymentForm must be saved with commit=True.")
+        data = {field: self.cleaned_data[field] for field in self.Meta.fields}
+        if self.instance.pk:
+            self.instance = update_payment(payment=self.instance, payment_data=data)
+        else:
+            self.instance = record_payment(invoice=self.invoice, payment_data=data)
+        return self.instance
+
+
+class VoidInvoiceForm(forms.Form):
+    reason = forms.CharField(widget=forms.Textarea(attrs={"rows": 3}), required=False)
+
+
+class InvoiceFilterForm(forms.Form):
+    status = forms.ChoiceField(
+        required=False,
+        choices=[("", "All statuses")] + Document.Status.choices,
+    )
+    invoice_kind = forms.ChoiceField(
+        required=False,
+        choices=[("", "All kinds")] + Document.InvoiceKind.choices,
+    )
+    client = forms.ModelChoiceField(queryset=Client.objects.none(), required=False)
+    project = forms.ModelChoiceField(queryset=Project.objects.none(), required=False)
+
+    def __init__(self, *args, company, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["client"].queryset = Client.objects.for_company(company).ordered_for_list()
+        self.fields["project"].queryset = Project.objects.for_company(company)

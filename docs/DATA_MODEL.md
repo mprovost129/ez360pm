@@ -163,11 +163,18 @@ PDFs, and dashboards use the same definitions.
 
 ## Implementation staging
 
-Phase 2 creates `TimeEntry` with its timer, reporting, status, and billing flags.
-The nullable `line_item` relationship is intentionally added in the Phase 3
-documents migration, when `LineItem` first exists. No time can be marked invoiced
-through the Phase 2 interface, so this staging does not create an unattached
-invoiced state in normal use.
+Phase 2 created `TimeEntry` with its timer, reporting, status, and billing flags.
+Phase 3 has now added the nullable `line_item` relationship alongside `LineItem`
+and the draft attachment/release services. Invoiced time is locked in normal use;
+removing a draft line or draft invoice releases it, while void-invoice release is
+an explicit warned action.
+
+Phase 4 implemented proposal sections and sanitized rich text, immutable public
+acceptance snapshots, accepted-proposal retainer invoices, project approval and
+activation transitions, and `InvoiceCredit` application/removal for draft final
+invoices. Non-void retainers from one accepted proposal are cumulatively capped
+at its accepted total. Final payment makes completion available but does not
+change project status without the explicit completion action.
 
 ## Document subtype validation
 
@@ -188,16 +195,18 @@ Where conditional database checks become too opaque, keep the database rule
 simple and put the full error-producing validation in the service, backed by
 tests.
 
-## Supporting record required by the screens
+## Supporting delivery record (implemented in Phase 5)
 
 The screen specification asks for recipient selection and send history, which
-cannot be represented by `Document.sent_at` alone. Add:
+cannot be represented by `Document.sent_at` alone. Phase 4 deliberately issues
+the stable public link without claiming email delivery. Phase 5 added:
 
 ### DocumentDelivery
 
 | Field | Purpose |
 | --- | --- |
 | `document` | parent proposal/invoice |
+| `purpose` | client document or internal acceptance notification |
 | `recipient_name` | snapshot at send time |
 | `recipient_email` | snapshot at send time |
 | `status` | pending, sent, or failed |
@@ -205,10 +214,10 @@ cannot be represented by `Document.sent_at` alone. Add:
 | `error_code` | safe diagnostic category, no credentials/body |
 | `created_at`, `sent_at` | attempt and success timestamps |
 
-One send action may create multiple delivery rows. The document becomes `sent`
-after the first successful delivery and `sent_at` records that first success.
-Failures remain in history and can be retried without fabricating a successful
-send.
+Each recipient attempt creates a delivery row. `Document.sent_at` records when
+the public document was issued; `DocumentDelivery.sent_at` records confirmed
+email delivery. Failures remain in history with a safe error category and can be
+retried without fabricating a successful send.
 
 ## Deletion behavior
 
@@ -219,7 +228,7 @@ send.
 | Sent Proposal | withdraw only |
 | Sent Invoice | void only |
 | Accepted Proposal | permanent |
-| Paid Invoice, Payment, InvoiceCredit | permanent through ordinary UI |
+| Paid Invoice, Payment, InvoiceCredit, DocumentDelivery | permanent through ordinary UI |
 | Note | archive in ordinary flow; administrative deletion is exceptional |
 
 Foreign-key `on_delete` choices should favor `PROTECT` across financial and

@@ -1,0 +1,3 @@
+{% extends 'base.html' %}
+{% block title %}Void {{ invoice.number }} | EZ360PM{% endblock %}
+{% block content %}<div class="page-heading"><h1>Void {{ invoice.number }}</h1></div><form method="post" class="content-card narrow-card">{% csrf_token %}{{ form.as_p }}<p class="text-danger">The invoice stays in history. Attached time will remain invoiced unless explicitly released afterward.</p><button class="btn btn-danger" type="submit">Void invoice</button></form>{% endblock %}

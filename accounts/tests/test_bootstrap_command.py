@@ -61,3 +61,23 @@ class BootstrapPersonalCommandTests(TestCase):
                     password_env="MISSING_PASSWORD",
                     no_input=True,
                 )
+
+    def test_django_createsuperuser_accepts_required_company_foreign_key(self):
+        company = Company.objects.create(name="Existing Studio")
+        with patch.dict(
+            "os.environ",
+            {"DJANGO_SUPERUSER_PASSWORD": self.password},
+        ):
+            call_command(
+                "createsuperuser",
+                email="admin@example.com",
+                company=str(company.pk),
+                interactive=False,
+                stdout=io.StringIO(),
+            )
+
+        user = User.objects.get(email="admin@example.com")
+        self.assertEqual(user.company, company)
+        self.assertTrue(user.is_staff)
+        self.assertTrue(user.is_superuser)
+        self.assertTrue(user.check_password(self.password))

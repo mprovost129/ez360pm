@@ -1,0 +1,16 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>{{ proposal.number }} | {{ proposal.company.name }}</title><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"><link rel="stylesheet" href="{% static 'css/main.css' %}"></head>
+<body class="public-document-body"><main class="public-document-shell">
+{% if proposal.status == 'withdrawn' %}<div class="closed-document-notice"><strong>This proposal has been withdrawn.</strong></div>{% elif proposal.status == 'declined' %}<div class="closed-document-notice"><strong>This proposal was declined.</strong></div>{% elif proposal.status == 'accepted' %}<div class="accepted-document-notice"><strong>Accepted by {{ proposal.accepted_by_name }}.</strong> A copy of this accepted proposal remains available below.</div>{% endif %}
+{% include 'documents/_proposal_document.html' %}
+<div class="public-document-actions"><a class="btn btn-light" href="{% url 'public-documents:pdf' proposal.public_token %}" target="_blank">Download PDF</a></div>
+{% if proposal.status == 'sent' or proposal.status == 'viewed' %}
+<section class="content-card proposal-response">
+    <h2>Accept proposal</h2>
+    <p>By accepting, you confirm the proposal total and terms shown above.</p>
+    <form method="post" action="{% url 'public-documents:accept' proposal.public_token %}" class="form-grid" novalidate>{% csrf_token %}{{ acceptance_form.non_field_errors }}{% for field in acceptance_form %}<div class="form-field{% if field.errors %} form-field--error{% endif %}"><label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{{ field.errors }}</div>{% endfor %}<div class="form-actions"><button class="btn btn-success" type="submit">Accept proposal</button></div></form>
+    <form method="post" action="{% url 'public-documents:decline' proposal.public_token %}">{% csrf_token %}<button class="link-button text-danger" type="submit">Decline proposal</button></form>
+</section>
+{% endif %}
+</main></body></html>

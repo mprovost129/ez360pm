@@ -61,6 +61,9 @@
                 <a class="nav-link" href="{% url 'clients:list' %}"><i class="bi bi-people" aria-hidden="true"></i>Clients</a>
                 <a class="nav-link" href="{% url 'projects:list' %}"><i class="bi bi-house-door" aria-hidden="true"></i>Projects</a>
                 <a class="nav-link" href="{% url 'projects:time-list' %}"><i class="bi bi-clock" aria-hidden="true"></i>Time</a>
+                <a class="nav-link" href="{% url 'proposals:list' %}"><i class="bi bi-file-earmark-check" aria-hidden="true"></i>Proposals</a>
+                <a class="nav-link" href="{% url 'documents:invoice-list' %}"><i class="bi bi-receipt" aria-hidden="true"></i>Invoices</a>
+                <a class="nav-link" href="{% url 'accounts:integrations' %}"><i class="bi bi-plug" aria-hidden="true"></i>Integrations</a>
                 {% if user.is_staff %}
                 <a class="nav-link" href="{% url 'admin:index' %}">
                     <i class="bi bi-gear" aria-hidden="true"></i>

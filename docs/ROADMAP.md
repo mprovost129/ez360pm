@@ -52,18 +52,21 @@ The architecture, relationships, and screen map are detailed in:
 - [Data model](DATA_MODEL.md)
 - [Screen and workflow design](SCREEN_FLOWS.md)
 - [Decisions and open questions](DECISIONS.md)
+- [Deployment and integration setup](DEPLOYMENT.md)
 
 ## Delivery map
 
 ### Implementation status - 2026-07-21
 
-- **Phases 0-2 code: complete and tested.** Forty-seven account, isolation,
-  intake, client/contact, project, timer/time-entry, command, health, and dashboard
-  tests pass on PostgreSQL. Lint, dependency, Django system checks,
-  migration-drift checks, and the deployment check pass.
+- **Phases 0-5 code: complete and tested.** Ninety-four account, isolation,
+  intake, client/contact, project, timer/time-entry, invoice, proposal,
+  acceptance, retainer, credit, manual/Stripe payment, email delivery, webhook,
+  public rendering/PDF, command, health, and dashboard tests pass on PostgreSQL.
+  Lint, dependency, Django system checks, migration-drift checks, and the
+  deployment check pass.
 - **Phase 0 operations: pending.** Bootstrap the real owner with an environment-
   supplied password and deploy the authenticated shell.
-- **Next code milestone:** Phase 3 invoices and manual payments.
+- **Next code milestone:** Phase 6 attention dashboard and financial insight.
 
 ### Workflow traceability
 
@@ -137,7 +140,7 @@ The user can time real work for a week without duplicate running timers or lost
 sessions; the server timestamp remains authoritative and flat-fee time appears in
 project performance data.
 
-### Phase 3 - Invoices and manual payments
+### Phase 3 - Invoices and manual payments (code complete)
 
 **Goal:** reach the first practical FreshBooks-replacement checkpoint.
 
@@ -157,13 +160,15 @@ An hourly or flat-fee project can produce an accurate invoice, PDF, manual
 payment, and audit-preserving paid history. Time cannot be accidentally billed
 twice through ordinary UI actions.
 
-### Phase 4 - Proposals, acceptance, retainers, and final invoices
+### Phase 4 - Proposals, acceptance, retainers, and final invoices (code complete)
 
 **Goal:** complete the entire business workflow without payment automation.
 
 - Add proposal body sections, terms/notes sanitization, pricing, preview, and
   public rendering.
-- Add recipient selection and document delivery history.
+- Activate a stable public proposal link when issuing. Recipient selection,
+  outbound email, and delivery-attempt history move together in Phase 5 so an
+  issue action never falsely claims an email was sent.
 - Implement public accept/decline, acceptance snapshot metadata, and the
   `lead -> approved` transition.
 - Create retainer invoices from accepted proposals by percentage or fixed amount.
@@ -179,7 +184,7 @@ The complete product outcome at the top of this file works end to end using
 manual payment recording. Proposal acceptance, retainer payment, time, final
 invoice credit, final payment, and project history reconcile correctly.
 
-### Phase 5 - Email and Stripe automation
+### Phase 5 - Email and Stripe automation (code complete)
 
 **Goal:** remove manual delivery and online-payment friction without changing the
 accounting model.

@@ -9,6 +9,10 @@ urlpatterns = [
     path('notes/', include('intake.urls')),
     path('clients/', include('clients.urls')),
     path('projects/', include('projects.urls')),
+    path('proposals/', include('documents.proposal_urls')),
+    path('invoices/', include('documents.urls')),
+    path('d/', include('documents.public_urls')),
+    path('webhooks/', include('documents.webhook_urls')),
     path('', include('core.urls')),
 ]
 

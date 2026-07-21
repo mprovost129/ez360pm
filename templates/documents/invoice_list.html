@@ -1,0 +1,22 @@
+{% extends 'base.html' %}
+
+{% block title %}Invoices | EZ360PM{% endblock %}
+
+{% block content %}
+<div class="page-heading">
+    <h1>Invoices</h1>
+    <a class="btn btn-primary" href="{% url 'documents:invoice-create' %}">New invoice</a>
+</div>
+<form method="get" class="content-card filter-bar">
+    {% for field in filter_form %}<div class="form-field"><label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}</div>{% endfor %}
+    <button class="btn btn-light" type="submit">Filter</button><a class="btn btn-link" href="{% url 'documents:invoice-list' %}">Clear</a>
+</form>
+<section class="content-card">
+    {% for invoice in invoices %}
+    <a class="item-row" href="{% url 'documents:invoice-detail' invoice.pk %}">
+        <span><strong>{{ invoice.number }} · {{ invoice.project.client.display_name }}</strong><small>{{ invoice.project.number }} · {{ invoice.get_invoice_kind_display }} · Due {{ invoice.due_date|date:'M j, Y' }}{% if invoice.is_overdue %} · Overdue{% endif %}</small></span>
+        <span class="invoice-list-total"><strong>${{ invoice.total }}</strong><small>{{ invoice.get_status_display }} · ${{ invoice.outstanding_balance }} due</small></span>
+    </a>
+    {% empty %}<div class="empty-state">No invoices match these filters.</div>{% endfor %}
+</section>
+{% endblock %}

@@ -32,6 +32,14 @@ class UserManager(BaseUserManager.from_queryset(UserQuerySet)):
         if not extra_fields.get("company") and not extra_fields.get("company_id"):
             raise ValueError("A company is required.")
 
+        # Django's createsuperuser command cleans a ForeignKey prompt to its raw
+        # primary-key value and passes it under the field name. Model
+        # construction expects either a Company instance under ``company`` or a
+        # raw value under ``company_id``.
+        company = extra_fields.get("company")
+        if company is not None and not isinstance(company, models.Model):
+            extra_fields["company_id"] = extra_fields.pop("company")
+
         email = self.normalize_login_email(email)
         user = self.model(email=email, **extra_fields)
         user.set_password(password)
@@ -49,4 +57,3 @@ class UserManager(BaseUserManager.from_queryset(UserQuerySet)):
             raise ValueError("Superuser must have is_superuser=True.")
 
         return self.create_user(email, password, **extra_fields)
-

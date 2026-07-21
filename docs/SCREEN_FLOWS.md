@@ -158,9 +158,10 @@ Use a shared proposal/invoice editor shell with subtype sections:
 8. Save draft, Preview, and Send actions
 
 Preview opens the exact public rendering context without stamping `viewed_at`.
-Send is a confirmation step showing recipients and the final total. Draft edits
-remain possible until send; sent records move to lifecycle actions rather than
-returning to an editable draft.
+In Phase 4, Issue confirms the final total and activates the stable public link.
+Draft edits remain possible until issue; issued records move to lifecycle actions
+rather than returning to an editable draft. Phase 5 adds recipient selection,
+outbound email, and delivery history as one auditable send workflow.
 
 ## Public proposal
 

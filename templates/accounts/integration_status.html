@@ -1,0 +1,20 @@
+{% extends 'base.html' %}
+
+{% block title %}Integrations | EZ360PM{% endblock %}
+
+{% block content %}
+<div class="page-heading"><div><p class="eyebrow">Settings</p><h1>Integrations</h1></div></div>
+<div class="detail-grid">
+    <section class="content-card">
+        <h2>Email delivery</h2>
+        <p class="integration-state integration-state--{% if email_status.configured %}ready{% else %}off{% endif %}">{% if email_status.configured %}Configured{% else %}Not configured{% endif %}</p>
+        <p><strong>Backend:</strong> {{ email_status.backend }}<br><strong>From:</strong> {{ email_status.from_email }}</p>
+    </section>
+    <section class="content-card">
+        <h2>Stripe Checkout</h2>
+        <p class="integration-state integration-state--{% if stripe_status.configured %}ready{% else %}off{% endif %}">{% if stripe_status.configured %}Configured{% else %}Not configured{% endif %}</p>
+        <p>Secret key: {% if stripe_status.secret_key %}present{% else %}missing{% endif %}<br>Webhook signing secret: {% if stripe_status.webhook_secret %}present{% else %}missing{% endif %}<br>API version: {{ stripe_status.api_version }}</p>
+        <p class="muted">Online payment buttons appear only on eligible invoices that explicitly allow payments.</p>
+    </section>
+</div>
+{% endblock %}

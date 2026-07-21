@@ -1,0 +1,39 @@
+<article class="invoice-document proposal-document">
+    <header class="invoice-document__header">
+        <div>
+            <h2>{{ proposal.company.name }}</h2>
+            {% if proposal.company.address_1 %}<address>{{ proposal.company.address_1 }}<br>{% if proposal.company.address_2 %}{{ proposal.company.address_2 }}<br>{% endif %}{{ proposal.company.city }}{% if proposal.company.state %}, {{ proposal.company.state }}{% endif %} {{ proposal.company.postal_code }}</address>{% endif %}
+            {% if proposal.company.phone %}<div>{{ proposal.company.phone }}</div>{% endif %}
+            {% if proposal.company.email %}<div>{{ proposal.company.email }}</div>{% endif %}
+        </div>
+        <div class="invoice-identity"><span>Proposal</span><strong>{{ proposal.number }}</strong><small>{{ proposal.get_status_display }}</small></div>
+    </header>
+    <div class="invoice-parties">
+        <div><h3>Prepared for</h3><strong>{{ proposal.project.client.display_name }}</strong>{% if proposal.project.client.primary_contact %}<div>{{ proposal.project.client.primary_contact.get_full_name }}</div><div>{{ proposal.project.client.primary_contact.email }}</div>{% endif %}</div>
+        <div><h3>Project</h3><strong>{{ proposal.project.number }} · {{ proposal.project.name }}</strong><div>{{ proposal.project.address_1 }}</div><div>{{ proposal.project.city }}, {{ proposal.project.state }} {{ proposal.project.postal_code }}</div></div>
+        <div class="invoice-dates"><div><span>Issued</span><strong>{{ proposal.issue_date|date:'M j, Y' }}</strong></div></div>
+    </div>
+    {% for section in proposal.body_sections %}
+    <section class="proposal-section">
+        <div class="section-heading"><h2>{{ section.heading }}</h2>{% if proposal.is_editable %}<span><a href="{% url 'proposals:section-update' proposal.pk forloop.counter0 %}">Edit</a> · <form class="inline-form" method="post" action="{% url 'proposals:section-delete' proposal.pk forloop.counter0 %}">{% csrf_token %}<button class="link-button" type="submit">Remove</button></form></span>{% endif %}</div>
+        <div class="rich-text">{{ section.body|safe }}</div>
+    </section>
+    {% endfor %}
+    <div class="invoice-lines-wrap">
+        <table class="invoice-lines">
+            <thead><tr><th>Description</th><th>Qty</th><th>Rate</th><th>Tax</th><th>Amount</th>{% if proposal.is_editable %}<th><span class="visually-hidden">Actions</span></th>{% endif %}</tr></thead>
+            <tbody>
+            {% for line in proposal.line_items.all %}
+            <tr><td>{{ line.description }}</td><td>{{ line.quantity }}</td><td>${{ line.rate|floatformat:2 }}</td><td>{{ line.tax_rate }}%</td><td>${{ line.line_total }}</td>{% if proposal.is_editable %}<td class="line-actions"><a href="{% url 'proposals:line-update' proposal.pk line.pk %}">Edit</a><form method="post" action="{% url 'proposals:line-delete' proposal.pk line.pk %}">{% csrf_token %}<button class="link-button" type="submit">Remove</button></form></td>{% endif %}</tr>
+            {% empty %}<tr><td colspan="6">No pricing yet.</td></tr>{% endfor %}
+            </tbody>
+        </table>
+    </div>
+    <div class="invoice-summary">
+        <div><span>Subtotal</span><strong>${{ proposal.subtotal }}</strong></div>
+        <div><span>Tax</span><strong>${{ proposal.tax_total }}</strong></div>
+        <div class="invoice-summary__total"><span>Proposal total</span><strong>${{ proposal.total }}</strong></div>
+    </div>
+    {% if proposal.terms %}<section class="invoice-text"><h3>Terms</h3><div class="rich-text">{{ proposal.terms|safe }}</div></section>{% endif %}
+    {% if show_internal_notes and proposal.notes %}<section class="invoice-text"><h3>Internal notes</h3><div class="rich-text">{{ proposal.notes|safe }}</div></section>{% endif %}
+</article>

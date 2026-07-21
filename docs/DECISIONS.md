@@ -26,10 +26,13 @@ locked decision requires an explicit update to the product specification.
 | Base User on `AbstractUser`, remove username, authenticate by unique email (implemented) | retains Django admin/auth compatibility and meets the custom-user requirement |
 | Use a modular server-rendered Django monolith | best fit for a solo operational tool and current starter |
 | Use explicit transactional services, not signals, for financial/state changes | makes ordering, locking, repetition, and tests visible |
-| Add `DocumentDelivery` | recipient selection and send history otherwise have no durable representation |
+| Add `DocumentDelivery` in Phase 5 (implemented) | recipient selection and provider-backed send history otherwise have no durable representation; Phase 4 only activates the public link |
 | Use a locked sequence record for generated numbers | avoids collision-prone `max + 1` logic and remains SaaS-safe |
-| Add `TimeEntry.line_item` with the Phase 3 documents migration | avoids a premature cross-app placeholder; Phase 2 exposes no invoicing action |
+| Add `TimeEntry.line_item` with the Phase 3 documents migration (implemented) | avoided a premature cross-app placeholder; Phase 2 exposed no invoicing action |
+| Use ReportLab behind the invoice PDF adapter (implemented) | produces deployment-friendly real PDFs without native rendering dependencies |
 | Treat the accepted Document fields as the durable acceptance record | accepted proposals are immutable and permanent; avoid duplicate acceptance storage |
+| Cap cumulative non-void retainers at the accepted proposal total | prevents repeated retainer creation from requesting more than the agreed price |
+| Require explicit project completion after final payment | payment closes the invoice; the owner still confirms that project work is complete |
 | Use `PROTECT` around financial history | prevents accidental cascade deletion of audit records |
 | Store timestamps in UTC and localize at presentation boundaries | required for durable timers and consistent server behavior |
 | Choose the PDF engine behind an adapter | preserves rendering design if deployment constraints force a library change |
@@ -46,12 +49,11 @@ assumption if no different product decision is made by the deadline.
 | 3 | What are proposal and invoice number formats? | independent company sequences, `P-YY-####` and `I-YY-####` |
 | 3 | What currency and tax rounding policy apply? | USD; round each line total and each line's tax half-up to cents |
 | 3 | What default invoice terms/due interval applies? | no implicit terms; require due date when preparing an invoice for send |
-| 3 | Which PDF engine works reliably in the deployment image? | run a short HTML/CSS fidelity and Render build spike before selection |
 | 3 | May manual payments exceed outstanding balance? | reject accidental overpayment; no refund/credit-balance workflow in MVP |
 | 4 | What exactly makes a retainer “required” for automatic activation? | a created/sent retainer is required; otherwise activation is explicit |
 | 4 | Can multiple proposal recipients sign? | first valid acceptance is final; delivery may have multiple recipients |
-| 5 | Which outbound email provider and reply-to address are used? | provider via environment; reply-to Company email |
-| 5 | Which Stripe event and ID are canonical? | fulfilled Checkout Session resolved to its successful Payment Intent |
+| 5 | Which outbound email provider and reply-to address are used? | implemented through Django's configured email backend; reply-to Company email |
+| 5 | Which Stripe event and ID are canonical? | implemented: paid `checkout.session.completed` or `checkout.session.async_payment_succeeded`; unique Payment Intent ID is the revenue guard |
 | 7 | What production retention and backup recovery targets are acceptable? | daily managed PostgreSQL backups plus a documented restore drill |
 
 ## Known specification tensions

@@ -1,8 +1,11 @@
 from django.contrib import messages
+from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.core.exceptions import ValidationError
 from django.db.models.deletion import ProtectedError
-from django.shortcuts import redirect
+from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse, reverse_lazy
+from django.views.decorators.http import require_POST
 from django.views.generic import (
     CreateView,
     DeleteView,
@@ -15,6 +18,7 @@ from core.mixins import CompanyScopedQuerysetMixin
 
 from .forms import ProjectForm
 from .models import Project
+from .workflow import complete_paid_project, start_without_retainer
 
 
 class CompanyFormMixin:
@@ -41,6 +45,7 @@ class ProjectDetailView(LoginRequiredMixin, CompanyScopedQuerysetMixin, DetailVi
     def get_queryset(self):
         return super().get_queryset().select_related("client").prefetch_related(
             "client__contacts",
+            "documents",
             "notes",
         )
 
@@ -49,6 +54,21 @@ class ProjectDetailView(LoginRequiredMixin, CompanyScopedQuerysetMixin, DetailVi
         context["recent_time_entries"] = self.object.time_entries.filter(
             user=self.request.user
         )[:10]
+        context["can_start_without_retainer"] = (
+            self.object.status == Project.Status.APPROVED
+            and not self.object.documents.filter(
+                doc_type="invoice",
+                invoice_kind="retainer",
+            ).exclude(status="void").exists()
+        )
+        context["can_complete"] = (
+            self.object.status in {Project.Status.ACTIVE, Project.Status.ON_HOLD}
+            and self.object.documents.filter(
+                doc_type="invoice",
+                invoice_kind="final",
+                status="paid",
+            ).exists()
+        )
         return context
 
 
@@ -109,3 +129,33 @@ class ProjectDeleteView(LoginRequiredMixin, CompanyScopedQuerysetMixin, DeleteVi
             return redirect("projects:detail", pk=self.object.pk)
         messages.success(self.request, "Project deleted.")
         return redirect(self.success_url)
+
+
+def scoped_project(request, pk):
+    return get_object_or_404(Project.objects.for_company(request.user.company), pk=pk)
+
+
+@login_required
+@require_POST
+def project_start_without_retainer(request, pk):
+    try:
+        project = scoped_project(request, pk)
+        start_without_retainer(project=project)
+    except ValidationError as exc:
+        messages.error(request, "; ".join(exc.messages))
+    else:
+        messages.success(request, "Project started without a retainer.")
+    return redirect("projects:detail", pk=pk)
+
+
+@login_required
+@require_POST
+def project_complete(request, pk):
+    try:
+        project = scoped_project(request, pk)
+        complete_paid_project(project=project)
+    except ValidationError as exc:
+        messages.error(request, "; ".join(exc.messages))
+    else:
+        messages.success(request, "Project marked complete.")
+    return redirect("projects:detail", pk=pk)

@@ -16,13 +16,30 @@ def check_custom_user_model(app_configs, **kwargs):
 
 @checks.register(checks.Tags.security, deploy=True)
 def check_production_email_identity(app_configs, **kwargs):
+    issues = []
     if not settings.DEBUG and settings.DEFAULT_FROM_EMAIL == "webmaster@localhost":
-        return [
+        issues.append(
             checks.Warning(
                 "DEFAULT_FROM_EMAIL still uses the development default.",
                 hint="Set DEFAULT_FROM_EMAIL to the company sending address.",
                 id="ez360pm.W001",
             )
-        ]
-    return []
-
+        )
+    if not settings.DEBUG and "localhost" in settings.PUBLIC_BASE_URL:
+        issues.append(
+            checks.Warning(
+                "PUBLIC_BASE_URL still points to localhost.",
+                hint="Set PUBLIC_BASE_URL to the public HTTPS application origin.",
+                id="ez360pm.W002",
+            )
+        )
+    stripe_values = (settings.STRIPE_SECRET_KEY, settings.STRIPE_WEBHOOK_SECRET)
+    if any(stripe_values) and not all(stripe_values):
+        issues.append(
+            checks.Warning(
+                "Stripe is only partially configured.",
+                hint="Set both STRIPE_SECRET_KEY and STRIPE_WEBHOOK_SECRET or neither.",
+                id="ez360pm.W003",
+            )
+        )
+    return issues

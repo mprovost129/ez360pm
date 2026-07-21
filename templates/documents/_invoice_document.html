@@ -1,0 +1,36 @@
+<article class="invoice-document">
+    <header class="invoice-document__header">
+        <div>
+            <h2>{{ invoice.company.name }}</h2>
+            {% if invoice.company.address_1 %}<address>{{ invoice.company.address_1 }}<br>{% if invoice.company.address_2 %}{{ invoice.company.address_2 }}<br>{% endif %}{{ invoice.company.city }}{% if invoice.company.state %}, {{ invoice.company.state }}{% endif %} {{ invoice.company.postal_code }}</address>{% endif %}
+            {% if invoice.company.phone %}<div>{{ invoice.company.phone }}</div>{% endif %}
+            {% if invoice.company.email %}<div>{{ invoice.company.email }}</div>{% endif %}
+        </div>
+        <div class="invoice-identity"><span>Invoice</span><strong>{{ invoice.number }}</strong><small>{{ invoice.get_status_display }}</small></div>
+    </header>
+    <div class="invoice-parties">
+        <div><h3>Bill to</h3><strong>{{ invoice.project.client.display_name }}</strong>{% if invoice.project.client.primary_contact %}<div>{{ invoice.project.client.primary_contact.get_full_name }}</div><div>{{ invoice.project.client.primary_contact.email }}</div>{% endif %}</div>
+        <div><h3>Project</h3><strong>{{ invoice.project.number }} · {{ invoice.project.name }}</strong><div>{{ invoice.project.address_1 }}</div><div>{{ invoice.project.city }}, {{ invoice.project.state }} {{ invoice.project.postal_code }}</div></div>
+        <div class="invoice-dates"><div><span>Issued</span><strong>{{ invoice.issue_date|date:'M j, Y' }}</strong></div><div><span>Due</span><strong>{{ invoice.due_date|date:'M j, Y' }}</strong></div></div>
+    </div>
+    <div class="invoice-lines-wrap">
+        <table class="invoice-lines">
+            <thead><tr><th>Description</th><th>Qty</th><th>Rate</th><th>Tax</th><th>Amount</th>{% if invoice.is_editable %}<th><span class="visually-hidden">Actions</span></th>{% endif %}</tr></thead>
+            <tbody>
+            {% for line in invoice.line_items.all %}
+            <tr><td>{{ line.description }}{% if line.time_entries.all %}<small>{{ line.time_entries.count }} time entr{{ line.time_entries.count|pluralize:'y,ies' }}</small>{% endif %}</td><td>{{ line.quantity }}</td><td>${{ line.rate|floatformat:2 }}</td><td>{{ line.tax_rate }}%</td><td>${{ line.line_total }}</td>{% if invoice.is_editable %}<td class="line-actions"><a href="{% url 'documents:line-update' invoice.pk line.pk %}">Edit</a><form method="post" action="{% url 'documents:line-delete' invoice.pk line.pk %}">{% csrf_token %}<button class="link-button" type="submit">Remove</button></form></td>{% endif %}</tr>
+            {% empty %}<tr><td colspan="6">No charges yet.</td></tr>{% endfor %}
+            </tbody>
+        </table>
+    </div>
+    <div class="invoice-summary">
+        <div><span>Subtotal</span><strong>${{ invoice.subtotal }}</strong></div>
+        <div><span>Tax</span><strong>${{ invoice.tax_total }}</strong></div>
+        {% if invoice.credit_total %}<div><span>Retainer credits</span><strong>-${{ invoice.credit_total }}</strong></div>{% endif %}
+        <div class="invoice-summary__total"><span>Total</span><strong>${{ invoice.total }}</strong></div>
+        {% if invoice.amount_paid %}<div><span>Paid</span><strong>-${{ invoice.amount_paid }}</strong></div>{% endif %}
+        <div class="invoice-summary__balance"><span>Balance due</span><strong>${{ invoice.outstanding_balance }}</strong></div>
+    </div>
+    {% if invoice.terms %}<section class="invoice-text"><h3>Terms</h3><p>{{ invoice.terms|linebreaksbr }}</p></section>{% endif %}
+    {% if invoice.notes %}<section class="invoice-text"><h3>Notes</h3><p>{{ invoice.notes|linebreaksbr }}</p></section>{% endif %}
+</article>

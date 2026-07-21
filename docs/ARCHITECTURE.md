@@ -187,7 +187,8 @@ treated as already-sanitized at rendering time.
 
 `DocumentDelivery` is a small supporting model needed by the specified “send
 history” screen. It records recipients and the result of every delivery attempt;
-`Document.sent_at` remains the timestamp of the first successful send.
+`Document.sent_at` records public issue; `DocumentDelivery.sent_at` records a
+confirmed email delivery.
 
 PDF generation sits behind an adapter so the HTML-to-PDF library can be selected
 after a deployment-compatibility spike. Generated PDFs do not become the source

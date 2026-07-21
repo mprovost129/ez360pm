@@ -204,6 +204,13 @@ class TimeEntry(CompanyOwnedModel):
         choices=Status.choices,
         default=Status.LOGGED,
     )
+    line_item = models.ForeignKey(
+        "documents.LineItem",
+        on_delete=models.SET_NULL,
+        related_name="time_entries",
+        blank=True,
+        null=True,
+    )
 
     class Meta:
         ordering = ("-start_time", "-pk")

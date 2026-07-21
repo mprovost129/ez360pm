@@ -49,7 +49,7 @@ class Document(CompanyOwnedModel):
         blank=True,
         null=True,
     )
-    number = models.CharField(max_length=30)
+    number = models.CharField(max_length=30, blank=True)
     status = models.CharField(
         max_length=30,
         choices=Status.choices,
@@ -177,6 +177,11 @@ class Document(CompanyOwnedModel):
     def __str__(self):
         return f"{self.number} - {self.get_doc_type_display()}"
 
+    def delete(self, *args, **kwargs):
+        if self.status != self.Status.DRAFT:
+            raise ValidationError("Issued documents must be voided or withdrawn, not deleted.")
+        return super().delete(*args, **kwargs)
+
 
 class LineItem(models.Model):
     document = models.ForeignKey(
@@ -268,6 +273,46 @@ class Payment(models.Model):
         return f"{self.get_method_display()} payment of {self.amount}"
 
 
+class DocumentDelivery(models.Model):
+    class Purpose(models.TextChoices):
+        CLIENT_DOCUMENT = "client_document", "Client document"
+        ACCEPTANCE_NOTIFICATION = "acceptance_notification", "Acceptance notification"
+
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending"
+        SENT = "sent", "Sent"
+        FAILED = "failed", "Failed"
+
+    document = models.ForeignKey(
+        Document,
+        on_delete=models.PROTECT,
+        related_name="deliveries",
+    )
+    purpose = models.CharField(
+        max_length=30,
+        choices=Purpose.choices,
+        default=Purpose.CLIENT_DOCUMENT,
+    )
+    recipient_name = models.CharField(max_length=255)
+    recipient_email = models.EmailField()
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.PENDING,
+    )
+    provider_message_id = models.CharField(max_length=255, blank=True)
+    error_code = models.CharField(max_length=100, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    sent_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        ordering = ("-created_at", "-pk")
+        indexes = [models.Index(fields=("document", "status"))]
+
+    def __str__(self):
+        return f"{self.document.number} to {self.recipient_email}: {self.status}"
+
+
 class InvoiceCredit(models.Model):
     source_invoice = models.ForeignKey(
         Document,
@@ -336,4 +381,3 @@ class DocumentNumberSequence(models.Model):
 
     def __str__(self):
         return f"{self.company}: {self.doc_type}/{self.period}/{self.last_value}"
-
