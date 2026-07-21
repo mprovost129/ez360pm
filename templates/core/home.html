@@ -1,0 +1,19 @@
+{% extends 'base.html' %}
+
+{% block title %}Dashboard | EZ360PM{% endblock %}
+{% block meta_description %}EZ360PM project dashboard.{% endblock %}
+
+{% block content %}
+<div class="page-heading">
+    <div>
+        <p class="eyebrow">{{ user.company.name }}</p>
+        <h1>Dashboard</h1>
+    </div>
+</div>
+
+<section class="empty-dashboard" aria-labelledby="dashboard-ready-heading">
+    <i class="bi bi-house-check" aria-hidden="true"></i>
+    <h2 id="dashboard-ready-heading">Your workspace is ready</h2>
+    <p>Notes, clients, projects, documents, and time will appear here as they are added.</p>
+</section>
+{% endblock %}
