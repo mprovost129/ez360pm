@@ -1,0 +1,12 @@
+{% extends 'base.html' %}
+
+{% block title %}Revenue | EZ360PM{% endblock %}
+
+{% block content %}
+<div class="page-heading"><div><p class="eyebrow">Payments received</p><h1>Revenue · {{ selected_month|date:'F Y' }}</h1></div><strong class="page-total">${{ revenue_total }}</strong></div>
+<nav class="month-nav" aria-label="Revenue month"><a href="?month={{ previous_month|date:'Y-m' }}">← {{ previous_month|date:'M Y' }}</a><form method="get"><label for="month">Month</label><input id="month" type="month" name="month" value="{{ selected_month|date:'Y-m' }}"><button class="btn btn-light" type="submit">View</button></form><a href="?month={{ next_month|date:'Y-m' }}">{{ next_month|date:'M Y' }} →</a></nav>
+<div class="metric-grid metric-grid--compact">{% for row in method_totals %}<div class="metric-card"><span>{{ row.label }}</span><strong>${{ row.total }}</strong></div>{% empty %}<div class="metric-card"><span>No payments</span><strong>$0.00</strong></div>{% endfor %}</div>
+<section class="content-card">
+    {% for payment in payments %}<a class="item-row" href="{% url 'documents:invoice-detail' payment.document.pk %}"><span><strong>{{ payment.received_at|date:'M j' }} · {{ payment.document.number }}</strong><small>{{ payment.document.project.client.display_name }} · {{ payment.get_method_display }}{% if payment.reference %} · {{ payment.reference }}{% endif %}</small></span><strong>${{ payment.amount }}</strong></a>{% empty %}<p class="muted">No payments were received in this month.</p>{% endfor %}
+</section>
+{% endblock %}

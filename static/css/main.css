@@ -3,15 +3,22 @@
    ============================================================================= */
 
 :root {
-    /* Brand colors */
-    --bs-blue:    #0d6efd;
+    /* EZ360PM brand colors, sourced from the approved logo/theme assets. */
+    --ez-blue:       #1f5fbf;
+    --ez-blue-dark:  #184c9b;
+    --ez-green:      #38b26f;
+    --ez-green-dark: #2a8a55;
+    --ez-navy:       #111c32;
+    --ez-gradient: linear-gradient(90deg, var(--ez-blue), var(--ez-green));
+
+    --bs-blue:    var(--ez-blue);
     --bs-indigo:  #6610f2;
     --bs-purple:  #6f42c1;
     --bs-pink:    #d63384;
     --bs-red:     #dc3545;
     --bs-orange:  #fd7e14;
     --bs-yellow:  #ffc107;
-    --bs-green:   #198754;
+    --bs-green:   var(--ez-green);
     --bs-teal:    #20c997;
     --bs-cyan:    #0dcaf0;
     --bs-white:   #ffffff;
@@ -20,9 +27,9 @@
     --bs-black:   #000000;
 
     /* Theme colors */
-    --bs-primary:   #0d6efd;
+    --bs-primary:   var(--ez-blue);
     --bs-secondary: #6c757d;
-    --bs-success:   #198754;
+    --bs-success:   var(--ez-green);
     --bs-info:      #0dcaf0;
     --bs-warning:   #ffc107;
     --bs-danger:    #dc3545;
@@ -30,9 +37,9 @@
     --bs-dark:      #212529;
 
     /* Theme color RGB values (used by Bootstrap utilities) */
-    --bs-primary-rgb:   13, 110, 253;
+    --bs-primary-rgb:   31, 95, 191;
     --bs-secondary-rgb: 108, 117, 125;
-    --bs-success-rgb:   25, 135, 84;
+    --bs-success-rgb:   56, 178, 111;
     --bs-info-rgb:      13, 202, 240;
     --bs-warning-rgb:   255, 193, 7;
     --bs-danger-rgb:    220, 53, 69;
@@ -47,8 +54,8 @@
     --bs-body-line-height: 1.5;
 
     /* Links */
-    --bs-link-color:       #0d6efd;
-    --bs-link-hover-color: #0a58ca;
+    --bs-link-color:       var(--ez-blue);
+    --bs-link-hover-color: var(--ez-blue-dark);
 
     /* Borders */
     --bs-border-color: #dee2e6;
@@ -91,6 +98,89 @@ a:hover {
     color: var(--bs-link-hover-color);
 }
 
+.skip-link {
+    position: fixed;
+    top: 0.5rem;
+    left: 0.5rem;
+    z-index: 1100;
+    padding: 0.6rem 0.85rem;
+    color: #fff;
+    background: var(--ez-navy);
+    border-radius: 0.4rem;
+    box-shadow: 0 4px 14px rgba(17, 28, 50, 0.25);
+    text-decoration: none;
+    transform: translateY(calc(-100% - 1rem));
+    transition: transform 150ms ease;
+}
+
+.skip-link:focus {
+    color: #fff;
+    transform: translateY(0);
+}
+
+/* Primary actions start blue and sweep to green on interaction. The oversized
+   gradient keeps both endpoints solid while background-position animates. */
+.btn-primary,
+button[type="submit"]:not(.btn) {
+    --bs-btn-color: #fff;
+    --bs-btn-bg: var(--ez-blue);
+    --bs-btn-border-color: var(--ez-blue);
+    --bs-btn-hover-color: #fff;
+    --bs-btn-hover-bg: var(--ez-green);
+    --bs-btn-hover-border-color: var(--ez-green);
+    --bs-btn-active-color: #fff;
+    --bs-btn-active-bg: var(--ez-green-dark);
+    --bs-btn-active-border-color: var(--ez-green-dark);
+    --bs-btn-disabled-bg: var(--ez-blue);
+    --bs-btn-disabled-border-color: var(--ez-blue);
+    background-color: var(--ez-blue);
+    background-image: linear-gradient(
+        90deg,
+        var(--ez-blue) 0%,
+        var(--ez-blue) 45%,
+        var(--ez-green) 55%,
+        var(--ez-green) 100%
+    );
+    background-position: left center;
+    background-size: 220% 100%;
+    border: 1px solid var(--ez-blue);
+    color: #fff;
+    transition: background-position 280ms ease, border-color 280ms ease, box-shadow 150ms ease, transform 150ms ease;
+}
+
+.btn-primary:hover,
+.btn-primary:focus-visible,
+button[type="submit"]:not(.btn):hover,
+button[type="submit"]:not(.btn):focus-visible {
+    background-color: var(--ez-green);
+    background-position: right center;
+    border-color: var(--ez-green);
+    color: #fff;
+}
+
+.btn-primary:active,
+button[type="submit"]:not(.btn):active {
+    background-color: var(--ez-green-dark);
+    background-position: right center;
+    border-color: var(--ez-green-dark);
+    transform: translateY(1px);
+}
+
+.btn-primary:disabled,
+.btn-primary.disabled {
+    background-position: left center;
+    opacity: 0.65;
+}
+
+.btn-success {
+    --bs-btn-bg: var(--ez-green);
+    --bs-btn-border-color: var(--ez-green);
+    --bs-btn-hover-bg: var(--ez-green-dark);
+    --bs-btn-hover-border-color: var(--ez-green-dark);
+    --bs-btn-active-bg: var(--ez-green-dark);
+    --bs-btn-active-border-color: var(--ez-green-dark);
+}
+
 /* =============================================================================
    Layout
    ============================================================================= */
@@ -101,9 +191,13 @@ a:hover {
 }
 
 .app-header {
-    min-height: 64px;
-    background: #17324d;
-    box-shadow: 0 1px 4px rgba(22, 39, 55, 0.2);
+    min-height: 68px;
+    background: #fff;
+    border-bottom: 3px solid transparent;
+    border-image: var(--ez-gradient) 1;
+    box-shadow: 0 2px 12px rgba(17, 28, 50, 0.1);
+    --bs-navbar-color: var(--ez-navy);
+    --bs-navbar-hover-color: var(--ez-blue);
 }
 
 .app-header form {
@@ -119,13 +213,54 @@ a:hover {
     display: flex;
     align-items: center;
     gap: 0.65rem;
-    color: #fff;
+    color: var(--ez-navy);
 }
 
 .header-timer__running a {
-    color: #fff;
+    color: var(--ez-blue);
     font-weight: 700;
     text-decoration: none;
+}
+
+.brand-cluster,
+.company-identity {
+    display: flex;
+    align-items: center;
+}
+
+.brand-cluster {
+    min-width: 0;
+    gap: 0.85rem;
+}
+
+.product-brand {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    text-decoration: none;
+}
+
+.product-logo {
+    display: block;
+    width: 86px;
+    height: 52px;
+    object-fit: contain;
+}
+
+.company-identity {
+    min-width: 0;
+    gap: 0.55rem;
+    padding-left: 0.85rem;
+    border-left: 1px solid #dce4ec;
+    color: var(--ez-navy);
+    font-weight: 700;
+}
+
+.company-name {
+    max-width: 210px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .timer-clock {
@@ -135,8 +270,8 @@ a:hover {
 }
 
 .company-logo {
-    width: 36px;
-    height: 36px;
+    width: 34px;
+    height: 34px;
     border-radius: 6px;
     object-fit: contain;
     background: #fff;
@@ -145,7 +280,7 @@ a:hover {
 .app-layout {
     display: grid;
     grid-template-columns: 220px minmax(0, 1fr);
-    min-height: calc(100vh - 64px);
+    min-height: calc(100vh - 68px);
 }
 
 .app-sidebar {
@@ -183,8 +318,8 @@ a:hover {
 }
 
 .app-sidebar .nav-link:hover {
-    color: #17324d;
-    background: #edf3f8;
+    color: var(--ez-blue-dark);
+    background: linear-gradient(90deg, rgba(31, 95, 191, 0.1), rgba(56, 178, 111, 0.08));
 }
 
 .app-main {
@@ -203,7 +338,7 @@ a:hover {
 .page-heading h1,
 .auth-card h1 {
     margin: 0;
-    color: #17324d;
+    color: var(--ez-navy);
 }
 
 .eyebrow {
@@ -343,6 +478,21 @@ a:hover {
 .integration-state { display: inline-block; padding: 0.25rem 0.65rem; border-radius: 999px; font-weight: 700; }
 .integration-state--ready { color: #215b3a; background: #dff3e6; }
 .integration-state--off { color: #712b29; background: #f8d7da; }
+.metric-grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 1rem; margin-bottom: 1.25rem; }
+.metric-grid--compact { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
+.metric-card { display: grid; align-content: start; min-height: 115px; padding: 1rem; color: #31465a; background: #fff; border: 1px solid #dfe5ea; border-radius: 0.6rem; text-decoration: none; box-shadow: 0 2px 8px rgba(22, 39, 55, 0.04); }
+.metric-card:hover { color: var(--ez-navy); border-color: #9cb1c3; }
+.metric-card > span { color: #66788a; font-size: 0.78rem; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; }
+.metric-card > strong { margin-top: 0.35rem; color: var(--ez-navy); font-size: 1.7rem; }
+.metric-card > small { margin-top: auto; color: #66788a; }
+.metric-card--money { border-color: #8fc5a2; background: #f2fbf5; }
+.dashboard-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
+.dashboard-grid .content-card { min-width: 0; }
+.page-total { color: var(--ez-navy); font-size: 1.8rem; }
+.month-nav { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 0.85rem 1rem; margin-bottom: 1rem; background: #fff; border: 1px solid #dfe5ea; border-radius: 0.5rem; }
+.month-nav form { display: flex; align-items: center; gap: 0.5rem; margin: 0; }
+.month-nav input[type="month"] { width: auto; }
+.danger-link { color: var(--bs-danger); }
 .form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; max-width: 960px; }
 .form-field { min-width: 0; }
 .form-field label { display: block; margin-bottom: 0.3rem; font-weight: 600; }
@@ -355,18 +505,25 @@ address { font-style: normal; }
 
 .auth-body {
     min-height: 100vh;
-    background: #eef2f5;
+    background:
+        radial-gradient(circle at top left, rgba(31, 95, 191, 0.1), transparent 32rem),
+        radial-gradient(circle at bottom right, rgba(56, 178, 111, 0.1), transparent 32rem),
+        #f4f7fa;
 }
 
 .auth-header {
-    padding: 1.5rem 2rem;
+    padding: 1.25rem 2rem;
 }
 
 .auth-brand {
-    color: #17324d;
-    font-size: 1.25rem;
-    font-weight: 800;
-    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+}
+
+.auth-brand img {
+    display: block;
+    width: 130px;
+    height: auto;
 }
 
 .auth-main {
@@ -378,8 +535,9 @@ address { font-style: normal; }
     padding: 2rem;
     background: #fff;
     border: 1px solid var(--bs-border-color);
+    border-top: 3px solid var(--ez-blue);
     border-radius: 0.75rem;
-    box-shadow: 0 10px 30px rgba(22, 39, 55, 0.08);
+    box-shadow: 0 14px 36px rgba(17, 28, 50, 0.1);
 }
 
 .auth-card form {
@@ -432,16 +590,9 @@ textarea {
 
 button[type="submit"]:not(.btn) {
     padding: 0.5rem 1.25rem;
-    background: var(--bs-primary);
-    color: var(--bs-white);
-    border: none;
     border-radius: var(--bs-border-radius);
     font-size: 1rem;
     cursor: pointer;
-}
-
-button[type="submit"]:not(.btn):hover {
-    background: var(--bs-link-hover-color);
 }
 
 @media (max-width: 767.98px) {
@@ -464,9 +615,13 @@ button[type="submit"]:not(.btn):hover {
     }
 
     .detail-grid,
-    .form-grid {
+    .form-grid,
+    .dashboard-grid {
         grid-template-columns: 1fr;
     }
+
+    .metric-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .month-nav { flex-wrap: wrap; }
 
     .detail-wide,
     .form-actions {
@@ -480,6 +635,10 @@ button[type="submit"]:not(.btn):hover {
     .app-header {
         flex-wrap: wrap;
         gap: 0.5rem;
+    }
+
+    .company-name {
+        max-width: 150px;
     }
 
     .header-timer {
@@ -504,5 +663,49 @@ button[type="submit"]:not(.btn):hover {
     .time-row > .btn {
         grid-column: 1 / -1;
         justify-self: start;
+    }
+}
+
+@media (max-width: 575.98px) {
+    .product-logo {
+        width: 40px;
+        height: 40px;
+        border-radius: 10px;
+    }
+
+    .brand-cluster {
+        gap: 0.55rem;
+    }
+
+    .company-identity {
+        gap: 0.4rem;
+        padding-left: 0.55rem;
+    }
+
+    .company-logo {
+        width: 30px;
+        height: 30px;
+    }
+
+    .company-name {
+        max-width: 105px;
+        font-size: 0.85rem;
+    }
+
+    .auth-header {
+        padding: 1rem;
+        text-align: center;
+    }
+
+    .auth-brand img {
+        width: 112px;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .skip-link,
+    .btn-primary,
+    button[type="submit"]:not(.btn) {
+        transition: none;
     }
 }

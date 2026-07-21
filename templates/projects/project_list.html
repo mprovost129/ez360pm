@@ -7,6 +7,7 @@
     <h1>Projects</h1>
     <a class="btn btn-primary" href="{% url 'projects:create' %}">New project</a>
 </div>
+<nav class="filter-links"><a href="{% url 'projects:list' %}">All</a>{% for value, label in status_choices %}<a href="?status={{ value }}">{{ label }}</a>{% endfor %}</nav>
 <section class="content-card">
     {% for project in projects %}
     <a class="item-row" href="{% url 'projects:detail' project.pk %}">

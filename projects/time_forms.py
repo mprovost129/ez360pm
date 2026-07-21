@@ -88,6 +88,7 @@ class TimeFilterForm(forms.Form):
         required=False,
         widget=forms.DateInput(attrs={"type": "date"}),
     )
+    unbilled = forms.BooleanField(required=False, label="Unbilled billable time only")
 
     def __init__(self, *args, company, **kwargs):
         super().__init__(*args, **kwargs)

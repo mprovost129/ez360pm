@@ -48,12 +48,20 @@ class TimeEntryListView(LoginRequiredMixin, CompanyScopedQuerysetMixin, ListView
             project = self.filter_form.cleaned_data.get("project")
             date_from = self.filter_form.cleaned_data.get("date_from")
             date_to = self.filter_form.cleaned_data.get("date_to")
+            unbilled = self.filter_form.cleaned_data.get("unbilled")
             if project:
                 queryset = queryset.filter(project=project)
             if date_from:
                 queryset = queryset.filter(start_time__date__gte=date_from)
             if date_to:
                 queryset = queryset.filter(start_time__date__lte=date_to)
+            if unbilled:
+                queryset = queryset.filter(
+                    end_time__isnull=False,
+                    billable=True,
+                    status=TimeEntry.Status.LOGGED,
+                    line_item__isnull=True,
+                )
         return queryset
 
     def get_context_data(self, **kwargs):

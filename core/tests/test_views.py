@@ -41,6 +41,16 @@ class DashboardViewTests(TestCase):
         self.assertContains(response, "Open intake")
         self.assertContains(response, "Lead projects")
 
+    def test_dashboard_shell_uses_product_brand_assets(self):
+        self.client.force_login(self.user)
+
+        response = self.client.get(reverse("core:home"))
+
+        self.assertContains(response, "images/ez360pm_logo.svg")
+        self.assertContains(response, "images/EZ360PM_icon_transparent_128.png")
+        self.assertContains(response, "images/favicon.ico")
+        self.assertContains(response, "site.webmanifest")
+
     def test_logout_requires_post(self):
         self.client.force_login(self.user)
 

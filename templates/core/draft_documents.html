@@ -1,0 +1,8 @@
+{% extends 'base.html' %}
+
+{% block title %}Draft documents | EZ360PM{% endblock %}
+
+{% block content %}
+<div class="page-heading"><div><p class="eyebrow">Needs preparation</p><h1>Draft documents</h1></div></div>
+<section class="content-card">{% for document in documents %}{% if document.doc_type == 'proposal' %}<a class="item-row" href="{% url 'proposals:detail' document.pk %}">{% else %}<a class="item-row" href="{% url 'documents:invoice-detail' document.pk %}">{% endif %}<span><strong>{{ document.number }} · {{ document.get_doc_type_display }}</strong><small>{{ document.project.number }} · {{ document.project.name }} · {{ document.project.client.display_name }}</small></span><strong>${{ document.total }}</strong></a>{% empty %}<p class="muted">No draft documents.</p>{% endfor %}</section>
+{% endblock %}

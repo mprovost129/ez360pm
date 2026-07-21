@@ -34,7 +34,17 @@ class ProjectListView(LoginRequiredMixin, CompanyScopedQuerysetMixin, ListView):
     template_name = "projects/project_list.html"
 
     def get_queryset(self):
-        return super().get_queryset().select_related("client").prefetch_related("client__contacts")
+        queryset = super().get_queryset()
+        status = self.request.GET.get("status")
+        if status in Project.Status.values:
+            queryset = queryset.filter(status=status)
+        return queryset.select_related("client").prefetch_related("client__contacts")
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["selected_status"] = self.request.GET.get("status", "")
+        context["status_choices"] = Project.Status.choices
+        return context
 
 
 class ProjectDetailView(LoginRequiredMixin, CompanyScopedQuerysetMixin, DetailView):

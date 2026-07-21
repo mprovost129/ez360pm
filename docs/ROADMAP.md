@@ -58,15 +58,20 @@ The architecture, relationships, and screen map are detailed in:
 
 ### Implementation status - 2026-07-21
 
-- **Phases 0-5 code: complete and tested.** Ninety-four account, isolation,
+- **Phases 0-6 code: complete and tested.** The account, isolation,
   intake, client/contact, project, timer/time-entry, invoice, proposal,
   acceptance, retainer, credit, manual/Stripe payment, email delivery, webhook,
-  public rendering/PDF, command, health, and dashboard tests pass on PostgreSQL.
-  Lint, dependency, Django system checks, migration-drift checks, and the
-  deployment check pass.
+  public rendering/PDF, dashboard, revenue, outstanding-balance, settings,
+  command, and health tests pass on PostgreSQL. Lint, dependency, Django system
+  checks, migration-drift checks, and the deployment check pass.
 - **Phase 0 operations: pending.** Bootstrap the real owner with an environment-
   supplied password and deploy the authenticated shell.
-- **Next code milestone:** Phase 6 attention dashboard and financial insight.
+- **Phase 7: in progress.** The launch baseline now includes a read-only data
+  audit, machine-readable monitoring output, backup/restore and webhook replay
+  drills, an accessibility skip link, and a privacy-safe real-use issue log.
+  Evidence-driven product hardening still requires production usage.
+- **Next milestone:** deploy, complete the first restore/replay drills, and log
+  recurring workflow friction during real use.
 
 ### Workflow traceability
 
@@ -204,7 +209,7 @@ accounting model.
 Repeated webhook delivery cannot duplicate revenue; a successful Stripe payment
 and a manually recorded check produce the same invoice status and revenue result.
 
-### Phase 6 - Attention dashboard and financial insight
+### Phase 6 - Attention dashboard and financial insight (code complete)
 
 **Goal:** surface what needs action without creating a general reporting product.
 
@@ -224,6 +229,11 @@ revenue totals equal Payment records rather than invoice totals.
 ### Phase 7 - Real-use hardening
 
 **Goal:** polish only the friction observed during at least one month of real use.
+
+Launch baseline implemented: `data_audit` verifies financial/document/time
+relationships without modifying them; the deployment guide defines health
+monitoring, restore, audit, and webhook replay drills; and `REAL_USE_LOG.md`
+defines the evidence threshold for product changes.
 
 - Keep a short issue log tied to actual jobs and rank fixes by frequency and risk.
 - Improve performance, accessibility, mobile quick capture, and print output

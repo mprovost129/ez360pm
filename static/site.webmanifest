@@ -1,0 +1,23 @@
+{
+  "name": "EZ360PM",
+  "short_name": "EZ360PM",
+  "description": "Personal project management from intake through payment.",
+  "icons": [
+    {
+      "src": "images/EZ360PM_icon_white_256.png",
+      "sizes": "256x256",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "images/EZ360PM_icon_white_512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ],
+  "theme_color": "#1f5fbf",
+  "background_color": "#ffffff",
+  "display": "standalone",
+  "start_url": "/"
+}

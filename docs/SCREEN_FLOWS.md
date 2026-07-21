@@ -114,6 +114,11 @@ first, then exceptional/actionable groups:
 Each count links to the exact filtered list that produced it. Empty groups collapse
 to a small success/empty state instead of consuming a full card.
 
+Implemented in Phase 6: project status filters, the unbilled-time filter, combined
+draft-document list, outstanding/overdue invoice lists, received-revenue month
+navigation, and company/integration settings are the reconciliation targets for
+these dashboard links.
+
 ## Quick-note interaction
 
 - The shell contains one multiline text box and a Save action.

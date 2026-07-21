@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
@@ -5,6 +7,7 @@ from django.core.exceptions import ValidationError
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
+from django.utils import timezone
 from django.views import View
 from django.views.decorators.http import require_POST
 from django.views.generic import CreateView, DetailView, FormView, ListView, UpdateView
@@ -24,6 +27,7 @@ from .models import Document, InvoiceCredit, LineItem, Payment
 from .pdf import build_invoice_pdf
 from .proposal_forms import InvoiceCreditForm
 from .proposal_services import remove_retainer_credit
+from .reporting import outstanding_invoices
 from .services import (
     attach_time_to_invoice,
     delete_draft_document,
@@ -77,6 +81,29 @@ class InvoiceListView(LoginRequiredMixin, CompanyScopedQuerysetMixin, ListView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context["filter_form"] = self.filter_form
+        return context
+
+
+class OutstandingInvoiceListView(LoginRequiredMixin, ListView):
+    model = Document
+    context_object_name = "invoices"
+    template_name = "documents/outstanding_invoice_list.html"
+    paginate_by = 50
+
+    def get_queryset(self):
+        queryset = outstanding_invoices(self.request.user.company)
+        if self.request.GET.get("overdue") == "1":
+            queryset = queryset.filter(due_date__lt=timezone.localdate())
+        return queryset
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["outstanding_total"] = sum(
+            (invoice.balance_amount for invoice in self.object_list),
+            Decimal("0.00"),
+        )
+        context["overdue_only"] = self.request.GET.get("overdue") == "1"
+        context["today"] = timezone.localdate()
         return context
 
 

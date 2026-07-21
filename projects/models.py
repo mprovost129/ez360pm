@@ -136,12 +136,27 @@ class Project(CompanyOwnedModel):
 
     @property
     def effective_hourly_rate(self):
-        if self.billing_type != self.BillingType.FLAT_FEE or not self.fixed_fee:
-            return None
         hours = self.actual_hours
         if not hours:
             return None
-        return (self.fixed_fee / hours).quantize(
+        if self.billing_type == self.BillingType.FLAT_FEE:
+            earned = self.fixed_fee
+        else:
+            from documents.models import Document
+
+            earned = self.documents.filter(
+                doc_type=Document.Type.INVOICE,
+                invoice_kind=Document.InvoiceKind.FINAL,
+                status__in=(
+                    Document.Status.SENT,
+                    Document.Status.VIEWED,
+                    Document.Status.PARTIALLY_PAID,
+                    Document.Status.PAID,
+                ),
+            ).aggregate(value=models.Sum("subtotal"))["value"]
+        if not earned:
+            return None
+        return (earned / hours).quantize(
             Decimal("0.01"),
             rounding=ROUND_HALF_UP,
         )

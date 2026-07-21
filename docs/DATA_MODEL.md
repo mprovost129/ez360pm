@@ -176,6 +176,12 @@ invoices. Non-void retainers from one accepted proposal are cumulatively capped
 at its accepted total. Final payment makes completion available but does not
 change project status without the explicit completion action.
 
+Phase 6 added no stored financial summaries. Dashboard attention counts,
+outstanding balances, unbilled duration, monthly revenue, project actual hours,
+and effective hourly rate remain derived from scoped source rows. Monthly revenue
+uses `Payment.received_at`; accounts receivable uses issued invoice totals minus
+their Payment rows.
+
 ## Document subtype validation
 
 One `Document` table intentionally serves proposals and invoices. Validation must

@@ -26,6 +26,7 @@ Run these after installing dependencies and before serving traffic:
 .\.venv\Scripts\python.exe manage.py migrate
 .\.venv\Scripts\python.exe manage.py collectstatic --noinput
 .\.venv\Scripts\python.exe manage.py deployment_check
+.\.venv\Scripts\python.exe manage.py data_audit --fail-on-warning
 ```
 
 Set `PUBLIC_BASE_URL` to the public HTTPS origin with no trailing slash. Public
@@ -84,3 +85,64 @@ After configuration, confirm the Integrations screen reports Email and Stripe as
 configured. Use a Stripe test-mode invoice first, replay its successful webhook,
 and verify that only one Stripe Payment row exists and the invoice balance is
 zero.
+
+## Monitoring and data audit
+
+Monitor `GET /health/` for an HTTP 200 response and `{"status":"ok"}`. This
+endpoint proves that Django and PostgreSQL can answer a request; it deliberately
+does not expose internal diagnostics.
+
+Run the read-only integrity audit after each release and on a daily schedule:
+
+```powershell
+.\.venv\Scripts\python.exe manage.py data_audit --json --fail-on-warning
+```
+
+The command checks stored line/document totals, payment-derived invoice status,
+retainer-credit relationships, invoiced-time relationships, company boundaries,
+and document deliveries left pending for more than 15 minutes. Use
+`--company-id <id>` to isolate one company or `--pending-minutes <minutes>` to
+change the delivery threshold. A nonzero result should alert the operator. The
+audit never modifies records; investigate against a backup before making a
+manual correction.
+
+## PostgreSQL backup and restore drill
+
+Use the hosting provider's encrypted daily PostgreSQL backups for routine
+retention. At least monthly, restore the latest backup into a new, isolated
+database—not over the live database—and record the recovery time.
+
+For a provider that exposes PostgreSQL command-line access, the equivalent flow
+is:
+
+```powershell
+pg_dump --format=custom --no-owner --file=<dated-backup-file> <live-database-url>
+createdb <isolated-restore-database>
+pg_restore --no-owner --dbname=<isolated-restore-database> <dated-backup-file>
+```
+
+Point a temporary EZ360PM environment at the isolated restore, then run:
+
+```powershell
+.\.venv\Scripts\python.exe manage.py deployment_check --skip-cache
+.\.venv\Scripts\python.exe manage.py data_audit --fail-on-warning
+```
+
+Verify that the owner can sign in and open representative accepted proposals,
+paid invoices, payment history, and attached time. Destroy the isolated restore
+through the provider after the drill. Back up and restore `MEDIA_ROOT` separately
+if company logos are stored on the application filesystem.
+
+## Stripe webhook replay drill
+
+In Stripe test mode, replay a previously successful Checkout event to the
+production-like webhook endpoint. Confirm both deliveries return success, only
+one Payment exists for the Payment Intent, the invoice balance is unchanged by
+the replay, and `data_audit` still passes. Never edit a Stripe Payment directly
+to repair a replay problem.
+
+## Real-use evidence
+
+Record workflow friction in [the real-use issue log](REAL_USE_LOG.md), excluding
+client or payment-sensitive information. Phase 7 changes should cite a repeated
+issue, an operational failure, or a measured accessibility/performance problem.

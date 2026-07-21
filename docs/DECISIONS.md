@@ -33,6 +33,7 @@ locked decision requires an explicit update to the product specification.
 | Treat the accepted Document fields as the durable acceptance record | accepted proposals are immutable and permanent; avoid duplicate acceptance storage |
 | Cap cumulative non-void retainers at the accepted proposal total | prevents repeated retainer creation from requesting more than the agreed price |
 | Require explicit project completion after final payment | payment closes the invoice; the owner still confirms that project work is complete |
+| Keep dashboard and revenue summaries derived (implemented) | Payment, invoice, and time source rows stay authoritative; no summary table can drift |
 | Use `PROTECT` around financial history | prevents accidental cascade deletion of audit records |
 | Store timestamps in UTC and localize at presentation boundaries | required for durable timers and consistent server behavior |
 | Choose the PDF engine behind an adapter | preserves rendering design if deployment constraints force a library change |

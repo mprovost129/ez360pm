@@ -7,6 +7,7 @@ app_name = "documents"
 
 urlpatterns = [
     path("", views.InvoiceListView.as_view(), name="invoice-list"),
+    path("outstanding/", views.OutstandingInvoiceListView.as_view(), name="outstanding-list"),
     path("new/", views.InvoiceCreateView.as_view(), name="invoice-create"),
     path("<int:pk>/", views.InvoiceDetailView.as_view(), name="invoice-detail"),
     path("<int:pk>/edit/", views.InvoiceUpdateView.as_view(), name="invoice-update"),
