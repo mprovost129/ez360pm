@@ -12,6 +12,8 @@ class CompanyScopedModelForm(forms.ModelForm):
             )
         self.company = company
         super().__init__(*args, **kwargs)
+        if hasattr(self.instance, "company_id"):
+            self.instance.company = company
 
     def scope_field(self, field_name, *, company_lookup="company"):
         """Limit a ModelChoice field to records owned by this form's company."""
@@ -27,4 +29,3 @@ class CompanyScopedModelForm(forms.ModelForm):
         if hasattr(self.instance, "company_id"):
             self.instance.company = self.company
         return super().save(commit=commit)
-

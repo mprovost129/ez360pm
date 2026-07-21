@@ -11,9 +11,14 @@
     </div>
 </div>
 
-<section class="empty-dashboard" aria-labelledby="dashboard-ready-heading">
-    <i class="bi bi-house-check" aria-hidden="true"></i>
-    <h2 id="dashboard-ready-heading">Your workspace is ready</h2>
-    <p>Notes, clients, projects, documents, and time will appear here as they are added.</p>
-</section>
+<div class="detail-grid">
+    <section class="content-card">
+        <div class="section-heading"><h2>Open intake</h2><a href="{% url 'intake:list' %}">View all</a></div>
+        {% for note in recent_notes %}<a class="item-row" href="{% url 'intake:update' note.pk %}"><span>{{ note.body|truncatechars:80 }}</span><i class="bi bi-chevron-right" aria-hidden="true"></i></a>{% empty %}<p class="muted">No open notes.</p>{% endfor %}
+    </section>
+    <section class="content-card">
+        <div class="section-heading"><h2>Lead projects</h2><a href="{% url 'projects:list' %}">View all</a></div>
+        {% for project in lead_projects %}<a class="item-row" href="{% url 'projects:detail' project.pk %}"><span><strong>{{ project.number }} · {{ project.name }}</strong><small>{{ project.client.display_name }}</small></span><i class="bi bi-chevron-right" aria-hidden="true"></i></a>{% empty %}<p class="muted">No lead projects.</p>{% endfor %}
+    </section>
+</div>
 {% endblock %}

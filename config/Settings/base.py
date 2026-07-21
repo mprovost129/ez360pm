@@ -25,6 +25,9 @@ INSTALLED_APPS = [
     'axes',
     # Local
     'accounts.apps.AccountsConfig',
+    'clients.apps.ClientsConfig',
+    'projects.apps.ProjectsConfig',
+    'intake.apps.IntakeConfig',
     'core.apps.CoreConfig',
 ]
 
@@ -63,6 +66,7 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'intake.context_processors.quick_note',
             ],
         },
     },

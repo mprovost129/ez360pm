@@ -1,0 +1,57 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ client.display_name }} | EZ360PM{% endblock %}
+
+{% block content %}
+<div class="page-heading">
+    <div><p class="eyebrow">Client</p><h1>{{ client.display_name }}</h1></div>
+    <div class="button-group">
+        <a class="btn btn-primary" href="{% url 'projects:create' %}?client={{ client.pk }}">New project</a>
+        <a class="btn btn-light" href="{% url 'clients:update' client.pk %}">Edit</a>
+    </div>
+</div>
+
+<div class="detail-grid">
+    <section class="content-card">
+        <div class="section-heading">
+            <h2>Contacts</h2>
+            <a href="{% url 'clients:contact-create' client.pk %}">Add contact</a>
+        </div>
+        {% for contact in client.contacts.all %}
+        <div class="detail-row">
+            <div>
+                <strong>{{ contact.get_full_name }}{% if contact.is_primary %} <span class="status-badge">Primary</span>{% endif %}</strong>
+                <small>{{ contact.email }} · {{ contact.phone }}</small>
+            </div>
+            <div>
+                <a href="{% url 'clients:contact-update' client.pk contact.pk %}">Edit</a>
+                {% if not contact.is_primary %} · <a href="{% url 'clients:contact-delete' client.pk contact.pk %}">Delete</a>{% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </section>
+
+    <section class="content-card">
+        <h2>Billing address</h2>
+        {% if client.billing_address_1 %}
+        <address>
+            {{ client.billing_address_1 }}<br>
+            {% if client.billing_address_2 %}{{ client.billing_address_2 }}<br>{% endif %}
+            {{ client.billing_city }}{% if client.billing_state %}, {{ client.billing_state }}{% endif %} {{ client.billing_postal_code }}<br>
+            {{ client.billing_country }}
+        </address>
+        {% else %}<p class="muted">No billing address entered.</p>{% endif %}
+        {% if client.internal_note %}<h3>Internal note</h3><p>{{ client.internal_note|linebreaksbr }}</p>{% endif %}
+    </section>
+
+    <section class="content-card detail-wide">
+        <div class="section-heading"><h2>Projects</h2></div>
+        {% for project in client.projects.all %}
+        <a class="item-row" href="{% url 'projects:detail' project.pk %}">
+            <span><strong>{{ project.number }} · {{ project.name }}</strong><small>{{ project.get_status_display }}</small></span>
+            <i class="bi bi-chevron-right" aria-hidden="true"></i>
+        </a>
+        {% empty %}<p class="muted">No projects yet.</p>{% endfor %}
+    </section>
+</div>
+{% endblock %}

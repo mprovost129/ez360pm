@@ -1,0 +1,31 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ page_title }} | EZ360PM{% endblock %}
+
+{% block content %}
+<div class="page-heading">
+    <h1>{{ page_title }}</h1>
+</div>
+
+<form method="post" class="content-card form-grid" novalidate>
+    {% csrf_token %}
+    {{ form.non_field_errors }}
+    {% for hidden in form.hidden_fields %}{{ hidden }}{% endfor %}
+    {% for field in form.visible_fields %}
+    <div class="form-field{% if field.errors %} form-field--error{% endif %}">
+        {% if field.field.widget.input_type == 'checkbox' %}
+        <label class="checkbox-label">{{ field }} {{ field.label }}</label>
+        {% else %}
+        <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+        {{ field }}
+        {% endif %}
+        {% if field.help_text %}<div class="help-text">{{ field.help_text }}</div>{% endif %}
+        {{ field.errors }}
+    </div>
+    {% endfor %}
+    <div class="form-actions">
+        <button class="btn btn-primary" type="submit">{{ submit_label|default:'Save' }}</button>
+        <button class="btn btn-light" type="button" onclick="history.back()">Cancel</button>
+    </div>
+</form>
+{% endblock %}

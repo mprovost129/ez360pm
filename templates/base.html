@@ -31,11 +31,20 @@
 
     <div class="app-layout">
         <aside class="app-sidebar" aria-label="Primary navigation">
+            <form class="quick-note" method="post" action="{% url 'intake:quick-add' %}">
+                {% csrf_token %}
+                {{ quick_note_form.body }}
+                <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                <button class="btn btn-primary btn-sm" type="submit">Save note</button>
+            </form>
             <nav class="nav flex-row flex-md-column">
                 <a class="nav-link" href="{% url 'core:home' %}">
                     <i class="bi bi-grid" aria-hidden="true"></i>
                     Dashboard
                 </a>
+                <a class="nav-link" href="{% url 'intake:list' %}"><i class="bi bi-inbox" aria-hidden="true"></i>Notes</a>
+                <a class="nav-link" href="{% url 'clients:list' %}"><i class="bi bi-people" aria-hidden="true"></i>Clients</a>
+                <a class="nav-link" href="{% url 'projects:list' %}"><i class="bi bi-house-door" aria-hidden="true"></i>Projects</a>
                 {% if user.is_staff %}
                 <a class="nav-link" href="{% url 'admin:index' %}">
                     <i class="bi bi-gear" aria-hidden="true"></i>

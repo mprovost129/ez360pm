@@ -41,7 +41,7 @@ assumption if no different product decision is made by the deadline.
 | By phase | Question | Working assumption |
 | --- | --- | --- |
 | 0 | What timezone determines “today,” project numbering month, and dashboard periods? | `America/New_York` for the personal company; store instants in UTC |
-| 1 | Can project number overrides use any text or only `YYMM###`? | allow nonblank text up to field length if company-unique |
+| 1 | Can project number overrides use any text or only `YYMM###`? | implemented: allow nonblank text up to field length if company-unique |
 | 3 | What are proposal and invoice number formats? | independent company sequences, `P-YY-####` and `I-YY-####` |
 | 3 | What currency and tax rounding policy apply? | USD; round each line total and each line's tax half-up to cents |
 | 3 | What default invoice terms/due interval applies? | no implicit terms; require due date when preparing an invoice for send |

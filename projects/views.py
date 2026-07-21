@@ -1,0 +1,104 @@
+from django.contrib import messages
+from django.contrib.auth.mixins import LoginRequiredMixin
+from django.db.models.deletion import ProtectedError
+from django.shortcuts import redirect
+from django.urls import reverse, reverse_lazy
+from django.views.generic import (
+    CreateView,
+    DeleteView,
+    DetailView,
+    ListView,
+    UpdateView,
+)
+
+from core.mixins import CompanyScopedQuerysetMixin
+
+from .forms import ProjectForm
+from .models import Project
+
+
+class CompanyFormMixin:
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["company"] = self.request.user.company
+        return kwargs
+
+
+class ProjectListView(LoginRequiredMixin, CompanyScopedQuerysetMixin, ListView):
+    model = Project
+    context_object_name = "projects"
+    template_name = "projects/project_list.html"
+
+    def get_queryset(self):
+        return super().get_queryset().select_related("client").prefetch_related("client__contacts")
+
+
+class ProjectDetailView(LoginRequiredMixin, CompanyScopedQuerysetMixin, DetailView):
+    model = Project
+    context_object_name = "project"
+    template_name = "projects/project_detail.html"
+
+    def get_queryset(self):
+        return super().get_queryset().select_related("client").prefetch_related(
+            "client__contacts",
+            "notes",
+        )
+
+
+class ProjectCreateView(LoginRequiredMixin, CompanyFormMixin, CreateView):
+    model = Project
+    form_class = ProjectForm
+    template_name = "shared/form.html"
+    extra_context = {"page_title": "New project", "submit_label": "Create project"}
+
+    def get_initial(self):
+        initial = super().get_initial()
+        client_id = self.request.GET.get("client")
+        if client_id:
+            initial["client"] = client_id
+        return initial
+
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        messages.success(self.request, f"Project {self.object.number} created.")
+        return response
+
+    def get_success_url(self):
+        return reverse("projects:detail", args=(self.object.pk,))
+
+
+class ProjectUpdateView(
+    LoginRequiredMixin,
+    CompanyScopedQuerysetMixin,
+    CompanyFormMixin,
+    UpdateView,
+):
+    model = Project
+    form_class = ProjectForm
+    template_name = "shared/form.html"
+    extra_context = {"page_title": "Edit project", "submit_label": "Save project"}
+
+    def get_success_url(self):
+        return reverse("projects:detail", args=(self.object.pk,))
+
+
+class ProjectDeleteView(LoginRequiredMixin, CompanyScopedQuerysetMixin, DeleteView):
+    model = Project
+    template_name = "shared/confirm_delete.html"
+    success_url = reverse_lazy("projects:list")
+    extra_context = {
+        "page_title": "Delete project",
+        "warning": "Only unused lead projects should be deleted.",
+    }
+
+    def form_valid(self, form):
+        if self.object.status != Project.Status.LEAD:
+            messages.error(self.request, "Only lead projects can be deleted.")
+            return redirect("projects:detail", pk=self.object.pk)
+        try:
+            self.object.delete()
+        except ProtectedError:
+            messages.error(self.request, "This project has attached history and cannot be deleted.")
+            return redirect("projects:detail", pk=self.object.pk)
+        messages.success(self.request, "Project deleted.")
+        return redirect(self.success_url)

@@ -57,12 +57,13 @@ The architecture, relationships, and screen map are detailed in:
 
 ### Implementation status - 2026-07-21
 
-- **Phase 0 code: complete and tested.** Seventeen account, scoping, command,
-  health, and dashboard tests pass on PostgreSQL. Lint, dependency, Django system
-  checks, migration-drift checks, and the deployment check pass.
+- **Phases 0-1 code: complete and tested.** Thirty-six account, isolation,
+  intake, client/contact, project, command, health, and dashboard tests pass on
+  PostgreSQL. Lint, dependency, Django system checks, migration-drift checks, and
+  the deployment check pass.
 - **Phase 0 operations: pending.** Bootstrap the real owner with an environment-
   supplied password and deploy the authenticated shell.
-- **Next code milestone:** Phase 1 intake, clients, contacts, and lead projects.
+- **Next code milestone:** Phase 2 durable time tracking.
 
 ### Workflow traceability
 
@@ -102,7 +103,7 @@ The architecture, relationships, and screen map are detailed in:
   changing a URL identifier.
 - The deployed health check, static files, login, and database connection work.
 
-### Phase 1 - Intake, clients, and projects
+### Phase 1 - Intake, clients, and projects (code complete)
 
 **Goal:** replace the notebook/inbox portion of the current workflow.
 

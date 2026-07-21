@@ -1,0 +1,26 @@
+{% extends 'base.html' %}
+
+{% block title %}Notes | EZ360PM{% endblock %}
+
+{% block content %}
+<div class="page-heading">
+    <h1>{% if request.GET.archived == '1' %}All notes{% else %}Intake notes{% endif %}</h1>
+    {% if request.GET.archived == '1' %}<a class="btn btn-light" href="{% url 'intake:list' %}">Show open</a>{% else %}<a class="btn btn-light" href="{% url 'intake:list' %}?archived=1">Show archived</a>{% endif %}
+</div>
+<section class="content-card">
+    {% for note in notes %}
+    <article class="note-row{% if note.is_archived %} note-row--archived{% endif %}">
+        <div class="note-body">{{ note.body|linebreaksbr }}</div>
+        <div class="note-meta">
+            <span>{{ note.created_at|date:'M j, Y g:i a' }}</span>
+            {% if note.project %}<a href="{% url 'projects:detail' note.project.pk %}">{{ note.project.number }}</a>{% elif note.client %}<a href="{% url 'clients:detail' note.client.pk %}">{{ note.client.display_name }}</a>{% endif %}
+        </div>
+        <div class="button-group">
+            <a class="btn btn-sm btn-light" href="{% url 'intake:update' note.pk %}">Edit / attach</a>
+            {% if not note.client and not note.project %}<a class="btn btn-sm btn-light" href="{% url 'intake:create-client' note.pk %}">Create client</a>{% endif %}
+            <form method="post" action="{% url 'intake:toggle-archive' note.pk %}">{% csrf_token %}<button class="btn btn-sm btn-light" type="submit">{% if note.is_archived %}Restore{% else %}Archive{% endif %}</button></form>
+        </div>
+    </article>
+    {% empty %}<div class="empty-state">No notes in this view.</div>{% endfor %}
+</section>
+{% endblock %}

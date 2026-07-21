@@ -1,0 +1,28 @@
+{% extends 'base.html' %}
+
+{% block title %}Clients | EZ360PM{% endblock %}
+
+{% block content %}
+<div class="page-heading">
+    <h1>Clients</h1>
+    <a class="btn btn-primary" href="{% url 'clients:create' %}">New client</a>
+</div>
+
+<section class="content-card">
+    {% if clients %}
+    <div class="item-list">
+        {% for client in clients %}
+        <a class="item-row" href="{% url 'clients:detail' client.pk %}">
+            <span>
+                <strong>{{ client.display_name }}</strong>
+                {% if client.primary_contact %}<small>{{ client.primary_contact.email }} · {{ client.primary_contact.phone }}</small>{% endif %}
+            </span>
+            <i class="bi bi-chevron-right" aria-hidden="true"></i>
+        </a>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty-state">No clients yet. Create the first client from an intake note or here.</div>
+    {% endif %}
+</section>
+{% endblock %}

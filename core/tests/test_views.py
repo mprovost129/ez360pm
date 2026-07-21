@@ -38,7 +38,8 @@ class DashboardViewTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Provost Home Design")
-        self.assertContains(response, "Your workspace is ready")
+        self.assertContains(response, "Open intake")
+        self.assertContains(response, "Lead projects")
 
     def test_logout_requires_post(self):
         self.client.force_login(self.user)
@@ -51,4 +52,3 @@ class DashboardViewTests(TestCase):
 class DeploymentCheckCommandTests(TestCase):
     def test_deployment_check_passes_with_current_migrations(self):
         call_command("deployment_check", skip_cache=True, verbosity=0)
-
