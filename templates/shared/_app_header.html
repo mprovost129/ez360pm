@@ -1,0 +1,25 @@
+{% load static %}
+<header class="app-header navbar navbar-light px-3">
+    <div class="brand-cluster">
+        <a class="product-brand" href="{% url 'core:home' %}" aria-label="EZ360PM dashboard">
+            <picture>
+                <source media="(max-width: 575.98px)" srcset="{% static 'images/EZ360PM_icon_transparent_128.png' %}">
+                <img class="product-logo" src="{% static 'images/ez360pm_logo.svg' %}" alt="EZ360PM">
+            </picture>
+        </a>
+        <div class="company-identity" title="{{ user.company.name }}">
+            {% if user.company.logo %}
+            <img class="company-logo" src="{{ user.company.logo.url }}" alt="">
+            {% endif %}
+            <span class="company-name">{{ user.company.name }}</span>
+        </div>
+    </div>
+    {% include 'shared/_running_timer.html' %}
+    <div class="d-flex align-items-center gap-3">
+        <span class="text-secondary small d-none d-sm-inline">{{ user.get_short_name|default:user.email }}</span>
+        <form method="post" action="{% url 'accounts:logout' %}">
+            {% csrf_token %}
+            <button class="btn btn-sm btn-outline-secondary" type="submit">Log out</button>
+        </form>
+    </div>
+</header>

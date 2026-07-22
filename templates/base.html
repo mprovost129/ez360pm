@@ -18,83 +18,13 @@
 <body class="{% if user.is_authenticated %}app-body{% else %}auth-body{% endif %}">
     <a class="skip-link" href="#main-content">Skip to main content</a>
     {% if user.is_authenticated %}
-    <header class="app-header navbar navbar-light px-3">
-        <div class="brand-cluster">
-            <a class="product-brand" href="{% url 'core:home' %}" aria-label="EZ360PM dashboard">
-                <picture>
-                    <source media="(max-width: 575.98px)" srcset="{% static 'images/EZ360PM_icon_transparent_128.png' %}">
-                    <img class="product-logo" src="{% static 'images/ez360pm_logo.svg' %}" alt="EZ360PM">
-                </picture>
-            </a>
-            <div class="company-identity" title="{{ user.company.name }}">
-                {% if user.company.logo %}
-                <img class="company-logo" src="{{ user.company.logo.url }}" alt="">
-                {% endif %}
-                <span class="company-name">{{ user.company.name }}</span>
-            </div>
-        </div>
-        <div class="header-timer">
-            {% if running_time_entry %}
-            <div class="header-timer__running" data-running-timer data-timer-start-ms="{{ running_timer_start_ms }}" data-timer-server-now-ms="{{ running_timer_server_now_ms }}">
-                <a href="{% url 'projects:detail' running_time_entry.project.pk %}">{{ running_time_entry.project.number }}</a>
-                <span class="timer-clock" data-timer-clock aria-live="off">{{ running_timer_elapsed }}</span>
-                <form method="post" action="{% url 'projects:timer-stop' %}">
-                    {% csrf_token %}
-                    <input type="hidden" name="next" value="{{ request.get_full_path }}">
-                    <button class="btn btn-sm btn-danger" type="submit">Stop</button>
-                </form>
-            </div>
-            {% else %}
-            <a class="btn btn-sm btn-success" href="{% url 'projects:timer-start' %}"><i class="bi bi-play-fill" aria-hidden="true"></i> Start timer</a>
-            {% endif %}
-        </div>
-        <div class="d-flex align-items-center gap-3">
-            <span class="text-secondary small d-none d-sm-inline">{{ user.get_short_name|default:user.email }}</span>
-            <form method="post" action="{% url 'accounts:logout' %}">
-                {% csrf_token %}
-                <button class="btn btn-sm btn-outline-secondary" type="submit">Log out</button>
-            </form>
-        </div>
-    </header>
+    {% include 'shared/_app_header.html' %}
 
     <div class="app-layout">
-        <aside class="app-sidebar" aria-label="Primary navigation">
-            <form class="quick-note" method="post" action="{% url 'intake:quick-add' %}">
-                {% csrf_token %}
-                {{ quick_note_form.body }}
-                <input type="hidden" name="next" value="{{ request.get_full_path }}">
-                <button class="btn btn-primary btn-sm" type="submit">Save note</button>
-            </form>
-            <nav class="nav flex-row flex-md-column">
-                <a class="nav-link" href="{% url 'core:home' %}">
-                    <i class="bi bi-grid" aria-hidden="true"></i>
-                    Dashboard
-                </a>
-                <a class="nav-link" href="{% url 'intake:list' %}"><i class="bi bi-inbox" aria-hidden="true"></i>Notes</a>
-                <a class="nav-link" href="{% url 'clients:list' %}"><i class="bi bi-people" aria-hidden="true"></i>Clients</a>
-                <a class="nav-link" href="{% url 'projects:list' %}"><i class="bi bi-house-door" aria-hidden="true"></i>Projects</a>
-                <a class="nav-link" href="{% url 'projects:time-list' %}"><i class="bi bi-clock" aria-hidden="true"></i>Time</a>
-                <a class="nav-link" href="{% url 'proposals:list' %}"><i class="bi bi-file-earmark-check" aria-hidden="true"></i>Proposals</a>
-                <a class="nav-link" href="{% url 'documents:invoice-list' %}"><i class="bi bi-receipt" aria-hidden="true"></i>Invoices</a>
-                <a class="nav-link" href="{% url 'core:revenue' %}"><i class="bi bi-cash-coin" aria-hidden="true"></i>Revenue</a>
-                <a class="nav-link" href="{% url 'accounts:settings' %}"><i class="bi bi-gear" aria-hidden="true"></i>Settings</a>
-                {% if user.is_staff %}
-                <a class="nav-link" href="{% url 'admin:index' %}">
-                    <i class="bi bi-gear" aria-hidden="true"></i>
-                    Administration
-                </a>
-                {% endif %}
-            </nav>
-        </aside>
+        {% include 'shared/_app_sidebar.html' %}
 
         <main class="app-main" id="main-content" tabindex="-1">
-            {% if messages %}
-            <ul class="messages" aria-live="polite">
-                {% for message in messages %}
-                <li class="message message--{{ message.tags }}">{{ message }}</li>
-                {% endfor %}
-            </ul>
-            {% endif %}
+            {% include 'shared/_messages.html' %}
             {% block content %}{% endblock %}
         </main>
     </div>
@@ -105,13 +35,7 @@
         </a>
     </header>
     <main class="auth-main" id="main-content" tabindex="-1">
-        {% if messages %}
-        <ul class="messages" aria-live="polite">
-            {% for message in messages %}
-            <li class="message message--{{ message.tags }}">{{ message }}</li>
-            {% endfor %}
-        </ul>
-        {% endif %}
+        {% include 'shared/_messages.html' %}
         {% block auth_content %}{% block content_anonymous %}{% endblock %}{% endblock %}
     </main>
     {% endif %}
