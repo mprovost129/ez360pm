@@ -129,6 +129,7 @@ class InvoiceDetailView(LoginRequiredMixin, CompanyScopedQuerysetMixin, DetailVi
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         if self.object.status == Document.Status.DRAFT:
+            context["line_item_form"] = LineItemForm(document=self.object)
             form = TimeAttachmentForm(invoice=self.object)
             if form.fields["entries"].queryset.exists():
                 context["time_attachment_form"] = form

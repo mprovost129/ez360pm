@@ -7,7 +7,7 @@
     <div><p class="eyebrow">Proposal · {{ proposal.get_status_display }}</p><h1>{{ proposal.number }}</h1></div>
     <div class="button-group">
         <a class="btn btn-light" href="{% url 'proposals:pdf' proposal.pk %}" target="_blank">PDF</a>
-        {% if proposal.is_editable %}<a class="btn btn-light" href="{% url 'proposals:update' proposal.pk %}">Edit</a><a class="btn btn-light" href="{% url 'proposals:section-create' proposal.pk %}">Add section</a><a class="btn btn-primary" href="{% url 'proposals:line-create' proposal.pk %}">Add price</a><form method="post" action="{% url 'proposals:issue' proposal.pk %}">{% csrf_token %}<button class="btn btn-success" type="submit">Issue proposal</button></form>{% endif %}
+        {% if proposal.is_editable %}<a class="btn btn-light" href="{% url 'proposals:update' proposal.pk %}">Edit</a><a class="btn btn-light" href="{% url 'proposals:section-create' proposal.pk %}">Add section</a><form method="post" action="{% url 'proposals:issue' proposal.pk %}">{% csrf_token %}<button class="btn btn-success" type="submit">Issue proposal</button></form>{% endif %}
         {% if proposal.status == 'sent' or proposal.status == 'viewed' %}<a class="btn btn-success" href="{% url 'proposals:send' proposal.pk %}">Email proposal</a>{% endif %}
         {% if proposal.status == 'sent' or proposal.status == 'viewed' %}<form method="post" action="{% url 'proposals:withdraw' proposal.pk %}">{% csrf_token %}<button class="btn btn-outline-danger" type="submit">Withdraw</button></form>{% endif %}
         {% if proposal.status == 'accepted' %}<a class="btn btn-primary" href="{% url 'proposals:retainer-create' proposal.pk %}">Create retainer invoice</a>{% endif %}
@@ -16,6 +16,12 @@
 {% if proposal.status != 'draft' %}<div class="public-link"><strong>Public link:</strong> <a href="{% url 'public-documents:view' proposal.public_token %}" target="_blank">{{ request.scheme }}://{{ request.get_host }}{% url 'public-documents:view' proposal.public_token %}</a></div>{% endif %}
 {% if proposal.status == 'accepted' %}<section class="content-card invoice-panel success-panel"><h2>Accepted</h2><p><strong>{{ proposal.accepted_by_name }}</strong> ({{ proposal.accepted_by_email }}) accepted ${{ proposal.accepted_total }} on {{ proposal.responded_at|date:'M j, Y g:i a' }}.</p></section>{% endif %}
 {% include 'documents/_proposal_document.html' %}
+{% if line_item_form %}
+<section class="content-card invoice-panel">
+    <h2>Add price</h2>
+    <form method="post" action="{% url 'proposals:line-create' proposal.pk %}" class="form-grid compact-form">{% csrf_token %}{{ line_item_form.as_p }}<div class="form-actions"><button class="btn btn-primary" type="submit">Add price</button></div></form>
+</section>
+{% endif %}
 {% if proposal.deliveries.all %}<section class="content-card invoice-panel"><h2>Delivery history</h2>{% for delivery in proposal.deliveries.all %}<div class="detail-row"><span><strong>{{ delivery.recipient_email }}</strong><small>{{ delivery.get_purpose_display }} · {{ delivery.created_at|date:'M j, Y g:i a' }}</small></span><span>{{ delivery.get_status_display }}{% if delivery.error_code %}<small>{{ delivery.error_code }}</small>{% endif %}</span></div>{% endfor %}</section>{% endif %}
 {% if proposal.derived_invoices.all %}<section class="content-card invoice-panel"><h2>Invoices from this proposal</h2>{% for invoice in proposal.derived_invoices.all %}<a class="item-row" href="{% url 'documents:invoice-detail' invoice.pk %}"><span><strong>{{ invoice.number }} · {{ invoice.get_invoice_kind_display }}</strong><small>{{ invoice.get_status_display }}</small></span><strong>${{ invoice.total }}</strong></a>{% endfor %}</section>{% endif %}
 {% if proposal.is_editable %}<div class="danger-zone"><a href="{% url 'proposals:delete' proposal.pk %}">Delete draft proposal</a></div>{% endif %}

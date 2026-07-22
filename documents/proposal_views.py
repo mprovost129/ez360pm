@@ -77,6 +77,8 @@ class ProposalDetailView(LoginRequiredMixin, CompanyScopedQuerysetMixin, DetailV
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context["show_internal_notes"] = True
+        if self.object.status == Document.Status.DRAFT:
+            context["line_item_form"] = LineItemForm(document=self.object)
         return context
 
 

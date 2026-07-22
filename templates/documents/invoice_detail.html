@@ -7,7 +7,7 @@
     <div><p class="eyebrow">{{ invoice.get_invoice_kind_display }} invoice · {{ invoice.get_status_display }}</p><h1>{{ invoice.number }}</h1></div>
     <div class="button-group">
         <a class="btn btn-light" href="{% url 'documents:invoice-pdf' invoice.pk %}" target="_blank">PDF</a>
-        {% if invoice.is_editable %}<a class="btn btn-light" href="{% url 'documents:invoice-update' invoice.pk %}">Edit</a><a class="btn btn-primary" href="{% url 'documents:line-create' invoice.pk %}">Add line</a><form method="post" action="{% url 'documents:invoice-issue' invoice.pk %}">{% csrf_token %}<button class="btn btn-success" type="submit">Issue invoice</button></form>{% endif %}
+        {% if invoice.is_editable %}<a class="btn btn-light" href="{% url 'documents:invoice-update' invoice.pk %}">Edit</a><form method="post" action="{% url 'documents:invoice-issue' invoice.pk %}">{% csrf_token %}<button class="btn btn-success" type="submit">Issue invoice</button></form>{% endif %}
         {% if invoice.status == 'sent' or invoice.status == 'viewed' or invoice.status == 'partially_paid' %}<a class="btn btn-success" href="{% url 'documents:invoice-send' invoice.pk %}">Email invoice</a>{% endif %}
         {% if invoice.status == 'sent' or invoice.status == 'viewed' or invoice.status == 'partially_paid' %}<a class="btn btn-primary" href="{% url 'documents:payment-create' invoice.pk %}">Record payment</a><a class="btn btn-outline-danger" href="{% url 'documents:invoice-void' invoice.pk %}">Void</a>{% endif %}
     </div>
@@ -17,14 +17,21 @@
 
 {% include 'documents/_invoice_document.html' %}
 
+{% if line_item_form %}
+<section class="content-card invoice-panel">
+    <h2>Add line</h2>
+    <form method="post" action="{% url 'documents:line-create' invoice.pk %}" class="form-grid compact-form">{% csrf_token %}{{ line_item_form.as_p }}<div class="form-actions"><button class="btn btn-primary" type="submit">Add line</button></div></form>
+</section>
+{% endif %}
+
 {% if time_attachment_form %}
 <section class="content-card invoice-panel">
     <h2>Add unbilled time</h2>
     <form method="post" action="{% url 'documents:invoice-attach-time' invoice.pk %}">{% csrf_token %}{{ time_attachment_form.as_p }}<button class="btn btn-primary" type="submit">Add selected time</button></form>
 </section>
+{% endif %}
 
 {% if invoice.deliveries.all %}<section class="content-card invoice-panel"><h2>Delivery history</h2>{% for delivery in invoice.deliveries.all %}<div class="detail-row"><span><strong>{{ delivery.recipient_email }}</strong><small>{{ delivery.get_purpose_display }} · {{ delivery.created_at|date:'M j, Y g:i a' }}</small></span><span>{{ delivery.get_status_display }}{% if delivery.error_code %}<small>{{ delivery.error_code }}</small>{% endif %}</span></div>{% endfor %}</section>{% endif %}
-{% endif %}
 
 {% if invoice.credits_received.all or credit_form %}
 <section class="content-card invoice-panel">
