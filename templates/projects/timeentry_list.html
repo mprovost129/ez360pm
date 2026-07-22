@@ -12,14 +12,14 @@
 </div>
 
 {% if running_time_entry %}
-<section class="running-card" data-running-timer data-timer-start="{{ running_time_entry.start_time|date:'c' }}">
+<section class="running-card" data-running-timer data-timer-start-ms="{{ running_timer_start_ms }}" data-timer-server-now-ms="{{ running_timer_server_now_ms }}">
     <div>
         <p class="eyebrow">Timer running</p>
         <strong>{{ running_time_entry.project.number }} · {{ running_time_entry.project.name }}</strong>
         {% if running_time_entry.description %}<small>{{ running_time_entry.description }}</small>{% endif %}
     </div>
     <div class="running-actions">
-        <span class="timer-clock" data-timer-clock>00:00:00</span>
+        <span class="timer-clock" data-timer-clock aria-live="off">{{ running_timer_elapsed }}</span>
         <form method="post" action="{% url 'projects:timer-stop' %}">{% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}"><button class="btn btn-danger" type="submit">Stop</button></form>
     </div>
 </section>

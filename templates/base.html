@@ -35,9 +35,9 @@
         </div>
         <div class="header-timer">
             {% if running_time_entry %}
-            <div class="header-timer__running" data-running-timer data-timer-start="{{ running_time_entry.start_time|date:'c' }}">
+            <div class="header-timer__running" data-running-timer data-timer-start-ms="{{ running_timer_start_ms }}" data-timer-server-now-ms="{{ running_timer_server_now_ms }}">
                 <a href="{% url 'projects:detail' running_time_entry.project.pk %}">{{ running_time_entry.project.number }}</a>
-                <span class="timer-clock" data-timer-clock>00:00:00</span>
+                <span class="timer-clock" data-timer-clock aria-live="off">{{ running_timer_elapsed }}</span>
                 <form method="post" action="{% url 'projects:timer-stop' %}">
                     {% csrf_token %}
                     <input type="hidden" name="next" value="{{ request.get_full_path }}">
@@ -117,7 +117,7 @@
     {% endif %}
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="{% static 'js/main.js' %}"></script>
+    <script src="{% static 'js/main.js' %}?v=2"></script>
     {% block extra_js %}{% endblock %}
 
 </body>

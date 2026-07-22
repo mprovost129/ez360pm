@@ -8,14 +8,32 @@ function formatElapsed(totalSeconds) {
         .join(":");
 }
 
-function updateRunningTimers() {
+const runningTimerStates = new WeakMap();
+
+function initializeRunningTimers() {
     document.querySelectorAll("[data-running-timer]").forEach((timer) => {
-        const startedAt = Date.parse(timer.dataset.timerStart);
-        const clock = timer.querySelector("[data-timer-clock]");
-        if (Number.isNaN(startedAt) || !clock) return;
-        clock.textContent = formatElapsed((Date.now() - startedAt) / 1000);
+        const startedAt = Number(timer.dataset.timerStartMs);
+        const serverNow = Number(timer.dataset.timerServerNowMs);
+        if (!Number.isFinite(startedAt) || !Number.isFinite(serverNow)) return;
+        runningTimerStates.set(timer, {
+            startedAt,
+            clockOffset: serverNow - Date.now(),
+        });
     });
 }
 
+function updateRunningTimers() {
+    document.querySelectorAll("[data-running-timer]").forEach((timer) => {
+        const state = runningTimerStates.get(timer);
+        const clock = timer.querySelector("[data-timer-clock]");
+        if (!state || !clock) return;
+        const serverAdjustedNow = Date.now() + state.clockOffset;
+        clock.textContent = formatElapsed(
+            (serverAdjustedNow - state.startedAt) / 1000,
+        );
+    });
+}
+
+initializeRunningTimers();
 updateRunningTimers();
 window.setInterval(updateRunningTimers, 1000);

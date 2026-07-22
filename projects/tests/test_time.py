@@ -5,6 +5,7 @@ from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 from django.test import TestCase
 from django.urls import reverse
+from django.utils import timezone
 
 from accounts.models import Company, User
 from clients.tests.test_clients import create_client
@@ -197,6 +198,23 @@ class TimeEntryViewTests(TestCase):
         )
         self.assertRedirects(stop_response, reverse("projects:time-list"))
         self.assertFalse(TimeEntry.objects.get().is_running)
+
+    def test_running_timer_renders_epoch_data_and_elapsed_fallback(self):
+        started_at = timezone.now() - timedelta(seconds=65)
+        entry = start_timer(user=self.user, project=self.project, at=started_at)
+
+        response = self.client.get(reverse("projects:time-list"))
+        html = response.content.decode()
+
+        self.assertContains(
+            response,
+            f'data-timer-start-ms="{int(entry.start_time.timestamp() * 1000)}"',
+            count=2,
+        )
+        self.assertContains(response, "data-timer-server-now-ms=", count=2)
+        self.assertEqual(html.count("data-timer-clock"), 2)
+        self.assertIn(">00:01:", html)
+        self.assertNotIn(">00:00:00</span>", html)
 
     def test_start_form_rejects_other_company_project(self):
         response = self.client.post(
