@@ -10,14 +10,21 @@ function formatElapsed(totalSeconds) {
 
 const runningTimerStates = new WeakMap();
 
+function monotonicNow() {
+    if (window.performance && typeof window.performance.now === "function") {
+        return window.performance.now();
+    }
+    return Date.now();
+}
+
 function initializeRunningTimers() {
     document.querySelectorAll("[data-running-timer]").forEach((timer) => {
         const startedAt = Number(timer.dataset.timerStartMs);
         const serverNow = Number(timer.dataset.timerServerNowMs);
         if (!Number.isFinite(startedAt) || !Number.isFinite(serverNow)) return;
         runningTimerStates.set(timer, {
-            startedAt,
-            clockOffset: serverNow - Date.now(),
+            elapsedAtInitialization: Math.max(0, serverNow - startedAt),
+            initializedAt: monotonicNow(),
         });
     });
 }
@@ -27,9 +34,11 @@ function updateRunningTimers() {
         const state = runningTimerStates.get(timer);
         const clock = timer.querySelector("[data-timer-clock]");
         if (!state || !clock) return;
-        const serverAdjustedNow = Date.now() + state.clockOffset;
+        const elapsedMilliseconds =
+            state.elapsedAtInitialization +
+            Math.max(0, monotonicNow() - state.initializedAt);
         clock.textContent = formatElapsed(
-            (serverAdjustedNow - state.startedAt) / 1000,
+            elapsedMilliseconds / 1000,
         );
     });
 }
