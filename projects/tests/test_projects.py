@@ -103,6 +103,22 @@ class ProjectViewTests(TestCase):
         self.assertRedirects(response, reverse("projects:detail", args=(project.pk,)))
         self.assertRegex(project.number, r"^\d{7}$")
 
+    def test_fixed_fee_clears_default_hourly_rate_and_selects_flat_fee(self):
+        data = project_data(
+            billing_type=Project.BillingType.HOURLY,
+            hourly_rate=self.company.default_hourly_rate,
+            fixed_fee=Decimal("2500.00"),
+        )
+        data["client"] = self.client_record.pk
+
+        response = self.client.post(reverse("projects:create"), data)
+
+        project = Project.objects.get(company=self.company)
+        self.assertRedirects(response, reverse("projects:detail", args=(project.pk,)))
+        self.assertEqual(project.billing_type, Project.BillingType.FLAT_FEE)
+        self.assertEqual(project.fixed_fee, Decimal("2500.00"))
+        self.assertIsNone(project.hourly_rate)
+
     def test_project_form_scopes_client_choices(self):
         other_client = create_client(self.other_company, company_name="Hidden Client")
         data = project_data()

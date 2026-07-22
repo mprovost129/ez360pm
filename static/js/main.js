@@ -46,3 +46,32 @@ function updateRunningTimers() {
 initializeRunningTimers();
 updateRunningTimers();
 window.setInterval(updateRunningTimers, 1000);
+
+function initializeProjectBillingFields() {
+    const billingType = document.querySelector("#id_billing_type");
+    const hourlyRate = document.querySelector("#id_hourly_rate");
+    const fixedFee = document.querySelector("#id_fixed_fee");
+    if (!billingType || !hourlyRate || !fixedFee) return;
+
+    billingType.addEventListener("change", () => {
+        if (billingType.value === "flat_fee") {
+            hourlyRate.value = "";
+        } else if (billingType.value === "hourly") {
+            fixedFee.value = "";
+        }
+    });
+
+    fixedFee.addEventListener("input", () => {
+        if (fixedFee.value.trim() === "") return;
+        billingType.value = "flat_fee";
+        hourlyRate.value = "";
+    });
+
+    hourlyRate.addEventListener("input", () => {
+        if (hourlyRate.value.trim() === "") return;
+        billingType.value = "hourly";
+        fixedFee.value = "";
+    });
+}
+
+initializeProjectBillingFields();

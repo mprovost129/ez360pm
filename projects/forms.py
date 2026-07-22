@@ -42,20 +42,32 @@ class ProjectForm(CompanyScopedModelForm):
         ).ordered_for_list()
         if not self.instance.pk and self.company.default_hourly_rate:
             self.fields["hourly_rate"].initial = self.company.default_hourly_rate
+        self.fields["hourly_rate"].help_text = (
+            "Entering a fixed fee clears this rate automatically."
+        )
+        self.fields["fixed_fee"].help_text = (
+            "Entering a fixed fee switches billing to Flat fee."
+        )
 
     def clean(self):
         cleaned = super().clean()
         billing_type = cleaned.get("billing_type")
+        fixed_fee = cleaned.get("fixed_fee")
+
+        # A fixed fee is an explicit billing choice. It wins over the hourly
+        # default populated from Company settings, including without JavaScript.
+        if fixed_fee is not None:
+            billing_type = Project.BillingType.FLAT_FEE
+            cleaned["billing_type"] = billing_type
+            cleaned["hourly_rate"] = None
+
         if billing_type == Project.BillingType.HOURLY:
             if cleaned.get("hourly_rate") is None:
                 self.add_error("hourly_rate", "Hourly projects require a rate.")
-            if cleaned.get("fixed_fee") is not None:
-                self.add_error("fixed_fee", "Clear the fixed fee for hourly billing.")
         elif billing_type == Project.BillingType.FLAT_FEE:
-            if cleaned.get("fixed_fee") is None:
+            cleaned["hourly_rate"] = None
+            if fixed_fee is None:
                 self.add_error("fixed_fee", "Flat-fee projects require a fee.")
-            if cleaned.get("hourly_rate") is not None:
-                self.add_error("hourly_rate", "Clear the hourly rate for flat-fee billing.")
         return cleaned
 
     def save(self, commit=True):
@@ -76,4 +88,3 @@ class ProjectForm(CompanyScopedModelForm):
             project_data=data,
         )
         return self.instance
-
