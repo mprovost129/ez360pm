@@ -35,7 +35,7 @@
 {% endif %}
 
 <section class="content-card invoice-panel">
-    <div class="section-heading"><h2>Payments</h2>{% if invoice.status != 'draft' and invoice.status != 'void' and invoice.status != 'paid' %}<a href="{% url 'documents:payment-create' invoice.pk %}">Record payment</a>{% endif %}</div>
+    <div class="section-heading"><h2>Payments</h2></div>
     {% for payment in invoice.payments.all %}<div class="detail-row"><span><strong>${{ payment.amount }} · {{ payment.get_method_display }}</strong><small>{{ payment.received_at|date:'M j, Y' }}{% if payment.reference %} · {{ payment.reference }}{% endif %}</small></span>{% if payment.method != 'stripe' %}<span><a href="{% url 'documents:payment-update' invoice.pk payment.pk %}">Edit</a> · <form class="inline-form" method="post" action="{% url 'documents:payment-delete' invoice.pk payment.pk %}">{% csrf_token %}<button class="link-button" type="submit">Remove</button></form></span>{% endif %}</div>{% empty %}<p class="muted">No payments recorded.</p>{% endfor %}
 </section>
 

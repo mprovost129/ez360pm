@@ -9,4 +9,5 @@
 <section class="content-card">
     {% for payment in payments %}<a class="item-row" href="{% url 'documents:invoice-detail' payment.document.pk %}"><span><strong>{{ payment.received_at|date:'M j' }} · {{ payment.document.number }}</strong><small>{{ payment.document.project.client.display_name }} · {{ payment.get_method_display }}{% if payment.reference %} · {{ payment.reference }}{% endif %}</small></span><strong>${{ payment.amount }}</strong></a>{% empty %}<p class="muted">No payments were received in this month.</p>{% endfor %}
 </section>
+{% include 'shared/_pagination.html' %}
 {% endblock %}

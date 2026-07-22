@@ -448,6 +448,7 @@ button[type="submit"]:not(.btn):active {
 .invoice-lines th:not(:first-child), .invoice-lines td:not(:first-child) { text-align: right; }
 .invoice-lines td small { display: block; color: #6c7d8d; }
 .line-actions { white-space: nowrap; }
+.line-actions a { margin-right: 0.75rem; }
 .line-actions form { display: inline; }
 .link-button { padding: 0; color: var(--bs-link-color); background: transparent; border: 0; }
 .link-button:hover { color: var(--bs-link-hover-color); text-decoration: underline; }
