@@ -1,5 +1,7 @@
 import os
 
+from config.storage import build_media_storage, s3_media_enabled
+
 from .base import *  # noqa: F403
 
 DEBUG = False
@@ -9,10 +11,10 @@ ALLOWED_HOSTS = [value.strip() for value in os.environ['ALLOWED_HOSTS'].split(',
 # Whitenoise — insert after SecurityMiddleware
 MIDDLEWARE.insert(1, 'whitenoise.middleware.WhiteNoiseMiddleware')  # noqa: F405
 
+USE_S3_MEDIA = s3_media_enabled(os.environ)
+
 STORAGES = {
-    'default': {
-        'BACKEND': 'django.core.files.storage.FileSystemStorage',
-    },
+    'default': build_media_storage(os.environ),
     'staticfiles': {
         'BACKEND': 'whitenoise.storage.CompressedManifestStaticFilesStorage',
     },

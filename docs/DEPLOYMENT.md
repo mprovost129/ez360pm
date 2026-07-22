@@ -58,10 +58,16 @@ Django can identify secure requests before enforcing HTTPS redirects. Configure
 the public load balancer to replace—not append an untrusted client value for—
 that header, terminate TLS, and forward only to the private application service.
 
-The default filesystem `MEDIA_ROOT` needs a persistent volume at `/app/media` or
-an object-storage backend before company logos are treated as durable. Static
-assets do not need that volume because WhiteNoise serves the collected manifest.
-Set `MEDIA_ROOT` to the mounted path if the provider uses a different location.
+Company logos can use private Amazon S3 storage. Set `USE_S3_MEDIA=True` together
+with `AWS_STORAGE_BUCKET_NAME`, `AWS_S3_REGION_NAME`, `AWS_ACCESS_KEY_ID`, and
+`AWS_SECRET_ACCESS_KEY`. Objects are stored below the `media/` prefix, retain
+their original content type, and use one-hour signed URLs; keep S3 Block Public
+Access enabled. The IAM principal needs `s3:ListBucket` on the bucket and
+`s3:GetObject`, `s3:PutObject`, and `s3:DeleteObject` on `media/*`.
+
+When `USE_S3_MEDIA` is false, the default filesystem `MEDIA_ROOT` needs a
+persistent volume at `/app/media` before company logos are treated as durable.
+Static assets always remain on WhiteNoise and do not need that volume.
 
 For a remote PostgreSQL service that requires TLS, set `DB_SSLMODE=require` (or
 the stricter mode supplied by the provider). `DB_CONN_MAX_AGE` defaults to 60
