@@ -33,4 +33,4 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
     CMD python -c "import os, urllib.request; request = urllib.request.Request(f\"http://127.0.0.1:{os.getenv('PORT', '8000')}/health/\", headers={'X-Forwarded-Proto': 'https'}); assert urllib.request.urlopen(request, timeout=4).status == 200"
 
-CMD ["sh", "-c", "exec gunicorn config.wsgi:application --bind 0.0.0.0:${PORT:-8000} --workers ${WEB_CONCURRENCY:-2} --access-logfile - --error-logfile -"]
+CMD ["sh", "-c", "python manage.py migrate --noinput && python manage.py bootstrap_personal --company-name 'Provost Home Design' --email 'mike@provosthomedesign.com' --first-name 'Michael' --last-name 'Provost' --no-input && exec gunicorn config.wsgi:application --bind 0.0.0.0:${PORT:-8000} --workers ${WEB_CONCURRENCY:-2} --access-logfile - --error-logfile -"]

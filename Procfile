@@ -1,2 +1,2 @@
 web: gunicorn config.wsgi:application --access-logfile - --error-logfile -
-release: python manage.py migrate && python manage.py check --deploy --fail-level WARNING && python manage.py deployment_check && python manage.py data_audit --fail-on-warning
+release: python manage.py migrate --noinput && python manage.py bootstrap_personal --company-name "Provost Home Design" --email "mike@provosthomedesign.com" --first-name "Michael" --last-name "Provost" --no-input && python manage.py check --deploy --fail-level WARNING && python manage.py deployment_check && python manage.py data_audit --fail-on-warning
