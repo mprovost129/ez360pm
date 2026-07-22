@@ -322,6 +322,46 @@ class DeliveryAndStripeTests(TestCase):
         invoice.refresh_from_db()
         self.assertEqual(invoice.status, Document.Status.PAID)
 
+    def test_stripe_capture_records_even_when_balance_dropped_after_checkout(self):
+        # A manual payment can land between Checkout creation and the webhook,
+        # leaving the captured amount larger than the current balance. The
+        # verified capture is real money and must be recorded, not rejected into
+        # an endlessly retried webhook.
+        invoice = self.make_invoice(amount="100.00")
+        record_payment(
+            invoice=invoice,
+            payment_data={
+                "amount": Decimal("40.00"),
+                "method": Payment.Method.CHECK,
+                "received_at": date(2026, 7, 22),
+                "reference": "walk-in check",
+            },
+        )
+        event = self.stripe_event(invoice, intent="pi_overpay", amount=10000)
+
+        payment = process_stripe_event(event=event)
+
+        self.assertEqual(payment.amount, Decimal("100.00"))
+        invoice.refresh_from_db()
+        self.assertEqual(invoice.status, Document.Status.PAID)
+        self.assertEqual(invoice.amount_paid, Decimal("140.00"))
+        self.assertEqual(invoice.outstanding_balance, Decimal("0.00"))
+
+    def test_manual_payment_still_rejects_amount_over_the_balance(self):
+        invoice = self.make_invoice(amount="100.00")
+
+        with self.assertRaises(ValidationError):
+            record_payment(
+                invoice=invoice,
+                payment_data={
+                    "amount": Decimal("150.00"),
+                    "method": Payment.Method.CHECK,
+                    "received_at": date(2026, 7, 22),
+                    "reference": "entry typo",
+                },
+            )
+        self.assertFalse(Payment.objects.filter(document=invoice).exists())
+
     def test_webhook_rejects_untrusted_company_metadata_and_currency(self):
         invoice = self.make_invoice()
         wrong_company = self.stripe_event(invoice)

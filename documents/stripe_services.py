@@ -130,4 +130,8 @@ def process_stripe_event(*, event):
             "reference": f"Stripe Checkout {_value(session, 'id', '')}"[:255],
             "stripe_payment_intent_id": payment_intent_id,
         },
+        # A captured Stripe payment is real money: record it even if the balance
+        # dropped since Checkout was created, rather than rejecting and forcing
+        # Stripe to retry a webhook that can never succeed.
+        allow_overpayment=True,
     )

@@ -286,7 +286,7 @@ def recalculate_payment_status(*, invoice):
 
 
 @transaction.atomic
-def record_payment(*, invoice, payment_data):
+def record_payment(*, invoice, payment_data, allow_overpayment=False):
     invoice = Document.objects.select_for_update().get(pk=invoice.pk)
     if invoice.doc_type != Document.Type.INVOICE or invoice.status in {
         Document.Status.DRAFT,
@@ -301,7 +301,11 @@ def record_payment(*, invoice, payment_data):
                 raise ValidationError("Payment intent is already linked to another invoice.")
             return existing
     amount = money(payment_data["amount"])
-    if amount > invoice.outstanding_balance:
+    # Manual entry rejects overpayment to catch data-entry mistakes. A verified
+    # external capture (Stripe) passes allow_overpayment=True: the money is real
+    # and must be recorded even if the balance dropped after the payment was
+    # authorized, leaving the invoice overpaid for data_audit to surface.
+    if not allow_overpayment and amount > invoice.outstanding_balance:
         raise ValidationError("Payment cannot exceed the outstanding balance.")
     payment = Payment(document=invoice, **payment_data)
     payment.amount = amount
