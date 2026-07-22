@@ -388,6 +388,13 @@ class InvoiceViewTests(TestCase):
         self.assertContains(public_response, invoice.number)
         self.assertEqual(pdf_response.status_code, 200)
         self.assertEqual(pdf_response["Content-Type"], "application/pdf")
+        for response in (public_response, pdf_response):
+            self.assertEqual(response["Cache-Control"], "private, no-store")
+            self.assertEqual(response["Referrer-Policy"], "no-referrer")
+            self.assertEqual(
+                response["X-Robots-Tag"],
+                "noindex, nofollow, noarchive",
+            )
         invoice.refresh_from_db()
         self.assertEqual(invoice.status, Document.Status.VIEWED)
 

@@ -29,8 +29,38 @@ Run these after installing dependencies and before serving traffic:
 .\.venv\Scripts\python.exe manage.py data_audit --fail-on-warning
 ```
 
+For production, set `DJANGO_SETTINGS_MODULE=config.Settings.prod`. The release
+process in `Procfile` runs migrations, Django's deployment security checks, the
+database/cache check, and the read-only data audit before the new web process is
+promoted.
+
 Set `PUBLIC_BASE_URL` to the public HTTPS origin with no trailing slash. Public
 document links in email and Stripe redirects are built from this value.
+
+## Container and reverse-proxy requirements
+
+The production image collects static assets with nonsecret build-only settings,
+runs as the unprivileged `ez360pm` user, writes Gunicorn logs to stdout/stderr,
+honors the platform's `PORT` and `WEB_CONCURRENCY` values, and exposes a Docker
+health check against `/health/`.
+
+`.dockerignore` excludes `.env`, repository metadata, local virtualenvs, logs,
+media, test output, and other workstation files from the build context. Never
+pass runtime secrets as Docker build arguments or copy `.env` into an image.
+
+The application trusts `X-Forwarded-Proto: https` from the deployment proxy so
+Django can identify secure requests before enforcing HTTPS redirects. Configure
+the public load balancer to replace—not append an untrusted client value for—
+that header, terminate TLS, and forward only to the private application service.
+
+The default filesystem `MEDIA_ROOT` needs a persistent volume at `/app/media` or
+an object-storage backend before company logos are treated as durable. Static
+assets do not need that volume because WhiteNoise serves the collected manifest.
+Set `MEDIA_ROOT` to the mounted path if the provider uses a different location.
+
+For a remote PostgreSQL service that requires TLS, set `DB_SSLMODE=require` (or
+the stricter mode supplied by the provider). `DB_CONN_MAX_AGE` defaults to 60
+seconds in production and Django validates a persistent connection before reuse.
 
 ## Email
 
@@ -105,6 +135,10 @@ and document deliveries left pending for more than 15 minutes. Use
 change the delivery threshold. A nonzero result should alert the operator. The
 audit never modifies records; investigate against a backup before making a
 manual correction.
+
+Tokenized proposal/invoice pages and PDFs return `private, no-store`, a
+no-referrer policy, and `X-Robots-Tag: noindex, nofollow, noarchive`. These are
+defense-in-depth controls; the public token must still be treated as a secret.
 
 ## PostgreSQL backup and restore drill
 

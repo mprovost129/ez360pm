@@ -34,7 +34,6 @@ from .services import (
     delete_line_item,
     delete_payment,
     issue_document,
-    record_public_view,
     release_void_invoice_time,
     void_invoice,
 )
@@ -428,40 +427,6 @@ class InvoiceCreditDeleteView(LoginRequiredMixin, View):
 class InvoicePdfView(LoginRequiredMixin, View):
     def get(self, request, pk):
         invoice = scoped_invoice(request, pk)
-        response = HttpResponse(build_invoice_pdf(invoice), content_type="application/pdf")
-        response["Content-Disposition"] = f'inline; filename="{invoice.number}.pdf"'
-        return response
-
-
-class PublicInvoiceView(DetailView):
-    model = Document
-    context_object_name = "invoice"
-    template_name = "documents/public_invoice.html"
-    slug_field = "public_token"
-    slug_url_kwarg = "token"
-
-    def get_queryset(self):
-        return Document.objects.filter(doc_type=Document.Type.INVOICE).exclude(
-            status=Document.Status.DRAFT
-        ).select_related("company", "project", "project__client").prefetch_related(
-            "project__client__contacts",
-            "line_items",
-            "payments",
-        )
-
-    def get_object(self, queryset=None):
-        invoice = super().get_object(queryset)
-        return record_public_view(document=invoice)
-
-
-class PublicInvoicePdfView(View):
-    def get(self, request, token):
-        invoice = get_object_or_404(
-            Document.objects.filter(doc_type=Document.Type.INVOICE).exclude(
-                status=Document.Status.DRAFT
-            ),
-            public_token=token,
-        )
         response = HttpResponse(build_invoice_pdf(invoice), content_type="application/pdf")
         response["Content-Disposition"] = f'inline; filename="{invoice.number}.pdf"'
         return response

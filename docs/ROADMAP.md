@@ -68,7 +68,10 @@ The architecture, relationships, and screen map are detailed in:
   supplied password and deploy the authenticated shell.
 - **Phase 7: in progress.** The launch baseline now includes a read-only data
   audit, machine-readable monitoring output, backup/restore and webhook replay
-  drills, an accessibility skip link, and a privacy-safe real-use issue log.
+  drills, secret-safe/non-root container builds, release security gates,
+  proxy-aware HTTPS, PostgreSQL TLS/persistent-connection controls, stdout
+  logging, private/no-store public-document responses, print styling, an
+  accessibility skip link, and a privacy-safe real-use issue log.
   Evidence-driven product hardening still requires production usage.
 - **Next milestone:** deploy, complete the first restore/replay drills, and log
   recurring workflow friction during real use.

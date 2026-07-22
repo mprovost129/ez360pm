@@ -33,6 +33,22 @@ def check_production_email_identity(app_configs, **kwargs):
                 id="ez360pm.W002",
             )
         )
+    if not settings.DEBUG and not settings.PUBLIC_BASE_URL.startswith("https://"):
+        issues.append(
+            checks.Warning(
+                "PUBLIC_BASE_URL is not HTTPS.",
+                hint="Set PUBLIC_BASE_URL to the public HTTPS application origin.",
+                id="ez360pm.W004",
+            )
+        )
+    if not settings.DEBUG and settings.EMAIL_BACKEND.endswith("console.EmailBackend"):
+        issues.append(
+            checks.Warning(
+                "The console email backend is enabled in production.",
+                hint="Configure the production SMTP email backend before launch.",
+                id="ez360pm.W005",
+            )
+        )
     stripe_values = (settings.STRIPE_SECRET_KEY, settings.STRIPE_WEBHOOK_SECRET)
     if any(stripe_values) and not all(stripe_values):
         issues.append(
