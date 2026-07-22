@@ -4,6 +4,7 @@ from decimal import Decimal
 from types import SimpleNamespace
 from unittest.mock import patch
 
+import stripe
 from django.core import mail
 from django.core.exceptions import ValidationError
 from django.test import TestCase, override_settings
@@ -50,6 +51,22 @@ class DeliveryAndStripeTests(TestCase):
             project_data=project_data(number="AUTOMATION-1"),
         )
         self.client.force_login(self.user)
+        # Fee lookups call the Stripe API; stub them so webhook tests stay offline.
+        fee_patcher = patch(
+            "documents.stripe_services.stripe.PaymentIntent.retrieve",
+            return_value=SimpleNamespace(
+                latest_charge=SimpleNamespace(balance_transaction=SimpleNamespace(fee=0))
+            ),
+        )
+        self.mock_stripe_fee = fee_patcher.start()
+        self.addCleanup(fee_patcher.stop)
+
+    def set_stripe_fee(self, fee_cents):
+        self.mock_stripe_fee.return_value = SimpleNamespace(
+            latest_charge=SimpleNamespace(
+                balance_transaction=SimpleNamespace(fee=fee_cents)
+            )
+        )
 
     def make_invoice(self, *, accept_payments=True, amount="100.00"):
         invoice = create_invoice(
@@ -361,6 +378,47 @@ class DeliveryAndStripeTests(TestCase):
                 },
             )
         self.assertFalse(Payment.objects.filter(document=invoice).exists())
+
+    def test_stripe_payment_records_exact_provider_fee_and_net(self):
+        invoice = self.make_invoice()  # $100.00 invoice
+        self.set_stripe_fee(320)  # 2.9% + $0.30 on $100
+        event = self.stripe_event(invoice)
+
+        payment = process_stripe_event(event=event)
+
+        self.assertEqual(payment.amount, Decimal("100.00"))
+        self.assertEqual(payment.fee_amount, Decimal("3.20"))
+        self.assertEqual(payment.net_amount, Decimal("96.80"))
+        invoice.refresh_from_db()
+        self.assertEqual(invoice.status, Document.Status.PAID)
+
+    def test_stripe_fee_lookup_failure_still_records_payment_with_zero_fee(self):
+        invoice = self.make_invoice()
+        self.mock_stripe_fee.side_effect = stripe.StripeError("fee not available yet")
+        event = self.stripe_event(invoice)
+
+        payment = process_stripe_event(event=event)
+
+        self.assertEqual(payment.amount, Decimal("100.00"))
+        self.assertEqual(payment.fee_amount, Decimal("0.00"))
+        invoice.refresh_from_db()
+        self.assertEqual(invoice.status, Document.Status.PAID)
+
+    def test_manual_payment_carries_no_provider_fee(self):
+        invoice = self.make_invoice()
+        record_payment(
+            invoice=invoice,
+            payment_data={
+                "amount": Decimal("100.00"),
+                "method": Payment.Method.CHECK,
+                "received_at": date(2026, 7, 22),
+                "reference": "check 1201",
+            },
+        )
+
+        payment = invoice.payments.get()
+        self.assertEqual(payment.fee_amount, Decimal("0.00"))
+        self.assertEqual(payment.net_amount, Decimal("100.00"))
 
     def test_webhook_rejects_untrusted_company_metadata_and_currency(self):
         invoice = self.make_invoice()

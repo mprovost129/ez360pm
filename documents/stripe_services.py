@@ -1,3 +1,4 @@
+import logging
 from decimal import Decimal
 
 import stripe
@@ -8,6 +9,8 @@ from django.utils import timezone
 
 from .models import Document, Payment
 from .services import money, record_payment
+
+logger = logging.getLogger(__name__)
 
 
 def stripe_configuration_status():
@@ -88,6 +91,30 @@ def create_checkout_session(*, invoice, success_url, cancel_url):
     )
 
 
+def _retrieve_stripe_fee(payment_intent_id):
+    """Return the exact provider fee for a captured PaymentIntent, in dollars.
+
+    Revenue must be recorded even when Stripe's fee data is momentarily
+    unavailable, so any failure degrades to a zero fee rather than blocking the
+    payment; the fee can be reconciled later from the Stripe dashboard.
+    """
+    try:
+        intent = stripe.PaymentIntent.retrieve(
+            payment_intent_id,
+            expand=["latest_charge.balance_transaction"],
+            api_key=settings.STRIPE_SECRET_KEY,
+        )
+    except stripe.StripeError:
+        logger.warning("Stripe fee lookup failed intent=%s", payment_intent_id)
+        return Decimal("0.00")
+    charge = _value(intent, "latest_charge")
+    balance_txn = _value(charge, "balance_transaction") if charge else None
+    fee_cents = _value(balance_txn, "fee") if balance_txn else None
+    if fee_cents is None:
+        return Decimal("0.00")
+    return money(Decimal(fee_cents) / Decimal("100"))
+
+
 def process_stripe_event(*, event):
     event_type = _value(event, "type")
     if event_type not in {
@@ -121,10 +148,12 @@ def process_stripe_event(*, event):
     except (Document.DoesNotExist, TypeError, ValueError):
         raise ValidationError("Stripe event does not match an invoice.") from None
     amount = money(Decimal(amount_total) / Decimal("100"))
+    fee_amount = _retrieve_stripe_fee(payment_intent_id)
     return record_payment(
         invoice=invoice,
         payment_data={
             "amount": amount,
+            "fee_amount": fee_amount,
             "method": Payment.Method.STRIPE,
             "received_at": timezone.localdate(),
             "reference": f"Stripe Checkout {_value(session, 'id', '')}"[:255],

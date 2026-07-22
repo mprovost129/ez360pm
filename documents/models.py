@@ -243,6 +243,13 @@ class Payment(models.Model):
         decimal_places=2,
         validators=[MinValueValidator(Decimal("0.01"))],
     )
+    fee_amount = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=Decimal("0.00"),
+        validators=[MinValueValidator(Decimal("0"))],
+        help_text="Processing fee withheld by the provider (0 for manual payments).",
+    )
     method = models.CharField(max_length=20, choices=Method.choices)
     received_at = models.DateField(default=timezone.localdate)
     reference = models.CharField(max_length=255, blank=True)
@@ -260,7 +267,11 @@ class Payment(models.Model):
             models.CheckConstraint(
                 condition=Q(amount__gt=0),
                 name="documents_payment_amount_positive",
-            )
+            ),
+            models.CheckConstraint(
+                condition=Q(fee_amount__gte=0),
+                name="documents_payment_fee_nonnegative",
+            ),
         ]
         indexes = [models.Index(fields=("document", "received_at"))]
 
@@ -271,6 +282,10 @@ class Payment(models.Model):
 
     def __str__(self):
         return f"{self.get_method_display()} payment of {self.amount}"
+
+    @property
+    def net_amount(self):
+        return self.amount - self.fee_amount
 
 
 class DocumentDelivery(models.Model):
