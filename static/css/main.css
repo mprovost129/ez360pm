@@ -541,6 +541,14 @@ button[type="submit"]:not(.btn):active {
 .ordering-actions { display: inline-flex; align-items: center; gap: 0.4rem; }
 .access-note { max-width: 1000px; margin: -0.5rem 0 1rem; color: #66788a; font-size: 0.85rem; }
 .section-divider { display: flex; align-items: center; justify-content: center; margin: 1rem 0; color: #66788a; font-weight: 700; }
+.inline-line-editor-row td { padding-top: 0; border-top: 0; }
+.inline-line-editor summary { width: fit-content; color: var(--ez-blue); cursor: pointer; font-weight: 700; }
+.inline-line-editor[open] summary { margin-bottom: 0.75rem; }
+.workflow-actions { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 1rem 2rem; align-items: center; margin-bottom: 1rem; }
+.workflow-actions h2, .workflow-actions p { margin-bottom: 0.35rem; }
+.workflow-actions__more { grid-column: 1 / -1; }
+.workflow-actions__more summary { width: fit-content; color: var(--ez-blue); cursor: pointer; font-weight: 700; }
+.workflow-actions__more .button-group { margin-top: 0.75rem; }
 .success-panel { border-color: #8fc5a2; background: #f2fbf5; }
 .filter-links { display: flex; flex-wrap: wrap; gap: 1rem; margin-bottom: 1rem; }
 .integration-state { display: inline-block; padding: 0.25rem 0.65rem; border-radius: 999px; font-weight: 700; }
@@ -691,9 +699,12 @@ button[type="submit"]:not(.btn) {
     .form-grid,
     .dashboard-grid,
     .draft-readiness,
-    .readiness-list {
+    .readiness-list,
+    .workflow-actions {
         grid-template-columns: 1fr;
     }
+
+    .workflow-actions__more { grid-column: auto; }
 
     .line-item-preview { justify-content: flex-start; flex-wrap: wrap; }
 

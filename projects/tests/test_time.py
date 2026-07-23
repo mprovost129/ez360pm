@@ -385,6 +385,68 @@ class TimeEntryViewTests(TestCase):
         self.assertContains(response, "Enter a duration greater than zero.")
         self.assertFalse(TimeEntry.objects.exists())
 
+    def test_manual_entry_warns_and_rejects_overlapping_time(self):
+        existing_start = timezone.make_aware(datetime(2026, 7, 20, 9))
+        TimeEntry.objects.create(
+            company=self.company,
+            project=self.project,
+            user=self.user,
+            start_time=existing_start,
+            end_time=existing_start + timedelta(hours=2),
+            description="Existing work",
+        )
+
+        response = self.client.post(
+            reverse("projects:time-create"),
+            {
+                "project": self.project.pk,
+                "start_time_0": "2026-07-20",
+                "start_time_1": "10:00",
+                "duration_hours": "1",
+                "duration_minutes": "0",
+                "description": "Overlapping work",
+                "billable": "on",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "overlaps an existing entry")
+        self.assertEqual(TimeEntry.objects.filter(company=self.company).count(), 1)
+
+    def test_time_list_shows_filtered_hours_value_and_today_total(self):
+        start = timezone.now() - timedelta(hours=3)
+        TimeEntry.objects.create(
+            company=self.company,
+            project=self.project,
+            user=self.user,
+            start_time=start,
+            end_time=start + timedelta(hours=2),
+            description="Billable work",
+            billable=True,
+        )
+        TimeEntry.objects.create(
+            company=self.company,
+            project=self.project,
+            user=self.user,
+            start_time=start + timedelta(hours=2),
+            end_time=start + timedelta(hours=3),
+            description="Administration",
+            billable=False,
+        )
+
+        response = self.client.get(
+            reverse("projects:time-list"),
+            {"project": self.project.pk},
+        )
+
+        self.assertEqual(response.context["filtered_totals"]["hours"], Decimal("3.00"))
+        self.assertEqual(
+            response.context["filtered_totals"]["billable_value"],
+            Decimal("350.00"),
+        )
+        self.assertEqual(response.context["today_totals"]["hours"], Decimal("3.00"))
+        self.assertContains(response, "Filtered billable value")
+
     def test_edit_form_prefills_duration_from_existing_entry(self):
         entry = TimeEntry.objects.create(
             company=self.company,

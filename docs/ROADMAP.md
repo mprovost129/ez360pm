@@ -107,7 +107,7 @@ The architecture, relationships, and screen map are detailed in:
     date; explain automatic numbering.
   - [x] Add company settings for reusable proposal terms, invoice terms,
     invoice due days, and default tax rate.
-- [ ] Improve pricing-line input with inline editing, calculated line/document
+- [x] Improve pricing-line input with inline editing, calculated line/document
   totals, Save and add another, currency/percentage formatting, and controls
   that use the existing line ordering.
   - [x] First pass: default common values, calculate line and taxed totals live,
@@ -142,10 +142,12 @@ The architecture, relationships, and screen map are detailed in:
 
 #### Current-feature improvement queue
 
-- [ ] Finish the single-page proposal/invoice builder with inline pricing edits,
+- [x] Finish the single-page proposal/invoice builder with inline pricing edits,
   Save and add another, and continuously visible totals and preview.
   - [x] Add separate Save and review / Save and add another paths that return to
     the live document preview or the next-line form.
+  - [x] Edit existing price lines directly inside the draft preview and
+    recalculate document totals after each save.
 - [x] Add company-scoped search to Clients, Projects, Proposals, and Invoices by
   the identifiers and customer details used during daily work.
 - [x] Add Resend to same recipient and Retry failed delivery actions while
@@ -154,15 +156,15 @@ The architecture, relationships, and screen map are detailed in:
   creating a new one, reducing accidental duplicate customer records.
 - [x] Distinguish a Stripe fee that is awaiting provider data from a confirmed
   zero fee, then show the reconciled amount when it arrives.
-- [ ] Add filtered hours, billable value, and today's total to the Time page and
+- [x] Add filtered hours, billable value, and today's total to the Time page and
   warn about overlapping manual time entries.
-- [ ] Prioritize dashboard attention lists by age and expose how long leads,
+- [x] Prioritize dashboard attention lists by age and expose how long leads,
   drafts, unpaid invoices, and unbilled time have been waiting.
-- [ ] Send an internal notification when a proposal is declined and make the
+- [x] Send an internal notification when a proposal is declined and make the
   customer's response prominent on the proposal.
-- [ ] Allow an existing proposal or draft invoice to be duplicated into a new
+- [x] Allow an existing proposal or draft invoice to be duplicated into a new
   draft without copying lifecycle or payment history.
-- [ ] Group project-page actions by workflow stage so the most likely next
+- [x] Group project-page actions by workflow stage so the most likely next
   action is prominent and secondary actions remain available.
 
 ### Workflow traceability

@@ -1,3 +1,4 @@
+from decimal import Decimal
 from functools import wraps
 
 from django.contrib import messages
@@ -6,6 +7,7 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import ValidationError
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
+from django.utils import timezone
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views import View
 from django.views.generic import CreateView, FormView, ListView, UpdateView
@@ -23,6 +25,20 @@ from .time_services import (
     start_timer,
     stop_timer,
 )
+
+
+def _summarize_entries(queryset):
+    total_hours = Decimal("0.00")
+    billable_value = Decimal("0.00")
+    for entry in queryset.select_related("project"):
+        hours = entry.duration_hours
+        total_hours += hours
+        if entry.billable and entry.project.hourly_rate is not None:
+            billable_value += hours * entry.project.hourly_rate
+    return {
+        "hours": total_hours.quantize(Decimal("0.01")),
+        "billable_value": billable_value.quantize(Decimal("0.01")),
+    }
 
 
 def _safe_next(request, fallback="projects:time-list"):
@@ -95,6 +111,13 @@ class TimeEntryListView(LoginRequiredMixin, CompanyScopedQuerysetMixin, ListView
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context["filter_form"] = self.filter_form
+        context["filtered_totals"] = _summarize_entries(self.object_list)
+        today_entries = TimeEntry.objects.filter(
+            company=self.request.user.company,
+            user=self.request.user,
+            start_time__date=timezone.localdate(),
+        )
+        context["today_totals"] = _summarize_entries(today_entries)
         return context
 
 

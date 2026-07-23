@@ -125,10 +125,12 @@ class DashboardAndReportingTests(TestCase):
         self.assertEqual(response.context["draft_count"], 1)
         self.assertEqual(response.context["unbilled_count"], 1)
         self.assertEqual(response.context["unbilled_hours"], Decimal("2.00"))
+        self.assertEqual(response.context["oldest_unbilled_at"], start)
         self.assertEqual(response.context["unpaid_count"], 1)
         self.assertEqual(response.context["overdue_count"], 1)
         self.assertEqual(response.context["month_revenue"], Decimal("50.00"))
         self.assertContains(response, overdue.number)
+        self.assertContains(response, "oldest")
         self.assertNotContains(response, "LEAD-OTHER")
         self.assertNotContains(response, "$900.00")
 

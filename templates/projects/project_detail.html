@@ -7,15 +7,37 @@
 <div class="page-heading">
     <div><p class="eyebrow">{{ project.number }} · {{ project.get_status_display }}</p><h1>{{ project.name }}</h1></div>
     <div class="button-group">
-        {% if project.accepts_time and not running_time_entry %}<a class="btn btn-success" href="{% url 'projects:timer-start' %}?project={{ project.pk }}">Start timer</a>{% endif %}
-        {% if project.accepts_time %}<a class="btn btn-light" href="{% url 'projects:time-create' %}?project={{ project.pk }}">Add manual entry</a>{% endif %}
-        {% if project.status == 'lead' %}<a class="btn btn-primary" href="{% url 'proposals:create' %}?project={{ project.pk }}">New estimate / proposal</a>{% endif %}
-        <a class="btn {% if project.status == 'lead' %}btn-light{% else %}btn-primary{% endif %}" href="{% url 'documents:invoice-create' %}?project={{ project.pk }}">New invoice</a>
-        {% if can_start_without_retainer %}<form method="post" action="{% url 'projects:start-without-retainer' project.pk %}" data-confirm="Start this project without recording a paid retainer?">{% csrf_token %}<button class="btn btn-success" type="submit">Start without retainer</button></form>{% endif %}
-        {% if can_complete %}<form method="post" action="{% url 'projects:complete' project.pk %}" data-confirm="Mark this project complete? New time can no longer be recorded unless its status is changed again.">{% csrf_token %}<button class="btn btn-success" type="submit">Mark complete</button></form>{% endif %}
         <a class="btn btn-light" href="{% url 'projects:update' project.pk %}">Edit project</a>
     </div>
 </div>
+<section class="content-card workflow-actions">
+    <div>
+        <p class="eyebrow">Recommended next step</p>
+        {% if can_complete %}<h2>Close out the finished project</h2><p>The final invoice is paid, so this project is ready to complete.</p>
+        {% elif project.status == 'lead' %}<h2>Prepare the customer proposal</h2><p>Confirm the scope and pricing, then send the estimate / proposal.</p>
+        {% elif project.status == 'approved' and can_start_without_retainer %}<h2>Start the approved project</h2><p>No paid retainer is required for this project.</p>
+        {% elif project.status == 'approved' %}<h2>Collect the required retainer</h2><p>Review the accepted proposal and retainer invoice before beginning work.</p>
+        {% elif project.status == 'active' %}<h2>Record the next work session</h2><p>Keep project time current before preparing the next invoice.</p>
+        {% else %}<h2>Review the completed project</h2><p>Project documents, payments, and time remain available below.</p>{% endif %}
+    </div>
+    <div class="button-group workflow-actions__primary">
+        {% if can_complete %}<form method="post" action="{% url 'projects:complete' project.pk %}" data-confirm="Mark this project complete? New time can no longer be recorded unless its status is changed again.">{% csrf_token %}<button class="btn btn-success" type="submit">Mark complete</button></form>
+        {% elif project.status == 'lead' %}<a class="btn btn-primary" href="{% url 'proposals:create' %}?project={{ project.pk }}">New estimate / proposal</a>
+        {% elif project.status == 'approved' and can_start_without_retainer %}<form method="post" action="{% url 'projects:start-without-retainer' project.pk %}" data-confirm="Start this project without recording a paid retainer?">{% csrf_token %}<button class="btn btn-success" type="submit">Start without retainer</button></form>
+        {% elif project.status == 'approved' %}<a class="btn btn-primary" href="#project-invoices">Review retainer</a>
+        {% elif project.accepts_time and not running_time_entry %}<a class="btn btn-success" href="{% url 'projects:timer-start' %}?project={{ project.pk }}">Start timer</a>
+        {% elif project.accepts_time %}<a class="btn btn-primary" href="{% url 'projects:time-create' %}?project={{ project.pk }}">Add manual entry</a>{% endif %}
+    </div>
+    <details class="workflow-actions__more">
+        <summary>More project actions</summary>
+        <div class="button-group">
+            {% if project.accepts_time and not running_time_entry %}<a class="btn btn-light" href="{% url 'projects:timer-start' %}?project={{ project.pk }}">Start timer</a>{% endif %}
+            {% if project.accepts_time %}<a class="btn btn-light" href="{% url 'projects:time-create' %}?project={{ project.pk }}">Add manual entry</a>{% endif %}
+            {% if project.status == 'lead' %}<a class="btn btn-light" href="#project-proposals">Review proposals</a>{% endif %}
+            <a class="btn btn-light" href="{% url 'documents:invoice-create' %}?project={{ project.pk }}">New invoice</a>
+        </div>
+    </details>
+</section>
 <div class="detail-grid">
     <section class="content-card">
         <h2>Client</h2>
@@ -41,11 +63,11 @@
         <h2>Description</h2>
         {% if project.description %}<p>{{ project.description|linebreaksbr }}</p>{% else %}<p class="muted">No description.</p>{% endif %}
     </section>
-    <section class="content-card detail-wide">
+    <section class="content-card detail-wide" id="project-proposals">
         <h2>Notes</h2>
         {% for note in project.notes.all %}<div class="detail-row"><span>{{ note.body|linebreaksbr }}</span><small>{{ note.created_at|date:'M j, Y g:i a' }}</small></div>{% empty %}<p class="muted">No attached notes.</p>{% endfor %}
     </section>
-    <section class="content-card detail-wide">
+    <section class="content-card detail-wide" id="project-invoices">
         <div class="section-heading"><h2>Recent time</h2><a href="{% url 'projects:time-list' %}?project={{ project.pk }}">View all time</a></div>
         {% for entry in recent_time_entries %}
         <div class="detail-row"><span><strong>{{ entry.start_time|date:'M j, Y g:i a' }}</strong>{% if entry.description %}<small>{{ entry.description }}</small>{% endif %}</span><span>{% if entry.is_paused %}Paused{% elif entry.is_running %}Running{% else %}{{ entry.duration_hours|hours_minutes }}{% endif %}</span></div>

@@ -143,6 +143,40 @@ def send_acceptance_notification(*, proposal, document_url):
     )
 
 
+def send_decline_notification(*, proposal, document_url):
+    proposal = Document.objects.select_related("company", "project", "project__client").get(
+        pk=proposal.pk
+    )
+    recipient_email = proposal.company.email
+    if not recipient_email:
+        recipient_email = (
+            proposal.company.users.order_by("is_superuser", "pk")
+            .values_list("email", flat=True)
+            .first()
+            or ""
+        )
+    if not recipient_email:
+        return None
+    delivery, created = DocumentDelivery.objects.get_or_create(
+        dedupe_key=f"proposal-decline:{proposal.pk}",
+        defaults={
+            "document": proposal,
+            "purpose": DocumentDelivery.Purpose.DECLINE_NOTIFICATION,
+            "recipient_name": proposal.company.name,
+            "recipient_email": recipient_email,
+        },
+    )
+    if not created:
+        return delivery
+    return _send_delivery(
+        delivery=delivery,
+        subject=f"Proposal {proposal.number} declined",
+        document_url=document_url,
+        template_base="decline_notification",
+        context={"proposal": proposal},
+    )
+
+
 def send_payment_notification(*, payment):
     payment = Payment.objects.select_related(
         "document",

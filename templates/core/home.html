@@ -13,7 +13,7 @@
 <div class="metric-grid">
     <a class="metric-card" href="{% url 'projects:list' %}?status=lead"><span>Leads</span><strong>{{ lead_count }}</strong></a>
     <a class="metric-card" href="{% url 'projects:list' %}?status=approved"><span>Awaiting start</span><strong>{{ approved_count }}</strong></a>
-    <a class="metric-card" href="{% url 'projects:time-list' %}?unbilled=on"><span>Unbilled time</span><strong>{{ unbilled_hours|hours_minutes }}</strong><small>{{ unbilled_count }} entr{{ unbilled_count|pluralize:'y,ies' }}</small></a>
+    <a class="metric-card" href="{% url 'projects:time-list' %}?unbilled=on"><span>Unbilled time</span><strong>{{ unbilled_hours|hours_minutes }}</strong><small>{{ unbilled_count }} entr{{ unbilled_count|pluralize:'y,ies' }}{% if oldest_unbilled_at %} · oldest {{ oldest_unbilled_at|timesince }} ago{% endif %}</small></a>
     <a class="metric-card" href="{% url 'core:draft-documents' %}"><span>Draft documents</span><strong>{{ draft_count }}</strong></a>
     <a class="metric-card" href="{% url 'documents:outstanding-list' %}"><span>Outstanding</span><strong>{{ unpaid_count }}</strong><small>{{ overdue_count }} overdue</small></a>
     <a class="metric-card metric-card--money" href="{% url 'core:revenue' %}?month={{ revenue_month|date:'Y-m' }}"><span>{{ revenue_month|date:'F' }} revenue</span><strong>${{ month_revenue }}</strong><small>Payments received</small></a>
@@ -22,27 +22,27 @@
 <div class="dashboard-grid">
     <section class="content-card">
         <div class="section-heading"><h2>Open intake</h2><a href="{% url 'intake:list' %}">View all</a></div>
-        {% for note in recent_notes %}<a class="item-row" href="{% url 'intake:update' note.pk %}"><span>{{ note.body|truncatechars:80 }}</span><i class="bi bi-chevron-right" aria-hidden="true"></i></a>{% empty %}<p class="muted">No open notes.</p>{% endfor %}
+        {% for note in recent_notes %}<a class="item-row" href="{% url 'intake:update' note.pk %}"><span>{{ note.body|truncatechars:80 }}<small>Open {{ note.created_at|timesince }}</small></span><i class="bi bi-chevron-right" aria-hidden="true"></i></a>{% empty %}<p class="muted">No open notes.</p>{% endfor %}
     </section>
     <section class="content-card">
         <div class="section-heading"><h2>Lead projects requiring proposals</h2><a href="{% url 'projects:list' %}?status=lead">{{ lead_count }} total</a></div>
-        {% for project in lead_projects %}<a class="item-row" href="{% url 'projects:detail' project.pk %}"><span><strong>{{ project.number }} · {{ project.name }}</strong><small>{{ project.client.display_name }}</small></span><i class="bi bi-chevron-right" aria-hidden="true"></i></a>{% empty %}<p class="muted">No lead projects need attention.</p>{% endfor %}
+        {% for project in lead_projects %}<a class="item-row" href="{% url 'projects:detail' project.pk %}"><span><strong>{{ project.number }} · {{ project.name }}</strong><small>{{ project.client.display_name }} · waiting {{ project.created_at|timesince }}</small></span><i class="bi bi-chevron-right" aria-hidden="true"></i></a>{% empty %}<p class="muted">No lead projects need attention.</p>{% endfor %}
     </section>
     <section class="content-card">
         <div class="section-heading"><h2>Approved, awaiting start</h2><a href="{% url 'projects:list' %}?status=approved">{{ approved_count }} total</a></div>
-        {% for project in approved_projects %}<a class="item-row" href="{% url 'projects:detail' project.pk %}"><span><strong>{{ project.number }} · {{ project.name }}</strong><small>{{ project.client.display_name }}</small></span><i class="bi bi-chevron-right" aria-hidden="true"></i></a>{% empty %}<p class="muted">No approved projects are waiting.</p>{% endfor %}
+        {% for project in approved_projects %}<a class="item-row" href="{% url 'projects:detail' project.pk %}"><span><strong>{{ project.number }} · {{ project.name }}</strong><small>{{ project.client.display_name }} · waiting {{ project.updated_at|timesince }}</small></span><i class="bi bi-chevron-right" aria-hidden="true"></i></a>{% empty %}<p class="muted">No approved projects are waiting.</p>{% endfor %}
     </section>
     <section class="content-card">
         <div class="section-heading"><h2>Active projects</h2><a href="{% url 'projects:list' %}?status=active">{{ active_count }} total</a></div>
-        {% for project in active_projects %}<a class="item-row" href="{% url 'projects:detail' project.pk %}"><span><strong>{{ project.number }} · {{ project.name }}</strong><small>{{ project.unbilled_entry_count }} unbilled entr{{ project.unbilled_entry_count|pluralize:'y,ies' }}</small></span><i class="bi bi-chevron-right" aria-hidden="true"></i></a>{% empty %}<p class="muted">No active projects.</p>{% endfor %}
+        {% for project in active_projects %}<a class="item-row" href="{% url 'projects:detail' project.pk %}"><span><strong>{{ project.number }} · {{ project.name }}</strong><small>{{ project.unbilled_entry_count }} unbilled entr{{ project.unbilled_entry_count|pluralize:'y,ies' }}{% if project.oldest_unbilled_at %} · oldest {{ project.oldest_unbilled_at|timesince }} ago{% endif %}</small></span><i class="bi bi-chevron-right" aria-hidden="true"></i></a>{% empty %}<p class="muted">No active projects.</p>{% endfor %}
     </section>
     <section class="content-card">
         <div class="section-heading"><h2>Draft documents</h2><a href="{% url 'core:draft-documents' %}">{{ draft_count }} total</a></div>
-        {% for document in draft_documents %}{% if document.doc_type == 'proposal' %}<a class="item-row" href="{% url 'proposals:detail' document.pk %}">{% else %}<a class="item-row" href="{% url 'documents:invoice-detail' document.pk %}">{% endif %}<span><strong>{{ document.number }} · {{ document.get_doc_type_display }}</strong><small>{{ document.project.number }} · {{ document.project.name }}</small></span><i class="bi bi-chevron-right" aria-hidden="true"></i></a>{% empty %}<p class="muted">No draft documents.</p>{% endfor %}
+        {% for document in draft_documents %}{% if document.doc_type == 'proposal' %}<a class="item-row" href="{% url 'proposals:detail' document.pk %}">{% else %}<a class="item-row" href="{% url 'documents:invoice-detail' document.pk %}">{% endif %}<span><strong>{{ document.number }} · {{ document.get_doc_type_display }}</strong><small>{{ document.project.number }} · {{ document.project.name }} · draft for {{ document.created_at|timesince }}</small></span><i class="bi bi-chevron-right" aria-hidden="true"></i></a>{% empty %}<p class="muted">No draft documents.</p>{% endfor %}
     </section>
     <section class="content-card">
         <div class="section-heading"><h2>Unpaid invoices</h2><span><a href="{% url 'documents:outstanding-list' %}">{{ unpaid_count }} total</a>{% if overdue_count %} · <a class="danger-link" href="{% url 'documents:outstanding-list' %}?overdue=1">{{ overdue_count }} overdue</a>{% endif %}</span></div>
-        {% for invoice in unpaid_invoices %}<a class="item-row" href="{% url 'documents:invoice-detail' invoice.pk %}"><span><strong>{{ invoice.number }} · {{ invoice.project.client.display_name }}</strong><small>Due {{ invoice.due_date|date:'M j, Y' }}{% if invoice.due_date < dashboard_today %} · Overdue{% endif %}</small></span><strong>${{ invoice.balance_amount }}</strong></a>{% empty %}<p class="muted">No outstanding invoices.</p>{% endfor %}
+        {% for invoice in unpaid_invoices %}<a class="item-row" href="{% url 'documents:invoice-detail' invoice.pk %}"><span><strong>{{ invoice.number }} · {{ invoice.project.client.display_name }}</strong><small>Due {{ invoice.due_date|date:'M j, Y' }}{% if invoice.due_date < dashboard_today %} · Overdue{% endif %}{% if invoice.sent_at %} · outstanding {{ invoice.sent_at|timesince }}{% endif %}</small></span><strong>${{ invoice.balance_amount }}</strong></a>{% empty %}<p class="muted">No outstanding invoices.</p>{% endfor %}
     </section>
 </div>
 {% endblock %}

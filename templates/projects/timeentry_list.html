@@ -37,6 +37,12 @@
     <a class="btn btn-link" href="{% url 'projects:time-list' %}">Clear</a>
 </form>
 
+<div class="metric-grid metric-grid--compact">
+    <div class="metric-card"><span>Filtered time</span><strong>{{ filtered_totals.hours|hours_minutes }}</strong></div>
+    <div class="metric-card metric-card--money"><span>Filtered billable value</span><strong>${{ filtered_totals.billable_value }}</strong></div>
+    <div class="metric-card"><span>Today</span><strong>{{ today_totals.hours|hours_minutes }}</strong></div>
+</div>
+
 <section class="content-card time-ledger">
     {% for entry in time_entries %}
     <article class="time-row">

@@ -169,3 +169,16 @@ class ProjectViewTests(TestCase):
         response = self.client.get(reverse("projects:list"), {"q": "Porch"})
 
         self.assertEqual(list(response.context["projects"]), [visible])
+
+    def test_project_detail_prioritizes_the_next_workflow_action(self):
+        project = create_project(
+            company=self.company,
+            client=self.client_record,
+            project_data=project_data(number="NEXT-STEP"),
+        )
+
+        response = self.client.get(reverse("projects:detail", args=(project.pk,)))
+
+        self.assertContains(response, "Recommended next step")
+        self.assertContains(response, "Prepare the customer proposal")
+        self.assertContains(response, "More project actions")

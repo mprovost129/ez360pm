@@ -30,6 +30,7 @@ from .proposal_services import (
 from .services import (
     delete_draft_document,
     delete_line_item,
+    duplicate_document,
     issue_document,
     move_line_item,
 )
@@ -98,6 +99,12 @@ class ProposalDetailView(LoginRequiredMixin, CompanyScopedQuerysetMixin, DetailV
         context["show_internal_notes"] = True
         if self.object.status == Document.Status.DRAFT:
             context["line_item_form"] = LineItemForm(document=self.object)
+            for line in self.object.line_items.all():
+                line.edit_form = LineItemForm(
+                    instance=line,
+                    document=self.object,
+                    auto_id=f"id_line_{line.pk}_%s",
+                )
             context["has_scope"] = bool(self.object.body_sections)
             context["has_pricing"] = bool(
                 self.object.line_items.all() and self.object.total > 0
@@ -165,6 +172,17 @@ class ProposalDeleteView(LoginRequiredMixin, View):
         delete_draft_document(document=proposal)
         messages.success(request, "Draft proposal deleted.")
         return redirect("proposals:list")
+
+
+class ProposalDuplicateView(LoginRequiredMixin, View):
+    def post(self, request, pk):
+        proposal = scoped_proposal(request, pk)
+        duplicate = duplicate_document(document=proposal)
+        messages.success(
+            request,
+            f"Created draft proposal {duplicate.number} from {proposal.number}.",
+        )
+        return redirect("proposals:detail", pk=duplicate.pk)
 
 
 class ProposalSectionView(LoginRequiredMixin, FormView):

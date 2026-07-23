@@ -1,0 +1,31 @@
+<tr>
+    <td>{{ line.description }}{% if show_time and line.time_entries.all %}<small>{{ line.time_entries.count }} time entr{{ line.time_entries.count|pluralize:'y,ies' }}</small>{% endif %}</td>
+    <td>{{ line.quantity }}</td>
+    <td>${{ line.rate|floatformat:2 }}</td>
+    <td>{{ line.tax_rate }}%</td>
+    <td>${{ line.line_total }}</td>
+    {% if document.is_editable %}
+    <td class="line-actions">
+        {% if document.doc_type == 'proposal' %}
+            {% if not forloop.first %}<form method="post" action="{% url 'proposals:line-move' document.pk line.pk 'up' %}">{% csrf_token %}<button class="link-button" type="submit" aria-label="Move {{ line.description }} up">↑</button></form>{% endif %}
+            {% if not forloop.last %}<form method="post" action="{% url 'proposals:line-move' document.pk line.pk 'down' %}">{% csrf_token %}<button class="link-button" type="submit" aria-label="Move {{ line.description }} down">↓</button></form>{% endif %}
+            <form method="post" action="{% url 'proposals:line-delete' document.pk line.pk %}" data-confirm="Remove this proposal line?">{% csrf_token %}<button class="link-button" type="submit">Remove</button></form>
+        {% else %}
+            {% if not forloop.first %}<form method="post" action="{% url 'documents:line-move' document.pk line.pk 'up' %}">{% csrf_token %}<button class="link-button" type="submit" aria-label="Move {{ line.description }} up">↑</button></form>{% endif %}
+            {% if not forloop.last %}<form method="post" action="{% url 'documents:line-move' document.pk line.pk 'down' %}">{% csrf_token %}<button class="link-button" type="submit" aria-label="Move {{ line.description }} down">↓</button></form>{% endif %}
+            <form method="post" action="{% url 'documents:line-delete' document.pk line.pk %}" data-confirm="Remove this invoice line?">{% csrf_token %}<button class="link-button" type="submit">Remove</button></form>
+        {% endif %}
+    </td>
+    {% endif %}
+</tr>
+{% if line.edit_form %}
+<tr class="inline-line-editor-row">
+    <td colspan="6">
+        <details class="inline-line-editor" id="edit-line-{{ line.pk }}">
+            <summary>Edit {{ line.description }}</summary>
+            {% if document.doc_type == 'proposal' %}{% url 'proposals:line-update' document.pk line.pk as edit_action %}{% else %}{% url 'documents:line-update' document.pk line.pk as edit_action %}{% endif %}
+            {% include 'documents/_line_item_editor.html' with form=line.edit_form action=edit_action editing=True %}
+        </details>
+    </td>
+</tr>
+{% endif %}

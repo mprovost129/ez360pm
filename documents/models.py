@@ -296,6 +296,7 @@ class DocumentDelivery(models.Model):
     class Purpose(models.TextChoices):
         CLIENT_DOCUMENT = "client_document", "Client document"
         ACCEPTANCE_NOTIFICATION = "acceptance_notification", "Acceptance notification"
+        DECLINE_NOTIFICATION = "decline_notification", "Decline notification"
         PAYMENT_NOTIFICATION = "payment_notification", "Payment notification"
 
     class Status(models.TextChoices):

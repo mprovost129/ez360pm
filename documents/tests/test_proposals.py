@@ -318,6 +318,36 @@ class ProposalWorkflowTests(TestCase):
             ["Second", "First"],
         )
 
+    def test_accepted_proposal_can_be_duplicated_as_clean_draft(self):
+        proposal = self.make_proposal()
+        save_proposal_section(
+            proposal=proposal,
+            heading="Scope",
+            body="<p>Original scope.</p>",
+        )
+        proposal = self.accept(proposal)
+
+        response = self.client.post(
+            reverse("proposals:duplicate", args=(proposal.pk,))
+        )
+
+        duplicate = Document.objects.filter(
+            company=self.company,
+            doc_type=Document.Type.PROPOSAL,
+        ).exclude(pk=proposal.pk).get()
+        self.assertRedirects(
+            response,
+            reverse("proposals:detail", args=(duplicate.pk,)),
+        )
+        self.assertEqual(duplicate.status, Document.Status.DRAFT)
+        self.assertNotEqual(duplicate.number, proposal.number)
+        self.assertNotEqual(duplicate.public_token, proposal.public_token)
+        self.assertEqual(duplicate.body_sections, proposal.body_sections)
+        self.assertEqual(duplicate.total, proposal.total)
+        self.assertIsNone(duplicate.responded_at)
+        self.assertEqual(duplicate.accepted_by_name, "")
+        self.assertFalse(duplicate.deliveries.exists())
+
     def test_issue_and_email_continues_to_delivery_form(self):
         proposal = self.make_proposal()
 

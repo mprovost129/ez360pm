@@ -1,6 +1,8 @@
 from datetime import timedelta
 
 from django import forms
+from django.db.models import Q
+from django.utils import timezone
 
 from core.forms import CompanyScopedModelForm
 
@@ -72,6 +74,26 @@ class TimeEntryForm(CompanyScopedModelForm):
                     + timedelta(hours=hours, minutes=minutes)
                     + paused_duration
                 )
+                conflict = (
+                    TimeEntry.objects.filter(
+                        company=self.company,
+                        user=self.user,
+                        start_time__lt=cleaned["end_time"],
+                    )
+                    .exclude(pk=self.instance.pk)
+                    .filter(Q(end_time__gt=start) | Q(end_time__isnull=True))
+                    .select_related("project")
+                    .first()
+                )
+                if conflict:
+                    conflict_start = timezone.localtime(conflict.start_time).strftime(
+                        "%b %d, %Y at %I:%M %p"
+                    )
+                    self.add_error(
+                        None,
+                        "This time overlaps an existing entry for "
+                        f"{conflict.project.number} starting {conflict_start}.",
+                    )
         return cleaned
 
     def save(self, commit=True):

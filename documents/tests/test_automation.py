@@ -281,6 +281,29 @@ class DeliveryAndStripeTests(TestCase):
         self.assertEqual(notifications.get().status, DocumentDelivery.Status.SENT)
         self.assertIn("Proposal", mail.outbox[0].subject)
 
+    def test_public_decline_sends_one_internal_notification_and_records_response(self):
+        proposal = self.make_proposal()
+        decline_url = reverse("public-documents:decline", args=(proposal.public_token,))
+
+        first = self.client.post(decline_url, REMOTE_ADDR="203.0.113.9")
+        second = self.client.post(decline_url, REMOTE_ADDR="203.0.113.9")
+
+        self.assertEqual(first.status_code, 302)
+        self.assertEqual(second.status_code, 302)
+        proposal.refresh_from_db()
+        self.assertEqual(proposal.status, Document.Status.DECLINED)
+        self.assertIsNotNone(proposal.responded_at)
+        notifications = DocumentDelivery.objects.filter(
+            document=proposal,
+            purpose=DocumentDelivery.Purpose.DECLINE_NOTIFICATION,
+        )
+        self.assertEqual(notifications.count(), 1)
+        self.assertEqual(notifications.get().status, DocumentDelivery.Status.SENT)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn("declined", mail.outbox[0].subject)
+        detail = self.client.get(reverse("proposals:detail", args=(proposal.pk,)))
+        self.assertContains(detail, "Declined by customer")
+
     def test_public_response_attempts_are_rate_limited(self):
         proposal = self.make_proposal()
         accept_url = reverse("public-documents:accept", args=(proposal.public_token,))

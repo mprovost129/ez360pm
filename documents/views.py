@@ -34,6 +34,7 @@ from .services import (
     delete_draft_document,
     delete_line_item,
     delete_payment,
+    duplicate_document,
     issue_document,
     move_line_item,
     release_void_invoice_time,
@@ -141,8 +142,15 @@ class InvoiceDetailView(LoginRequiredMixin, CompanyScopedQuerysetMixin, DetailVi
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+        context["show_internal_notes"] = True
         if self.object.status == Document.Status.DRAFT:
             context["line_item_form"] = LineItemForm(document=self.object)
+            for line in self.object.line_items.all():
+                line.edit_form = LineItemForm(
+                    instance=line,
+                    document=self.object,
+                    auto_id=f"id_line_{line.pk}_%s",
+                )
             form = TimeAttachmentForm(invoice=self.object)
             if form.fields["entries"].queryset.exists():
                 context["time_attachment_form"] = form
@@ -250,6 +258,14 @@ class InvoiceDeleteView(LoginRequiredMixin, View):
         delete_draft_document(document=invoice)
         messages.success(request, "Draft invoice deleted and attached time released.")
         return redirect("documents:invoice-list")
+
+
+class InvoiceDuplicateView(LoginRequiredMixin, View):
+    def post(self, request, pk):
+        invoice = scoped_invoice(request, pk, draft=True)
+        duplicate = duplicate_document(document=invoice)
+        messages.success(request, f"Created draft invoice {duplicate.number} from {invoice.number}.")
+        return redirect("documents:invoice-detail", pk=duplicate.pk)
 
 
 class InvoiceChildFormMixin(LoginRequiredMixin):

@@ -1,4 +1,6 @@
 from collections import defaultdict
+from copy import deepcopy
+from datetime import timedelta
 from decimal import ROUND_HALF_UP, Decimal
 
 from django.core.exceptions import ValidationError
@@ -102,6 +104,63 @@ def create_invoice(*, company, project, invoice_data):
 def _require_draft(document):
     if document.status != Document.Status.DRAFT:
         raise ValidationError("Only draft documents can be edited.")
+
+
+@transaction.atomic
+def duplicate_document(*, document):
+    document = (
+        Document.objects.select_for_update()
+        .select_related("company", "project")
+        .prefetch_related("line_items")
+        .get(pk=document.pk)
+    )
+    if document.doc_type == Document.Type.INVOICE and not document.is_editable:
+        raise ValidationError("Only draft invoices can be duplicated.")
+    if document.doc_type not in {Document.Type.INVOICE, Document.Type.PROPOSAL}:
+        raise ValidationError("This document cannot be duplicated.")
+
+    today = timezone.localdate()
+    duplicate = Document.objects.create(
+        company=document.company,
+        project=document.project,
+        doc_type=document.doc_type,
+        invoice_kind=document.invoice_kind,
+        number=allocate_document_number(
+            company=document.company,
+            doc_type=document.doc_type,
+            on_date=today,
+        ),
+        status=Document.Status.DRAFT,
+        issue_date=today,
+        due_date=(
+            today + timedelta(days=document.company.default_invoice_due_days)
+            if document.doc_type == Document.Type.INVOICE
+            else None
+        ),
+        body_sections=deepcopy(document.body_sections),
+        terms=document.terms,
+        notes=document.notes,
+        accept_payments=(
+            document.accept_payments
+            if document.doc_type == Document.Type.INVOICE
+            else False
+        ),
+    )
+    LineItem.objects.bulk_create(
+        [
+            LineItem(
+                document=duplicate,
+                order=line.order,
+                description=line.description,
+                rate=line.rate,
+                quantity=line.quantity,
+                tax_rate=line.tax_rate,
+                line_total=line.line_total,
+            )
+            for line in document.line_items.all()
+        ]
+    )
+    return recalculate_document_totals(document=duplicate)
 
 
 @transaction.atomic

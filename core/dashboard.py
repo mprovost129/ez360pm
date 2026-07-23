@@ -1,7 +1,7 @@
 from datetime import timedelta
 from decimal import Decimal
 
-from django.db.models import Count, DurationField, ExpressionWrapper, F, Q, Sum
+from django.db.models import Count, DurationField, ExpressionWrapper, F, Min, Q, Sum
 from django.utils import timezone
 
 from documents.models import Document, Payment
@@ -28,12 +28,14 @@ def dashboard_context(company):
         .filter(status=Project.Status.LEAD)
         .select_related("client")
         .prefetch_related("client__contacts", "documents")
+        .order_by("created_at", "pk")
     )
     approved = (
         Project.objects.for_company(company)
         .filter(status=Project.Status.APPROVED)
         .select_related("client")
         .prefetch_related("client__contacts", "documents")
+        .order_by("updated_at", "pk")
     )
     active = (
         Project.objects.for_company(company)
@@ -42,12 +44,15 @@ def dashboard_context(company):
         .annotate(
             unbilled_entry_count=Count("time_entries", filter=unbilled_filter),
             unbilled_duration=Sum(duration_expression, filter=unbilled_filter),
+            oldest_unbilled_at=Min("time_entries__start_time", filter=unbilled_filter),
         )
+        .order_by(F("oldest_unbilled_at").asc(nulls_last=True), "pk")
     )
     drafts = (
         Document.objects.for_company(company)
         .filter(status=Document.Status.DRAFT)
         .select_related("project", "project__client")
+        .order_by("created_at", "pk")
     )
     unpaid = outstanding_invoices(company).prefetch_related("payments")
     today = timezone.localdate()
@@ -69,6 +74,7 @@ def dashboard_context(company):
         line_item__isnull=True,
     ).aggregate(
         count=Count("pk"),
+        oldest=Min("start_time"),
         duration=Sum(
             ExpressionWrapper(
                 F("end_time") - F("start_time") - F("paused_duration"),
@@ -78,7 +84,9 @@ def dashboard_context(company):
     )
     unbilled_duration = unbilled["duration"] or timedelta()
     return {
-        "recent_notes": Note.objects.for_company(company).filter(is_archived=False)[:5],
+        "recent_notes": Note.objects.for_company(company)
+        .filter(is_archived=False)
+        .order_by("created_at", "pk")[:5],
         "lead_projects": leads[:8],
         "lead_count": leads.count(),
         "approved_projects": approved[:8],
@@ -94,6 +102,7 @@ def dashboard_context(company):
         "unbilled_hours": (
             Decimal(str(unbilled_duration.total_seconds())) / Decimal("3600")
         ).quantize(Decimal("0.01")),
+        "oldest_unbilled_at": unbilled["oldest"],
         "month_revenue": revenue,
         "revenue_month": month_start,
         "dashboard_today": today,

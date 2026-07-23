@@ -11,6 +11,7 @@ urlpatterns = [
     path("<int:pk>/", proposal_views.ProposalDetailView.as_view(), name="detail"),
     path("<int:pk>/edit/", proposal_views.ProposalUpdateView.as_view(), name="update"),
     path("<int:pk>/delete/", proposal_views.ProposalDeleteView.as_view(), name="delete"),
+    path("<int:pk>/duplicate/", proposal_views.ProposalDuplicateView.as_view(), name="duplicate"),
     path("<int:pk>/issue/", proposal_views.proposal_issue, name="issue"),
     path(
         "<int:pk>/send/",

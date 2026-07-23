@@ -453,6 +453,32 @@ class InvoiceViewTests(TestCase):
         self.assertContains(response, "Design development")
         self.assertContains(response, "$175.00/hr")
         self.assertContains(response, "Draft readiness")
+        self.assertContains(response, "Save changes")
+
+    def test_invoice_line_can_be_edited_inside_draft_preview(self):
+        invoice = self.make_invoice()
+        line = invoice.line_items.get()
+
+        detail = self.client.get(reverse("documents:invoice-detail", args=(invoice.pk,)))
+        response = self.client.post(
+            reverse("documents:line-update", args=(invoice.pk, line.pk)),
+            {
+                "description": "Updated design services",
+                "rate": "125.00",
+                "quantity": "2.00",
+                "tax_rate": "0",
+            },
+        )
+
+        self.assertContains(detail, f"Edit {line.description}")
+        self.assertRedirects(
+            response,
+            f"{reverse('documents:invoice-detail', args=(invoice.pk,))}#document-preview",
+        )
+        line.refresh_from_db()
+        invoice.refresh_from_db()
+        self.assertEqual(line.description, "Updated design services")
+        self.assertEqual(invoice.total, Decimal("250.00"))
 
     def test_draft_invoice_lines_can_be_reordered(self):
         invoice = self.make_invoice()
@@ -473,6 +499,32 @@ class InvoiceViewTests(TestCase):
             list(invoice.line_items.values_list("pk", flat=True)),
             [second.pk, first.pk],
         )
+
+    def test_draft_invoice_can_be_duplicated_without_history(self):
+        invoice = self.make_invoice()
+
+        response = self.client.post(
+            reverse("documents:invoice-duplicate", args=(invoice.pk,))
+        )
+
+        duplicate = Document.objects.filter(
+            company=self.company,
+            doc_type=Document.Type.INVOICE,
+        ).exclude(pk=invoice.pk).get()
+        self.assertRedirects(
+            response,
+            reverse("documents:invoice-detail", args=(duplicate.pk,)),
+        )
+        self.assertEqual(duplicate.status, Document.Status.DRAFT)
+        self.assertNotEqual(duplicate.number, invoice.number)
+        self.assertNotEqual(duplicate.public_token, invoice.public_token)
+        self.assertEqual(duplicate.total, invoice.total)
+        self.assertEqual(
+            list(duplicate.line_items.values_list("description", flat=True)),
+            list(invoice.line_items.values_list("description", flat=True)),
+        )
+        self.assertFalse(duplicate.payments.exists())
+        self.assertFalse(duplicate.deliveries.exists())
 
     def test_issue_and_email_continues_to_delivery_form(self):
         invoice = self.make_invoice()
@@ -497,6 +549,8 @@ class InvoiceViewTests(TestCase):
 
     def test_issued_invoice_public_view_and_pdf(self):
         invoice = self.make_invoice()
+        invoice.notes = "Internal accounting note"
+        invoice.save(update_fields=["notes"])
         issue_document(document=invoice)
         invoice.refresh_from_db()
 
@@ -509,6 +563,7 @@ class InvoiceViewTests(TestCase):
 
         self.assertEqual(public_response.status_code, 200)
         self.assertContains(public_response, invoice.number)
+        self.assertNotContains(public_response, "Internal accounting note")
         self.assertEqual(pdf_response.status_code, 200)
         self.assertEqual(pdf_response["Content-Type"], "application/pdf")
         for response in (public_response, pdf_response):

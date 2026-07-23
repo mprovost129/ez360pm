@@ -4,7 +4,11 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.views import View
 from django.views.decorators.http import require_POST
 
-from .delivery_services import public_document_url, send_acceptance_notification
+from .delivery_services import (
+    public_document_url,
+    send_acceptance_notification,
+    send_decline_notification,
+)
 from .models import Document
 from .pdf import build_invoice_pdf, build_proposal_pdf
 from .proposal_forms import AcceptanceForm
@@ -103,10 +107,17 @@ def public_proposal_decline(request, token):
         return HttpResponse("Too many attempts. Please wait and try again.", status=429)
     proposal = public_document(token)
     if proposal.doc_type == Document.Type.PROPOSAL:
+        was_open = proposal.status in {Document.Status.SENT, Document.Status.VIEWED}
         try:
             decline_proposal(proposal=proposal)
         except ValidationError:
             pass
+        else:
+            if was_open:
+                send_decline_notification(
+                    proposal=proposal,
+                    document_url=public_document_url(proposal),
+                )
     return redirect("public-documents:view", token=token)
 
 

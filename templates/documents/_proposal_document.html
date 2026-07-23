@@ -24,7 +24,7 @@
             <thead><tr><th>Description</th><th>Qty</th><th>Rate</th><th>Tax</th><th>Amount</th>{% if proposal.is_editable %}<th><span class="visually-hidden">Actions</span></th>{% endif %}</tr></thead>
             <tbody>
             {% for line in proposal.line_items.all %}
-            <tr><td>{{ line.description }}</td><td>{{ line.quantity }}</td><td>${{ line.rate|floatformat:2 }}</td><td>{{ line.tax_rate }}%</td><td>${{ line.line_total }}</td>{% if proposal.is_editable %}<td class="line-actions">{% if not forloop.first %}<form method="post" action="{% url 'proposals:line-move' proposal.pk line.pk 'up' %}">{% csrf_token %}<button class="link-button" type="submit" aria-label="Move {{ line.description }} up">↑</button></form>{% endif %}{% if not forloop.last %}<form method="post" action="{% url 'proposals:line-move' proposal.pk line.pk 'down' %}">{% csrf_token %}<button class="link-button" type="submit" aria-label="Move {{ line.description }} down">↓</button></form>{% endif %}<a href="{% url 'proposals:line-update' proposal.pk line.pk %}">Edit</a><form method="post" action="{% url 'proposals:line-delete' proposal.pk line.pk %}" data-confirm="Remove this proposal line?">{% csrf_token %}<button class="link-button" type="submit">Remove</button></form></td>{% endif %}</tr>
+            {% include 'documents/_line_item_row.html' with document=proposal %}
             {% empty %}<tr><td colspan="6">No pricing yet.</td></tr>{% endfor %}
             </tbody>
         </table>
