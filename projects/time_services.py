@@ -100,3 +100,17 @@ def save_manual_entry(*, user, project, entry_data, entry=None):
     entry.full_clean()
     entry.save()
     return entry
+
+
+@transaction.atomic
+def delete_manual_entry(*, user, entry):
+    entry = TimeEntry.objects.select_for_update().get(
+        pk=entry.pk,
+        company=user.company,
+        user=user,
+    )
+    if entry.status == TimeEntry.Status.INVOICED:
+        raise ValidationError("Invoiced time cannot be deleted.")
+    if entry.is_running:
+        raise ValidationError("Stop the timer before deleting this entry.")
+    entry.delete()

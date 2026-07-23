@@ -691,7 +691,7 @@ button[type="submit"]:not(.btn) {
     .invoice-identity { justify-items: start; }
     .invoice-dates { text-align: left; }
 
-    .time-row > .btn {
+    .time-row > .button-group {
         grid-column: 1 / -1;
         justify-self: start;
     }

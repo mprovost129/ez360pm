@@ -14,6 +14,7 @@ from projects.services import create_project
 from projects.tests.test_projects import project_data
 from projects.time_services import (
     TimerAlreadyRunning,
+    delete_manual_entry,
     save_manual_entry,
     start_timer,
     stop_timer,
@@ -148,6 +149,47 @@ class TimerServiceTests(TestCase):
                 },
             )
 
+    def test_manual_entry_can_be_deleted(self):
+        entry = save_manual_entry(
+            user=self.user,
+            project=self.project,
+            entry_data={
+                "start_time": self.started_at,
+                "end_time": self.started_at + timedelta(hours=1),
+                "description": "Mistaken entry",
+                "billable": True,
+            },
+        )
+
+        delete_manual_entry(user=self.user, entry=entry)
+
+        self.assertFalse(TimeEntry.objects.filter(pk=entry.pk).exists())
+
+    def test_invoiced_entry_cannot_be_deleted(self):
+        entry = save_manual_entry(
+            user=self.user,
+            project=self.project,
+            entry_data={
+                "start_time": self.started_at,
+                "end_time": self.started_at + timedelta(hours=1),
+                "description": "Already billed",
+                "billable": True,
+            },
+        )
+        entry.status = TimeEntry.Status.INVOICED
+        entry.save(update_fields=["status"])
+
+        with self.assertRaises(ValidationError):
+            delete_manual_entry(user=self.user, entry=entry)
+        self.assertTrue(TimeEntry.objects.filter(pk=entry.pk).exists())
+
+    def test_running_timer_cannot_be_deleted(self):
+        entry = start_timer(user=self.user, project=self.project, at=self.started_at)
+
+        with self.assertRaises(ValidationError):
+            delete_manual_entry(user=self.user, entry=entry)
+        self.assertTrue(TimeEntry.objects.filter(pk=entry.pk, end_time__isnull=True).exists())
+
 
 class TimeEntryViewTests(TestCase):
     def setUp(self):
@@ -277,3 +319,50 @@ class TimeEntryViewTests(TestCase):
         response = self.client.get(reverse("projects:time-update", args=(entry.pk,)))
 
         self.assertEqual(response.status_code, 404)
+
+    def test_manual_entry_delete_flow(self):
+        entry = TimeEntry.objects.create(
+            company=self.company,
+            project=self.project,
+            user=self.user,
+            start_time=datetime(2026, 7, 20, 9, tzinfo=UTC),
+            end_time=datetime(2026, 7, 20, 10, tzinfo=UTC),
+            description="Site visit",
+        )
+
+        response = self.client.post(reverse("projects:time-delete", args=(entry.pk,)))
+
+        self.assertRedirects(response, reverse("projects:time-list"))
+        self.assertFalse(TimeEntry.objects.filter(pk=entry.pk).exists())
+
+    def test_invoiced_entry_delete_is_rejected_with_message(self):
+        entry = TimeEntry.objects.create(
+            company=self.company,
+            project=self.project,
+            user=self.user,
+            start_time=datetime(2026, 7, 20, 9, tzinfo=UTC),
+            end_time=datetime(2026, 7, 20, 10, tzinfo=UTC),
+            status=TimeEntry.Status.INVOICED,
+        )
+
+        response = self.client.post(
+            reverse("projects:time-delete", args=(entry.pk,)), follow=True
+        )
+
+        self.assertRedirects(response, reverse("projects:time-list"))
+        self.assertContains(response, "Invoiced time cannot be deleted.")
+        self.assertTrue(TimeEntry.objects.filter(pk=entry.pk).exists())
+
+    def test_other_company_entry_cannot_be_deleted(self):
+        hidden = TimeEntry.objects.create(
+            company=self.other_company,
+            project=self.other_project,
+            user=self.other_user,
+            start_time=datetime(2026, 7, 20, 9, tzinfo=UTC),
+            end_time=datetime(2026, 7, 20, 10, tzinfo=UTC),
+        )
+
+        response = self.client.post(reverse("projects:time-delete", args=(hidden.pk,)))
+
+        self.assertEqual(response.status_code, 404)
+        self.assertTrue(TimeEntry.objects.filter(pk=hidden.pk).exists())

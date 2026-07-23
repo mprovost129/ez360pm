@@ -42,7 +42,12 @@
             {% if entry.is_running %}<span class="status-badge">Running</span>{% else %}<strong>{{ entry.duration_hours }} h</strong>{% endif %}
             <small>{% if entry.billable %}Billable{% else %}Non-billable{% endif %} · {{ entry.get_status_display }}</small>
         </div>
-        {% if not entry.is_running and entry.status == 'logged' %}<a class="btn btn-sm btn-light" href="{% url 'projects:time-update' entry.pk %}">Edit</a>{% endif %}
+        {% if not entry.is_running and entry.status == 'logged' %}
+        <div class="button-group">
+            <a class="btn btn-sm btn-light" href="{% url 'projects:time-update' entry.pk %}">Edit</a>
+            <form method="post" action="{% url 'projects:time-delete' entry.pk %}">{% csrf_token %}<button class="btn btn-sm btn-outline-danger" type="submit">Delete</button></form>
+        </div>
+        {% endif %}
     </article>
     {% empty %}<div class="empty-state">No time entries match these filters.</div>{% endfor %}
 </section>

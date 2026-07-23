@@ -2,9 +2,10 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import ValidationError
-from django.shortcuts import redirect
+from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
 from django.utils.http import url_has_allowed_host_and_scheme
+from django.views import View
 from django.views.decorators.http import require_POST
 from django.views.generic import CreateView, FormView, ListView, UpdateView
 
@@ -12,7 +13,12 @@ from core.mixins import CompanyScopedQuerysetMixin
 
 from .models import TimeEntry
 from .time_forms import TimeEntryForm, TimeFilterForm, TimerStartForm
-from .time_services import TimerAlreadyRunning, start_timer, stop_timer
+from .time_services import (
+    TimerAlreadyRunning,
+    delete_manual_entry,
+    start_timer,
+    stop_timer,
+)
 
 
 def _safe_next(request, fallback="projects:time-list"):
@@ -146,3 +152,18 @@ class TimeEntryUpdateView(
             status=TimeEntry.Status.LOGGED,
             end_time__isnull=False,
         )
+
+
+class TimeEntryDeleteView(LoginRequiredMixin, View):
+    def post(self, request, pk):
+        entry = get_object_or_404(
+            TimeEntry.objects.filter(company=request.user.company, user=request.user),
+            pk=pk,
+        )
+        try:
+            delete_manual_entry(user=request.user, entry=entry)
+        except ValidationError as exc:
+            messages.error(request, exc.message)
+        else:
+            messages.success(request, "Time entry deleted.")
+        return redirect("projects:time-list")

@@ -17,4 +17,5 @@ urlpatterns = [
     path("time/stop/", time_views.timer_stop, name="timer-stop"),
     path("time/new/", time_views.TimeEntryCreateView.as_view(), name="time-create"),
     path("time/<int:pk>/edit/", time_views.TimeEntryUpdateView.as_view(), name="time-update"),
+    path("time/<int:pk>/delete/", time_views.TimeEntryDeleteView.as_view(), name="time-delete"),
 ]
