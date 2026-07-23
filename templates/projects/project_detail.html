@@ -9,7 +9,7 @@
     <div class="button-group">
         {% if project.accepts_time and not running_time_entry %}<a class="btn btn-success" href="{% url 'projects:timer-start' %}?project={{ project.pk }}">Start timer</a>{% endif %}
         {% if project.accepts_time %}<a class="btn btn-light" href="{% url 'projects:time-create' %}?project={{ project.pk }}">Add manual entry</a>{% endif %}
-        {% if project.status == 'lead' %}<a class="btn btn-primary" href="{% url 'proposals:create' %}?project={{ project.pk }}">New proposal</a>{% endif %}
+        {% if project.status == 'lead' %}<a class="btn btn-primary" href="{% url 'proposals:create' %}?project={{ project.pk }}">New estimate / proposal</a>{% endif %}
         <a class="btn {% if project.status == 'lead' %}btn-light{% else %}btn-primary{% endif %}" href="{% url 'documents:invoice-create' %}?project={{ project.pk }}">New invoice</a>
         {% if can_start_without_retainer %}<form method="post" action="{% url 'projects:start-without-retainer' project.pk %}" data-confirm="Start this project without recording a paid retainer?">{% csrf_token %}<button class="btn btn-success" type="submit">Start without retainer</button></form>{% endif %}
         {% if can_complete %}<form method="post" action="{% url 'projects:complete' project.pk %}" data-confirm="Mark this project complete? New time can no longer be recorded unless its status is changed again.">{% csrf_token %}<button class="btn btn-success" type="submit">Mark complete</button></form>{% endif %}

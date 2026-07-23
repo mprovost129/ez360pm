@@ -525,6 +525,19 @@ button[type="submit"]:not(.btn):active {
 .rich-text > :last-child { margin-bottom: 0; }
 .proposal-response { max-width: 1000px; margin-top: 1rem; }
 .compact-form { margin-top: 1rem; padding: 0; }
+.draft-readiness { display: grid; grid-template-columns: minmax(220px, 0.8fr) minmax(300px, 1.2fr); gap: 1.5rem; max-width: 1000px; margin-bottom: 1rem; }
+.draft-readiness h2 { margin-bottom: 0; }
+.readiness-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.5rem 1rem; margin: 0; padding: 0; list-style: none; color: #66788a; }
+.readiness-list .is-ready { color: #215b3a; }
+.workflow-warning { max-width: 1000px; margin-bottom: 1rem; padding: 0.85rem 1rem; color: #664d03; background: #fff3cd; border: 1px solid #ffecb5; border-radius: 0.5rem; }
+.line-item-preview { grid-column: 1 / -1; display: flex; justify-content: flex-end; gap: 1.5rem; padding: 0.75rem 1rem; background: #f5f8fb; border-radius: 0.4rem; color: #66788a; }
+.line-item-preview strong { margin-left: 0.35rem; color: var(--ez-navy); }
+.time-attachment-form { display: grid; gap: 1rem; }
+.time-entry-choices { display: grid; gap: 0.5rem; }
+.time-entry-choice { display: flex; align-items: flex-start; gap: 0.65rem; padding: 0.75rem; background: #f8fafc; border: 1px solid var(--bs-border-color); border-radius: 0.4rem; cursor: pointer; }
+.time-entry-choice:has(input:checked) { background: #eef6ff; border-color: var(--ez-blue); }
+.time-entry-choice input { margin-top: 0.2rem; }
+.calculation-preview { margin-top: 0.5rem; padding: 0.65rem 0.75rem; color: var(--ez-navy); background: #eef6ff; border-radius: 0.35rem; font-weight: 700; }
 .success-panel { border-color: #8fc5a2; background: #f2fbf5; }
 .filter-links { display: flex; flex-wrap: wrap; gap: 1rem; margin-bottom: 1rem; }
 .integration-state { display: inline-block; padding: 0.25rem 0.65rem; border-radius: 999px; font-weight: 700; }
@@ -673,9 +686,13 @@ button[type="submit"]:not(.btn) {
 
     .detail-grid,
     .form-grid,
-    .dashboard-grid {
+    .dashboard-grid,
+    .draft-readiness,
+    .readiness-list {
         grid-template-columns: 1fr;
     }
+
+    .line-item-preview { justify-content: flex-start; flex-wrap: wrap; }
 
     .metric-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .month-nav { flex-wrap: wrap; }

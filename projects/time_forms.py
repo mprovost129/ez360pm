@@ -50,9 +50,7 @@ class TimeEntryForm(CompanyScopedModelForm):
         super().__init__(*args, company=company, **kwargs)
         self.fields["project"].queryset = Project.objects.for_company(self.company)
         if self.instance.pk and self.instance.end_time:
-            total_minutes = int(
-                (self.instance.end_time - self.instance.start_time).total_seconds() // 60
-            )
+            total_minutes = int(self.instance.duration.total_seconds() // 60)
             hours, minutes = divmod(total_minutes, 60)
             self.fields["duration_hours"].initial = hours
             self.fields["duration_minutes"].initial = minutes
@@ -66,7 +64,14 @@ class TimeEntryForm(CompanyScopedModelForm):
             if hours == 0 and minutes == 0:
                 self.add_error(None, "Enter a duration greater than zero.")
             else:
-                cleaned["end_time"] = start + timedelta(hours=hours, minutes=minutes)
+                # Hours/minutes represent active work. Preserve any pause history
+                # on a timer-created entry without subtracting it a second time.
+                paused_duration = self.instance.paused_duration or timedelta()
+                cleaned["end_time"] = (
+                    start
+                    + timedelta(hours=hours, minutes=minutes)
+                    + paused_duration
+                )
         return cleaned
 
     def save(self, commit=True):

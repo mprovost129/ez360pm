@@ -1,0 +1,20 @@
+<form method="post" action="{% url 'documents:invoice-attach-time' invoice.pk %}" class="time-attachment-form" novalidate>
+    {% csrf_token %}
+    <div class="section-heading">
+        <h3>Select entries</h3>
+        <button class="btn btn-sm btn-light" type="button" data-select-all-time>Select all</button>
+    </div>
+    {{ time_attachment_form.entries.errors }}
+    <div class="time-entry-choices" data-time-entry-choices>
+        {% for choice in time_attachment_form.entries %}
+        <label class="time-entry-choice" for="{{ choice.id_for_label }}">{{ choice.tag }}<span>{{ choice.choice_label }}</span></label>
+        {% endfor %}
+    </div>
+    <div class="form-field">
+        <label for="{{ time_attachment_form.grouping.id_for_label }}">{{ time_attachment_form.grouping.label }}</label>
+        {{ time_attachment_form.grouping }}
+        <div class="help-text">{{ time_attachment_form.grouping.help_text }}</div>
+        {{ time_attachment_form.grouping.errors }}
+    </div>
+    <button class="btn btn-primary" type="submit">Add selected time</button>
+</form>

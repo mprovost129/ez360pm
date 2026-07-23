@@ -76,6 +76,57 @@ The architecture, relationships, and screen map are detailed in:
 - **Next milestone:** deploy, complete the first restore/replay drills, and log
   recurring workflow friction during real use.
 
+### Current Phase 7 backlog - 2026-07-23
+
+#### Correctness
+
+- [x] **Fix exact-duration editing for stopped timer entries.** A timer that has
+  accumulated paused time retains `paused_duration` when its Hours/Minutes are
+  edited. The form sets `end_time = start_time + entered duration`, then the
+  displayed duration subtracts the old pause total again. Editing an entry to
+  exactly 6 hours must display and bill exactly 6 hours, regardless of its
+  original pauses. Reset or consistently recalculate the pause fields during a
+  manual duration edit, and add regression tests for paused-and-resumed entries.
+
+#### Estimate, proposal, and invoice experience
+
+- [x] Treat a draft proposal as the internal estimate stage; clarify the UI as
+  "Estimate / Draft Proposal" without introducing a duplicate Estimate model.
+- [ ] Consolidate document preparation into one proposal/invoice builder with
+  project/customer context, scope, pricing, terms, internal notes, totals, and
+  preview visible in one workflow.
+  - [x] First pass: add readiness, price/time entry, preview, and lifecycle
+    actions to the existing draft detail screen.
+- [x] Clarify customer-facing versus internal inputs. Rename ambiguous fields
+  such as Notes, Rate, Quantity, Tax rate, Invoice kind, and Accept payments,
+  with explicit help text where a mistake could reach a customer.
+- [ ] Reduce repetitive setup: keep a project fixed when launched from its
+  detail page, hide automatic document numbers unless overridden, default line
+  quantity and tax, and provide sensible reusable terms and invoice due dates.
+  - [x] Lock project context; default quantity, tax, and a 30-day invoice due
+    date; explain automatic numbering.
+- [ ] Improve pricing-line input with inline editing, calculated line/document
+  totals, Save and add another, currency/percentage formatting, and controls
+  that use the existing line ordering.
+  - [x] First pass: default common values, calculate line and taxed totals live,
+    and keep the add-price form on the document draft.
+- [x] Add a draft-readiness summary for customer/project, scope, positive
+  pricing, terms, total, and recipient email, followed by a clear Review and
+  send path instead of disconnected issue and email actions.
+- [ ] Improve proposal preparation with an obvious Scope of work starting
+  section, adjacent edit/reorder controls, an accurate customer preview, and a
+  calculated dollar preview when creating a percentage retainer.
+  - [x] Default Scope of work and show a live percentage-retainer amount.
+- [ ] Replace the raw unbilled-time checkbox list with rows showing date,
+  description, hours, rate, and amount; include Select all and a grouping
+  preview before attaching entries to an invoice.
+  - [x] Detailed selectable rows and Select all are implemented.
+- [ ] Make final-invoice reconciliation clearer by surfacing available retainer
+  credit, offering Apply maximum available credit, and warning when final
+  pricing differs from the accepted proposal or project fixed fee.
+  - [x] Show available credit, prefill the safe maximum for one retainer, and
+    warn when invoice charges differ from the accepted proposal.
+
 ### Workflow traceability
 
 | Required workflow step | Primary delivery phase | Proof at the exit gate |

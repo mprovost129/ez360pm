@@ -122,3 +122,67 @@ function focusFirstFormError() {
 }
 
 focusFirstFormError();
+
+function initializeLineItemPreviews() {
+    document.querySelectorAll("[data-line-item-form]").forEach((form) => {
+        const rate = form.querySelector('[name="rate"]');
+        const quantity = form.querySelector('[name="quantity"]');
+        const taxRate = form.querySelector('[name="tax_rate"]');
+        const subtotalOutput = form.querySelector("[data-line-subtotal]");
+        const totalOutput = form.querySelector("[data-line-total]");
+        if (!rate || !quantity || !taxRate || !subtotalOutput || !totalOutput) return;
+
+        const update = () => {
+            const subtotal = Math.max(0, Number(rate.value) || 0) *
+                Math.max(0, Number(quantity.value) || 0);
+            const tax = subtotal * Math.max(0, Number(taxRate.value) || 0) / 100;
+            subtotalOutput.textContent = `$${subtotal.toFixed(2)}`;
+            totalOutput.textContent = `$${(subtotal + tax).toFixed(2)}`;
+        };
+        [rate, quantity, taxRate].forEach((field) => {
+            field.addEventListener("input", update);
+        });
+        update();
+    });
+}
+
+function initializeTimeSelection() {
+    document.querySelectorAll("[data-select-all-time]").forEach((button) => {
+        const form = button.closest("form");
+        const choices = form?.querySelectorAll('[data-time-entry-choices] input[type="checkbox"]');
+        if (!choices?.length) return;
+        button.addEventListener("click", () => {
+            const shouldSelect = Array.from(choices).some((choice) => !choice.checked);
+            choices.forEach((choice) => {
+                choice.checked = shouldSelect;
+            });
+            button.textContent = shouldSelect ? "Clear all" : "Select all";
+        });
+    });
+}
+
+function initializeRetainerPreview() {
+    const mode = document.querySelector("#id_mode");
+    const value = document.querySelector("#id_value[data-proposal-total]");
+    if (!mode || !value) return;
+    const preview = document.createElement("div");
+    preview.className = "calculation-preview";
+    preview.setAttribute("aria-live", "polite");
+    value.closest(".form-field")?.append(preview);
+
+    const update = () => {
+        const entered = Math.max(0, Number(value.value) || 0);
+        const proposalTotal = Math.max(0, Number(value.dataset.proposalTotal) || 0);
+        const amount = mode.value === "percentage"
+            ? proposalTotal * entered / 100
+            : entered;
+        preview.textContent = `Retainer invoice amount: $${amount.toFixed(2)}`;
+    };
+    mode.addEventListener("change", update);
+    value.addEventListener("input", update);
+    update();
+}
+
+initializeLineItemPreviews();
+initializeTimeSelection();
+initializeRetainerPreview();

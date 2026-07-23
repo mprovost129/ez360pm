@@ -1,6 +1,8 @@
+from datetime import timedelta
 from decimal import Decimal
 
 from django import forms
+from django.utils import timezone
 
 from core.forms import CompanyScopedModelForm
 from projects.models import Project
@@ -18,6 +20,12 @@ from .proposal_services import (
 class ProposalCreateForm(CompanyScopedModelForm):
     number = forms.CharField(max_length=30, required=False)
 
+    field_groups = (
+        ("Estimate / proposal", ("project", "number", "issue_date")),
+        ("Customer settings", ("terms",)),
+        ("Internal", ("notes",)),
+    )
+
     class Meta:
         model = Document
         fields = ("project", "number", "issue_date", "terms", "notes")
@@ -26,6 +34,14 @@ class ProposalCreateForm(CompanyScopedModelForm):
             "terms": forms.Textarea(attrs={"rows": 4}),
             "notes": forms.Textarea(attrs={"rows": 3}),
         }
+        labels = {
+            "terms": "Customer terms",
+            "notes": "Internal notes",
+        }
+        help_texts = {
+            "number": "Leave blank to generate the next proposal number.",
+            "notes": "Only you can see these notes.",
+        }
 
     def __init__(self, *args, company=None, **kwargs):
         super().__init__(*args, company=company, **kwargs)
@@ -33,6 +49,13 @@ class ProposalCreateForm(CompanyScopedModelForm):
         self.instance.invoice_kind = ""
         self.instance.due_date = None
         self.fields["project"].queryset = Project.objects.for_company(company)
+        project_id = self.initial.get("project")
+        if project_id:
+            locked_project = self.fields["project"].queryset.filter(pk=project_id).first()
+            if locked_project:
+                self.fields["project"].initial = locked_project
+                self.fields["project"].disabled = True
+                self.fields["project"].help_text = "Selected from the project page."
 
     def save(self, commit=True):
         if not commit:
@@ -52,6 +75,12 @@ class ProposalCreateForm(CompanyScopedModelForm):
 
 
 class ProposalEditForm(CompanyScopedModelForm):
+    field_groups = (
+        ("Estimate / proposal", ("number", "issue_date")),
+        ("Customer settings", ("terms",)),
+        ("Internal", ("notes",)),
+    )
+
     class Meta:
         model = Document
         fields = ("number", "issue_date", "terms", "notes")
@@ -60,6 +89,11 @@ class ProposalEditForm(CompanyScopedModelForm):
             "terms": forms.Textarea(attrs={"rows": 4}),
             "notes": forms.Textarea(attrs={"rows": 3}),
         }
+        labels = {
+            "terms": "Customer terms",
+            "notes": "Internal notes",
+        }
+        help_texts = {"notes": "Only you can see these notes."}
 
     def clean_terms(self):
         return sanitize_rich_text(self.cleaned_data["terms"])
@@ -93,7 +127,22 @@ class RetainerInvoiceForm(forms.Form):
     def __init__(self, *args, proposal, **kwargs):
         self.proposal = proposal
         super().__init__(*args, **kwargs)
-        self.fields["issue_date"].initial = proposal.issue_date
+        today = timezone.localdate()
+        self.fields["mode"].label = "Retainer calculation"
+        self.fields["value"].label = "Percentage or amount"
+        self.fields["value"].help_text = (
+            "Enter a percentage when Percentage is selected, otherwise enter a dollar amount."
+        )
+        self.fields["value"].widget.attrs["data-proposal-total"] = str(
+            proposal.accepted_total or proposal.total
+        )
+        self.fields["number"].help_text = "Leave blank to generate the next invoice number."
+        self.fields["terms"].label = "Customer terms"
+        self.fields["notes"].label = "Internal notes"
+        self.fields["notes"].help_text = "Only you can see these notes."
+        self.fields["accept_payments"].label = "Allow online payment with Stripe"
+        self.fields["issue_date"].initial = today
+        self.fields["due_date"].initial = today + timedelta(days=30)
         self.fields["accept_payments"].initial = proposal.company.accept_payments_default
 
     def save(self):
@@ -109,8 +158,17 @@ class RetainerInvoiceForm(forms.Form):
         )
 
 
+class RetainerChoiceField(forms.ModelChoiceField):
+    def label_from_instance(self, invoice):
+        available = available_retainer_credit(invoice)
+        return f"{invoice.number} · ${available:.2f} available"
+
+
 class InvoiceCreditForm(forms.Form):
-    source_invoice = forms.ModelChoiceField(queryset=Document.objects.none())
+    source_invoice = RetainerChoiceField(
+        queryset=Document.objects.none(),
+        label="Paid retainer",
+    )
     amount = forms.DecimalField(min_value=Decimal("0.01"), max_digits=12, decimal_places=2)
 
     def __init__(self, *args, destination_invoice, **kwargs):
@@ -124,6 +182,19 @@ class InvoiceCreditForm(forms.Form):
             status=Document.Status.PAID,
         )
         self.fields["source_invoice"].queryset = paid_retainers
+        self.fields["amount"].label = "Credit to apply"
+        self.fields["amount"].help_text = (
+            "The credit cannot exceed the retainer available or the remaining invoice charges."
+        )
+        if not self.is_bound and paid_retainers.count() == 1:
+            available = available_retainer_credit(paid_retainers.first())
+            remaining = max(
+                destination_invoice.subtotal
+                + destination_invoice.tax_total
+                - destination_invoice.credit_total,
+                Decimal("0.00"),
+            )
+            self.fields["amount"].initial = min(available, remaining)
 
     def clean(self):
         cleaned = super().clean()

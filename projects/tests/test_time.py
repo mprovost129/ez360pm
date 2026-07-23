@@ -401,6 +401,46 @@ class TimeEntryViewTests(TestCase):
         self.assertEqual(form.fields["duration_hours"].initial, 1)
         self.assertEqual(form.fields["duration_minutes"].initial, 15)
 
+    def test_edit_paused_timer_uses_and_saves_exact_active_duration(self):
+        entry = TimeEntry.objects.create(
+            company=self.company,
+            project=self.project,
+            user=self.user,
+            start_time=datetime(2026, 7, 20, 9, tzinfo=UTC),
+            end_time=datetime(2026, 7, 20, 16, 2, tzinfo=UTC),
+            paused_duration=timedelta(hours=1, minutes=2),
+            description="Design hours",
+        )
+
+        get_response = self.client.get(
+            reverse("projects:time-update", args=(entry.pk,))
+        )
+        form = get_response.context["form"]
+        self.assertEqual(form.fields["duration_hours"].initial, 6)
+        self.assertEqual(form.fields["duration_minutes"].initial, 0)
+
+        post_response = self.client.post(
+            reverse("projects:time-update", args=(entry.pk,)),
+            {
+                "project": self.project.pk,
+                "start_time_0": "2026-07-20",
+                "start_time_1": "09:00",
+                "duration_hours": "6",
+                "duration_minutes": "0",
+                "description": "Design hours",
+                "billable": "on",
+            },
+        )
+
+        self.assertRedirects(post_response, reverse("projects:time-list"))
+        entry.refresh_from_db()
+        self.assertEqual(entry.duration, timedelta(hours=6))
+        self.assertEqual(entry.duration_hours, Decimal("6.00"))
+        self.assertEqual(
+            entry.end_time - entry.start_time,
+            timedelta(hours=7, minutes=2),
+        )
+
     def test_manual_entry_create_defaults_project_from_query_param(self):
         response = self.client.get(
             reverse("projects:time-create"), {"project": self.project.pk}

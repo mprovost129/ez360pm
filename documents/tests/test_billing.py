@@ -4,6 +4,7 @@ from decimal import Decimal
 from django.core.exceptions import ValidationError
 from django.test import TestCase
 from django.urls import reverse
+from django.utils import timezone
 
 from accounts.models import Company, User
 from clients.tests.test_clients import create_client
@@ -364,6 +365,63 @@ class InvoiceViewTests(TestCase):
         self.assertRedirects(line_response, reverse("documents:invoice-detail", args=(invoice.pk,)))
         invoice.refresh_from_db()
         self.assertEqual(invoice.total, Decimal("250.00"))
+
+    def test_invoice_authoring_defaults_and_locks_project_context(self):
+        response = self.client.get(
+            reverse("documents:invoice-create"),
+            {"project": self.project.pk},
+        )
+
+        form = response.context["form"]
+        self.assertTrue(form.fields["project"].disabled)
+        self.assertEqual(form.fields["project"].initial, self.project)
+        self.assertEqual(
+            form.fields["due_date"].initial,
+            timezone.localdate() + timedelta(days=30),
+        )
+        self.assertEqual(form.fields["notes"].label, "Internal notes")
+        self.assertEqual(
+            form.fields["accept_payments"].label,
+            "Allow online payment with Stripe",
+        )
+
+    def test_invoice_detail_improves_line_and_time_authoring_context(self):
+        invoice = self.make_invoice()
+        start = timezone.now() - timedelta(hours=2)
+        TimeEntry.objects.create(
+            company=self.company,
+            project=self.project,
+            user=self.user,
+            start_time=start,
+            end_time=start + timedelta(hours=2),
+            description="Design development",
+        )
+
+        response = self.client.get(
+            reverse("documents:invoice-detail", args=(invoice.pk,))
+        )
+
+        line_form = response.context["line_item_form"]
+        self.assertEqual(line_form.fields["quantity"].initial, Decimal("1.00"))
+        self.assertContains(response, "Line amount")
+        self.assertContains(response, "Select all")
+        self.assertContains(response, "Design development")
+        self.assertContains(response, "$175.00/hr")
+        self.assertContains(response, "Draft readiness")
+
+    def test_issue_and_email_continues_to_delivery_form(self):
+        invoice = self.make_invoice()
+
+        response = self.client.post(
+            reverse("documents:invoice-issue", args=(invoice.pk,)),
+            {"send_after_issue": "1"},
+        )
+
+        self.assertRedirects(
+            response,
+            reverse("documents:invoice-send", args=(invoice.pk,)),
+            fetch_redirect_response=False,
+        )
 
     def test_other_company_invoice_is_not_retrievable(self):
         hidden = self.make_invoice(other=True)

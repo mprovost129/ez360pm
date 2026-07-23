@@ -7,7 +7,7 @@
     <div><p class="eyebrow">{{ invoice.get_invoice_kind_display }} invoice · {{ invoice.get_status_display }}</p><h1>{{ invoice.number }}</h1></div>
     <div class="button-group">
         <a class="btn btn-light" href="{% url 'documents:invoice-pdf' invoice.pk %}" target="_blank">PDF</a>
-        {% if invoice.is_editable %}<a class="btn btn-light" href="{% url 'documents:invoice-update' invoice.pk %}">Edit</a><form method="post" action="{% url 'documents:invoice-issue' invoice.pk %}" data-confirm="Issue this invoice? Draft editing will end and its public link will become active.">{% csrf_token %}<button class="btn btn-success" type="submit">Issue invoice</button></form>{% endif %}
+        {% if invoice.is_editable %}<a class="btn btn-light" href="{% url 'documents:invoice-update' invoice.pk %}">Edit details</a><form method="post" action="{% url 'documents:invoice-issue' invoice.pk %}" data-confirm="Issue this invoice? Draft editing will end and its public link will become active.">{% csrf_token %}<button class="btn btn-success" type="submit" name="send_after_issue" value="1">Issue &amp; email</button><button class="btn btn-light" type="submit" name="send_after_issue" value="0">Issue only</button></form>{% endif %}
         {% if invoice.status == 'sent' or invoice.status == 'viewed' or invoice.status == 'partially_paid' %}<a class="btn btn-success" href="{% url 'documents:invoice-send' invoice.pk %}">Email invoice</a>{% endif %}
         {% if invoice.status == 'sent' or invoice.status == 'viewed' or invoice.status == 'partially_paid' %}<a class="btn btn-primary" href="{% url 'documents:payment-create' invoice.pk %}">Record payment</a><a class="btn btn-outline-danger" href="{% url 'documents:invoice-void' invoice.pk %}">Void</a>{% endif %}
     </div>
@@ -15,19 +15,35 @@
 
 {% if invoice.status != 'draft' %}<div class="public-link"><strong>Public link:</strong> <a href="{% url 'public-documents:view' invoice.public_token %}" target="_blank">{{ request.scheme }}://{{ request.get_host }}{% url 'public-documents:view' invoice.public_token %}</a></div>{% endif %}
 
+{% if invoice.is_editable %}
+<section class="content-card draft-readiness">
+    <div><p class="eyebrow">Draft readiness</p><h2>Prepare this invoice for the customer</h2></div>
+    <ul class="readiness-list">
+        <li class="{% if has_pricing %}is-ready{% endif %}">{% if has_pricing %}✓{% else %}○{% endif %} Positive charges</li>
+        <li class="{% if invoice.due_date %}is-ready{% endif %}">{% if invoice.due_date %}✓{% else %}○{% endif %} Due date: {{ invoice.due_date|date:'M j, Y' }}</li>
+        <li class="{% if invoice.terms %}is-ready{% endif %}">{% if invoice.terms %}✓{% else %}○{% endif %} Customer terms reviewed</li>
+        <li class="{% if recipient and recipient.email %}is-ready{% endif %}">{% if recipient and recipient.email %}✓{% else %}○{% endif %} Recipient email{% if recipient and recipient.email %}: {{ recipient.email }}{% endif %}</li>
+        <li class="{% if invoice.accept_payments %}is-ready{% endif %}">{% if invoice.accept_payments %}✓{% else %}○{% endif %} Online payment {% if invoice.accept_payments %}enabled{% else %}not enabled{% endif %}</li>
+    </ul>
+</section>
+{% endif %}
+
+{% if pricing_differs_from_proposal %}<div class="workflow-warning" role="status"><strong>Pricing check:</strong> This invoice has ${{ invoice_charge_total }} in charges including tax; accepted proposal {{ accepted_proposal.number }} was ${{ accepted_proposal.accepted_total }}. Review the difference before issuing.</div>{% endif %}
+
 {% include 'documents/_invoice_document.html' %}
 
 {% if line_item_form %}
 <section class="content-card invoice-panel">
     <h2>Add line</h2>
-    <form method="post" action="{% url 'documents:line-create' invoice.pk %}" class="form-grid compact-form">{% csrf_token %}{{ line_item_form.as_p }}<div class="form-actions"><button class="btn btn-primary" type="submit">Add line</button></div></form>
+    {% url 'documents:line-create' invoice.pk as line_action %}
+    {% include 'documents/_line_item_editor.html' with form=line_item_form action=line_action submit_label='Add line and continue' %}
 </section>
 {% endif %}
 
 {% if time_attachment_form %}
 <section class="content-card invoice-panel">
     <h2>Add unbilled time</h2>
-    <form method="post" action="{% url 'documents:invoice-attach-time' invoice.pk %}">{% csrf_token %}{{ time_attachment_form.as_p }}<button class="btn btn-primary" type="submit">Add selected time</button></form>
+    {% include 'documents/_time_attachment_editor.html' %}
 </section>
 {% endif %}
 

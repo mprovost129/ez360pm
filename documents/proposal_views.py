@@ -80,6 +80,11 @@ class ProposalDetailView(LoginRequiredMixin, CompanyScopedQuerysetMixin, DetailV
         context["show_internal_notes"] = True
         if self.object.status == Document.Status.DRAFT:
             context["line_item_form"] = LineItemForm(document=self.object)
+            context["has_scope"] = bool(self.object.body_sections)
+            context["has_pricing"] = bool(
+                self.object.line_items.all() and self.object.total > 0
+            )
+            context["recipient"] = self.object.project.client.primary_contact
         return context
 
 
@@ -87,7 +92,10 @@ class ProposalCreateView(LoginRequiredMixin, CreateView):
     model = Document
     form_class = ProposalCreateForm
     template_name = "shared/form.html"
-    extra_context = {"page_title": "New proposal", "submit_label": "Create proposal"}
+    extra_context = {
+        "page_title": "New estimate / proposal",
+        "submit_label": "Create draft",
+    }
 
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
@@ -156,7 +164,7 @@ class ProposalSectionView(LoginRequiredMixin, FormView):
 
     def get_initial(self):
         if self.index is None:
-            return {}
+            return {"heading": "Scope of work"}
         return self.proposal.body_sections[self.index]
 
     def get_context_data(self, **kwargs):
@@ -236,6 +244,8 @@ def proposal_issue(request, pk):
         messages.error(request, "; ".join(exc.messages))
     else:
         messages.success(request, "Proposal issued. Its public link is active.")
+        if request.POST.get("send_after_issue") == "1":
+            return redirect("proposals:send", pk=proposal.pk)
     return redirect("proposals:detail", pk=proposal.pk)
 
 

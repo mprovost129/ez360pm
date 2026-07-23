@@ -7,6 +7,7 @@ references, or other sensitive data.
 
 | Date | Workflow | Device/browser | Expected | What happened | Workaround | Frequency | Risk |
 | --- | --- | --- | --- | --- | --- | --- | --- |
+| 2026-07-23 | Edit a stopped timer entry | Windows / Chrome | Entering 6 hours saves and displays exactly 6 hours | The edited entry retained about 1h 2m of its original paused duration and displayed about an hour less than the entered duration | Entered 7h 2m to make the list display 6h | First | High |
 | | | | | | | First / repeated | Low / medium / high |
 
 ## Triage rule
@@ -21,3 +22,9 @@ Rank an item for implementation when at least one condition is true:
 
 For each implemented fix, link the test or operational check that prevents a
 regression and note the deployment date in the row.
+
+## Resolution notes
+
+- **2026-07-23:** Exact-duration editing now uses active duration while
+  preserving pause history. Regression coverage:
+  `projects.tests.test_time.TimeEntryViewTests.test_edit_paused_timer_uses_and_saves_exact_active_duration`.

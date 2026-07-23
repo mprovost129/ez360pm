@@ -137,6 +137,30 @@ class InvoiceDetailView(LoginRequiredMixin, CompanyScopedQuerysetMixin, DetailVi
                 credit_form = InvoiceCreditForm(destination_invoice=self.object)
                 if credit_form.fields["source_invoice"].queryset.exists():
                     context["credit_form"] = credit_form
+            context["has_pricing"] = bool(
+                self.object.line_items.all() and self.object.total > 0
+            )
+            context["recipient"] = self.object.project.client.primary_contact
+            if self.object.invoice_kind == Document.InvoiceKind.FINAL:
+                accepted_proposal = (
+                    Document.objects.for_company(self.request.user.company)
+                    .filter(
+                        project=self.object.project,
+                        doc_type=Document.Type.PROPOSAL,
+                        status=Document.Status.ACCEPTED,
+                    )
+                    .order_by("-responded_at", "-pk")
+                    .first()
+                )
+                context["accepted_proposal"] = accepted_proposal
+                context["invoice_charge_total"] = (
+                    self.object.subtotal + self.object.tax_total
+                )
+                context["pricing_differs_from_proposal"] = bool(
+                    accepted_proposal
+                    and accepted_proposal.accepted_total
+                    != context["invoice_charge_total"]
+                )
         return context
 
 
@@ -299,6 +323,8 @@ def invoice_issue(request, pk):
         messages.error(request, exc.message)
     else:
         messages.success(request, "Invoice issued. Its public link is now active.")
+        if request.POST.get("send_after_issue") == "1":
+            return redirect("documents:invoice-send", pk=invoice.pk)
     return redirect("documents:invoice-detail", pk=invoice.pk)
 
 

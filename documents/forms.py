@@ -1,4 +1,8 @@
+from datetime import timedelta
+from decimal import Decimal
+
 from django import forms
+from django.utils import timezone
 
 from clients.models import Client
 from core.forms import CompanyScopedModelForm
@@ -13,6 +17,12 @@ class InvoiceCreateForm(CompanyScopedModelForm):
         max_length=30,
         required=False,
         help_text="Leave blank to generate the next invoice number.",
+    )
+
+    field_groups = (
+        ("Invoice", ("project", "invoice_kind", "number", "issue_date", "due_date")),
+        ("Customer settings", ("terms", "accept_payments")),
+        ("Internal", ("notes",)),
     )
 
     class Meta:
@@ -33,6 +43,16 @@ class InvoiceCreateForm(CompanyScopedModelForm):
             "terms": forms.Textarea(attrs={"rows": 3}),
             "notes": forms.Textarea(attrs={"rows": 3}),
         }
+        labels = {
+            "invoice_kind": "Invoice type",
+            "terms": "Customer terms",
+            "notes": "Internal notes",
+            "accept_payments": "Allow online payment with Stripe",
+        }
+        help_texts = {
+            "notes": "Only you can see these notes.",
+            "accept_payments": "Shows a Pay button on the customer invoice when Stripe is configured.",
+        }
 
     def __init__(self, *args, company=None, **kwargs):
         super().__init__(*args, company=company, **kwargs)
@@ -40,6 +60,15 @@ class InvoiceCreateForm(CompanyScopedModelForm):
         self.fields["project"].queryset = Project.objects.for_company(company)
         self.fields["accept_payments"].initial = company.accept_payments_default
         self.fields["invoice_kind"].initial = Document.InvoiceKind.FINAL
+        if not self.is_bound:
+            self.fields["due_date"].initial = timezone.localdate() + timedelta(days=30)
+        project_id = self.initial.get("project")
+        if project_id:
+            locked_project = self.fields["project"].queryset.filter(pk=project_id).first()
+            if locked_project:
+                self.fields["project"].initial = locked_project
+                self.fields["project"].disabled = True
+                self.fields["project"].help_text = "Selected from the project page."
 
     def save(self, commit=True):
         if not commit:
@@ -59,6 +88,12 @@ class InvoiceCreateForm(CompanyScopedModelForm):
 
 
 class InvoiceEditForm(CompanyScopedModelForm):
+    field_groups = (
+        ("Invoice", ("number", "issue_date", "due_date")),
+        ("Customer settings", ("terms", "accept_payments")),
+        ("Internal", ("notes",)),
+    )
+
     class Meta:
         model = Document
         fields = ("number", "issue_date", "due_date", "terms", "notes", "accept_payments")
@@ -68,16 +103,38 @@ class InvoiceEditForm(CompanyScopedModelForm):
             "terms": forms.Textarea(attrs={"rows": 3}),
             "notes": forms.Textarea(attrs={"rows": 3}),
         }
+        labels = {
+            "terms": "Customer terms",
+            "notes": "Internal notes",
+            "accept_payments": "Allow online payment with Stripe",
+        }
+        help_texts = {
+            "notes": "Only you can see these notes.",
+            "accept_payments": "Shows a Pay button on the customer invoice when Stripe is configured.",
+        }
 
 
 class LineItemForm(forms.ModelForm):
     class Meta:
         model = LineItem
         fields = ("description", "rate", "quantity", "tax_rate")
+        labels = {
+            "rate": "Unit price",
+            "quantity": "Quantity / hours",
+            "tax_rate": "Tax %",
+        }
+        widgets = {
+            "rate": forms.NumberInput(attrs={"step": "0.01", "min": "0"}),
+            "quantity": forms.NumberInput(attrs={"step": "0.01", "min": "0.01"}),
+            "tax_rate": forms.NumberInput(attrs={"step": "0.001", "min": "0"}),
+        }
 
     def __init__(self, *args, document, **kwargs):
         self.document = document
         super().__init__(*args, **kwargs)
+        if not self.is_bound and not self.instance.pk:
+            self.fields["quantity"].initial = Decimal("1.00")
+            self.fields["tax_rate"].initial = Decimal("0")
 
     def save(self, commit=True):
         if not commit:
@@ -91,17 +148,32 @@ class LineItemForm(forms.ModelForm):
         return self.instance
 
 
+class TimeEntryChoiceField(forms.ModelMultipleChoiceField):
+    def label_from_instance(self, entry):
+        rate = entry.project.hourly_rate or Decimal("0.00")
+        amount = rate * entry.duration_hours
+        description = entry.description.strip() or "Professional services"
+        local_start = timezone.localtime(entry.start_time)
+        date_label = local_start.strftime("%b %d, %Y").replace(" 0", " ")
+        return (
+            f"{date_label} · {description} · "
+            f"{entry.duration_hours}h · ${rate:.2f}/hr · ${amount:.2f}"
+        )
+
+
 class TimeAttachmentForm(forms.Form):
-    entries = forms.ModelMultipleChoiceField(
+    entries = TimeEntryChoiceField(
         queryset=TimeEntry.objects.none(),
         widget=forms.CheckboxSelectMultiple,
+        label="Unbilled time",
     )
     grouping = forms.ChoiceField(
         choices=(
             ("individual", "One line per time entry"),
             ("description", "Group identical descriptions"),
             ("combined", "One combined line"),
-        )
+        ),
+        help_text="Choose how the selected entries should appear on the customer invoice.",
     )
 
     def __init__(self, *args, invoice, **kwargs):
@@ -113,7 +185,7 @@ class TimeAttachmentForm(forms.Form):
             billable=True,
             status=TimeEntry.Status.LOGGED,
             line_item__isnull=True,
-        )
+        ).select_related("project")
 
 
 class PaymentForm(forms.ModelForm):

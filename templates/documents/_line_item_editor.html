@@ -1,0 +1,16 @@
+<form method="post" action="{{ action }}" class="form-grid compact-form line-item-editor" data-line-item-form novalidate>
+    {% csrf_token %}
+    {% for field in form %}
+    <div class="form-field{% if field.errors %} form-field--error{% endif %}">
+        <label for="{{ field.id_for_label }}">{{ field.label }}{% if field.field.required %}<span class="required-marker" aria-hidden="true">*</span>{% endif %}</label>
+        {{ field }}
+        {% if field.help_text %}<div class="help-text">{{ field.help_text }}</div>{% endif %}
+        {{ field.errors }}
+    </div>
+    {% endfor %}
+    <div class="line-item-preview" aria-live="polite">
+        <span>Line amount <strong data-line-subtotal>$0.00</strong></span>
+        <span>With tax <strong data-line-total>$0.00</strong></span>
+    </div>
+    <div class="form-actions"><button class="btn btn-primary" type="submit">{{ submit_label }}</button></div>
+</form>

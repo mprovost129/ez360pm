@@ -266,6 +266,42 @@ class ProposalWorkflowTests(TestCase):
         self.assertEqual(proposal.body_sections[0]["heading"], "Scope")
         self.assertEqual(proposal.total, Decimal("1000.00"))
 
+    def test_estimate_authoring_locks_project_and_guides_scope(self):
+        create_response = self.client.get(
+            reverse("proposals:create"),
+            {"project": self.project.pk},
+        )
+
+        form = create_response.context["form"]
+        self.assertTrue(form.fields["project"].disabled)
+        self.assertEqual(form.fields["project"].initial, self.project)
+        self.assertEqual(form.fields["notes"].label, "Internal notes")
+        self.assertContains(create_response, "New estimate / proposal")
+
+        proposal = self.make_proposal()
+        detail = self.client.get(reverse("proposals:detail", args=(proposal.pk,)))
+        section = self.client.get(
+            reverse("proposals:section-create", args=(proposal.pk,))
+        )
+        self.assertContains(detail, "Estimate / Draft proposal")
+        self.assertContains(detail, "Draft readiness")
+        self.assertContains(detail, "Line amount")
+        self.assertEqual(section.context["form"].initial["heading"], "Scope of work")
+
+    def test_issue_and_email_continues_to_delivery_form(self):
+        proposal = self.make_proposal()
+
+        response = self.client.post(
+            reverse("proposals:issue", args=(proposal.pk,)),
+            {"send_after_issue": "1"},
+        )
+
+        self.assertRedirects(
+            response,
+            reverse("proposals:send", args=(proposal.pk,)),
+            fetch_redirect_response=False,
+        )
+
     def test_retainer_percentage_and_fixed_amount_use_accepted_snapshot(self):
         proposal = self.accept(self.make_proposal())
 

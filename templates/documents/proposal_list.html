@@ -5,11 +5,11 @@
 {% block content %}
 <div class="page-heading">
     <div><p class="eyebrow">Agreements</p><h1>Proposals</h1></div>
-    <a class="btn btn-primary" href="{% url 'proposals:create' %}">New proposal</a>
+    <a class="btn btn-primary" href="{% url 'proposals:create' %}">New estimate / proposal</a>
 </div>
 <nav class="filter-links" aria-label="Proposal status">
     <a href="{% url 'proposals:list' %}">All</a>
-    <a href="?status=draft">Draft</a>
+    <a href="?status=draft">Estimates / Drafts</a>
     <a href="?status=sent">Sent</a>
     <a href="?status=viewed">Viewed</a>
     <a href="?status=accepted">Accepted</a>
