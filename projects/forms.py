@@ -1,10 +1,12 @@
 from django import forms
+from django.db import transaction
 
 from clients.models import Client
 from core.forms import CompanyScopedModelForm
 
 from .models import Project
 from .services import create_project
+from .workflow import change_project_status
 
 
 class ProjectForm(CompanyScopedModelForm):
@@ -90,6 +92,7 @@ class ProjectForm(CompanyScopedModelForm):
                 self.add_error("fixed_fee", "Flat-fee projects require a fee.")
         return cleaned
 
+    @transaction.atomic
     def save(self, commit=True):
         if not commit:
             raise ValueError("ProjectForm must be saved with commit=True.")
@@ -106,5 +109,63 @@ class ProjectForm(CompanyScopedModelForm):
             company=self.company,
             client=client,
             project_data=data,
+        )
+        return self.instance
+
+
+class ProjectEditForm(ProjectForm):
+    status = forms.ChoiceField(
+        choices=Project.Status.choices,
+        label="Project status",
+        help_text=(
+            "Status normally advances through proposals and payments. A manual change "
+            "does not alter invoices, proposals, payments, or recorded time."
+        ),
+    )
+    confirm_status_change = forms.BooleanField(
+        required=False,
+        label="Confirm this manual status change",
+        help_text="Required only when selecting a different status.",
+    )
+    field_groups = (
+        ProjectForm.field_groups[0],
+        ("Workflow", ("status", "confirm_status_change")),
+        *ProjectForm.field_groups[1:],
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.original_status = self.instance.status
+        self.fields["status"].initial = self.original_status
+
+    def clean(self):
+        cleaned = super().clean()
+        status = cleaned.get("status")
+        if status and status != self.original_status:
+            if not cleaned.get("confirm_status_change"):
+                self.add_error(
+                    "confirm_status_change",
+                    "Confirm the manual status change before saving.",
+                )
+            if status in {
+                Project.Status.ON_HOLD,
+                Project.Status.COMPLETED,
+                Project.Status.CANCELED,
+            } and self.instance.time_entries.filter(end_time__isnull=True).exists():
+                self.add_error(
+                    "status",
+                    "Stop the running timer before placing this project on hold or closing it.",
+                )
+        return cleaned
+
+    @transaction.atomic
+    def save(self, commit=True):
+        if not commit:
+            raise ValueError("ProjectEditForm must be saved with commit=True.")
+        requested_status = self.cleaned_data["status"]
+        project = super().save(commit=True)
+        self.instance = change_project_status(
+            project=project,
+            status=requested_status,
         )
         return self.instance

@@ -5,6 +5,26 @@ from .models import Project
 
 
 @transaction.atomic
+def change_project_status(*, project, status):
+    project = Project.objects.select_for_update().get(pk=project.pk)
+    if status not in Project.Status.values:
+        raise ValidationError("Choose a valid project status.")
+    if project.status == status:
+        return project
+    if status in {
+        Project.Status.ON_HOLD,
+        Project.Status.COMPLETED,
+        Project.Status.CANCELED,
+    } and project.time_entries.filter(end_time__isnull=True).exists():
+        raise ValidationError(
+            "Stop the running timer before placing this project on hold or closing it."
+        )
+    project.status = status
+    project.save(update_fields=["status", "updated_at"])
+    return project
+
+
+@transaction.atomic
 def approve_project(*, project):
     project = Project.objects.select_for_update().get(pk=project.pk)
     if project.status == Project.Status.APPROVED:

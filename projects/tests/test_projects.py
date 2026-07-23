@@ -9,6 +9,7 @@ from accounts.models import Company, User
 from clients.tests.test_clients import create_client
 from projects.models import Project
 from projects.services import allocate_project_number, create_project
+from projects.time_services import start_timer
 
 
 def project_data(**overrides):
@@ -182,3 +183,77 @@ class ProjectViewTests(TestCase):
         self.assertContains(response, "Recommended next step")
         self.assertContains(response, "Prepare the customer proposal")
         self.assertContains(response, "More project actions")
+
+    def test_status_is_managed_on_edit_but_new_projects_still_start_as_leads(self):
+        project = create_project(
+            company=self.company,
+            client=self.client_record,
+            project_data=project_data(number="STATUS-EDIT"),
+        )
+
+        create_response = self.client.get(reverse("projects:create"))
+        edit_response = self.client.get(reverse("projects:update", args=(project.pk,)))
+
+        self.assertNotIn("status", create_response.context["form"].fields)
+        self.assertIn("status", edit_response.context["form"].fields)
+        self.assertContains(edit_response, "Project status")
+        self.assertContains(edit_response, "Confirm this manual status change")
+
+    def test_manual_status_change_requires_confirmation_and_can_activate_lead(self):
+        project = create_project(
+            company=self.company,
+            client=self.client_record,
+            project_data=project_data(number="STATUS-ACTIVE"),
+        )
+        data = project_data(number=project.number)
+        data.update(
+            client=self.client_record.pk,
+            fixed_fee="",
+            status=Project.Status.ACTIVE,
+        )
+
+        unconfirmed = self.client.post(
+            reverse("projects:update", args=(project.pk,)),
+            data,
+        )
+        project.refresh_from_db()
+        self.assertEqual(unconfirmed.status_code, 200)
+        self.assertContains(unconfirmed, "Confirm the manual status change")
+        self.assertEqual(project.status, Project.Status.LEAD)
+
+        data["confirm_status_change"] = "on"
+        confirmed = self.client.post(
+            reverse("projects:update", args=(project.pk,)),
+            data,
+        )
+        project.refresh_from_db()
+        self.assertRedirects(
+            confirmed,
+            reverse("projects:detail", args=(project.pk,)),
+        )
+        self.assertEqual(project.status, Project.Status.ACTIVE)
+
+    def test_manual_status_change_cannot_close_project_with_running_timer(self):
+        project = create_project(
+            company=self.company,
+            client=self.client_record,
+            project_data=project_data(number="STATUS-RUNNING"),
+        )
+        start_timer(user=self.user, project=project)
+        data = project_data(number=project.number)
+        data.update(
+            client=self.client_record.pk,
+            fixed_fee="",
+            status=Project.Status.CANCELED,
+            confirm_status_change="on",
+        )
+
+        response = self.client.post(
+            reverse("projects:update", args=(project.pk,)),
+            data,
+        )
+
+        project.refresh_from_db()
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Stop the running timer")
+        self.assertEqual(project.status, Project.Status.LEAD)

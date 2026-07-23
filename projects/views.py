@@ -17,7 +17,7 @@ from django.views.generic import (
 
 from core.mixins import CompanyScopedQuerysetMixin
 
-from .forms import ProjectForm
+from .forms import ProjectEditForm, ProjectForm
 from .models import Project
 from .workflow import complete_paid_project, start_without_retainer
 
@@ -125,9 +125,26 @@ class ProjectUpdateView(
     UpdateView,
 ):
     model = Project
-    form_class = ProjectForm
+    form_class = ProjectEditForm
     template_name = "shared/form.html"
     extra_context = {"page_title": "Edit project", "submit_label": "Save project"}
+
+    def form_valid(self, form):
+        original_status = form.original_status
+        try:
+            response = super().form_valid(form)
+        except ValidationError as exc:
+            form.add_error("status", "; ".join(exc.messages))
+            return self.form_invalid(form)
+        if self.object.status != original_status:
+            messages.success(
+                self.request,
+                f"Project status changed from {Project.Status(original_status).label} "
+                f"to {self.object.get_status_display()}.",
+            )
+        else:
+            messages.success(self.request, "Project updated.")
+        return response
 
     def get_success_url(self):
         return reverse("projects:detail", args=(self.object.pk,))

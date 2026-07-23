@@ -87,6 +87,10 @@ The architecture, relationships, and screen map are detailed in:
   exactly 6 hours must display and bill exactly 6 hours, regardless of its
   original pauses. Reset or consistently recalculate the pause fields during a
   manual duration edit, and add regression tests for paused-and-resumed entries.
+- [x] **Expose guarded manual project status changes.** Keep new projects at
+  Lead, add the existing status choices to Edit Project, require explicit
+  confirmation when the status changes, preserve all financial/history records,
+  and prevent hold/complete/cancel while the project timer is running.
 
 #### Estimate, proposal, and invoice experience
 
