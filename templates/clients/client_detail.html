@@ -88,7 +88,7 @@
                 {% for entry in time_entries %}
                 <div class="detail-row">
                     <span><strong>{{ entry.project.number }} · {{ entry.project.name }}</strong><small>{{ entry.start_time|date:'M j, Y g:i a' }}{% if entry.description %} · {{ entry.description }}{% endif %}</small></span>
-                    <span>{% if entry.is_running %}<span class="status-badge">Running</span>{% else %}<strong>{{ entry.duration_hours|hours_minutes }}</strong>{% endif %}</span>
+                    <span>{% if entry.is_paused %}<span class="status-badge status-badge--paused">Paused</span>{% elif entry.is_running %}<span class="status-badge">Running</span>{% else %}<strong>{{ entry.duration_hours|hours_minutes }}</strong>{% endif %}</span>
                 </div>
                 {% empty %}<p class="empty-state">No time recorded.</p>{% endfor %}
             </div>

@@ -123,10 +123,13 @@ class Project(CompanyOwnedModel):
     def actual_duration(self):
         durations = (
             self.time_entries.filter(end_time__isnull=False)
-            .values_list("start_time", "end_time")
+            .values_list("start_time", "end_time", "paused_duration")
             .iterator()
         )
-        return sum((end - start for start, end in durations), timedelta())
+        return sum(
+            (max(end - start - paused, timedelta()) for start, end, paused in durations),
+            timedelta(),
+        )
 
     @property
     def actual_hours(self):
@@ -212,6 +215,8 @@ class TimeEntry(CompanyOwnedModel):
     )
     start_time = models.DateTimeField()
     end_time = models.DateTimeField(blank=True, null=True)
+    paused_at = models.DateTimeField(blank=True, null=True)
+    paused_duration = models.DurationField(default=timedelta)
     description = models.CharField(max_length=255, blank=True)
     billable = models.BooleanField(default=True)
     status = models.CharField(
@@ -243,6 +248,10 @@ class TimeEntry(CompanyOwnedModel):
                 condition=Q(end_time__isnull=False) | Q(status="logged"),
                 name="projects_running_time_is_logged",
             ),
+            models.CheckConstraint(
+                condition=Q(end_time__isnull=True) | Q(paused_at__isnull=True),
+                name="projects_time_no_pause_after_stop",
+            ),
         ]
         indexes = [
             models.Index(fields=("company", "project", "start_time")),
@@ -260,8 +269,14 @@ class TimeEntry(CompanyOwnedModel):
             errors["end_time"] = "End time must be after start time."
         if self.end_time is None and self.status != self.Status.LOGGED:
             errors["status"] = "A running timer must be logged, not invoiced."
+        if self.paused_at is not None and self.end_time is not None:
+            errors["paused_at"] = "A stopped time entry cannot be paused."
         if errors:
             raise ValidationError(errors)
+
+    @property
+    def is_paused(self):
+        return self.paused_at is not None
 
     @property
     def is_running(self):
@@ -269,8 +284,8 @@ class TimeEntry(CompanyOwnedModel):
 
     @property
     def duration(self):
-        effective_end = self.end_time or timezone.now()
-        return max(effective_end - self.start_time, timedelta())
+        effective_end = self.end_time or self.paused_at or timezone.now()
+        return max(effective_end - self.start_time - self.paused_duration, timedelta())
 
     @property
     def duration_hours(self):

@@ -13,14 +13,19 @@
 </div>
 
 {% if running_time_entry %}
-<section class="running-card" data-running-timer data-timer-start-ms="{{ running_timer_start_ms }}" data-timer-server-now-ms="{{ running_timer_server_now_ms }}">
+<section class="running-card" data-running-timer data-timer-paused="{{ running_timer_is_paused|yesno:'true,false' }}" data-timer-start-ms="{{ running_timer_start_ms }}" data-timer-server-now-ms="{{ running_timer_server_now_ms }}">
     <div>
-        <p class="eyebrow">Timer running</p>
+        <p class="eyebrow">{% if running_timer_is_paused %}Timer paused{% else %}Timer running{% endif %}</p>
         <strong>{{ running_time_entry.project.number }} · {{ running_time_entry.project.name }}</strong>
         {% if running_time_entry.description %}<small>{{ running_time_entry.description }}</small>{% endif %}
     </div>
     <div class="running-actions">
         <span class="timer-clock" data-timer-clock aria-live="off">{{ running_timer_elapsed }}</span>
+        {% if running_timer_is_paused %}
+        <form method="post" action="{% url 'projects:timer-resume' %}">{% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}"><button class="btn btn-success" type="submit">Resume</button></form>
+        {% else %}
+        <form method="post" action="{% url 'projects:timer-pause' %}">{% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}"><button class="btn btn-outline-warning" type="submit">Pause</button></form>
+        {% endif %}
         <form method="post" action="{% url 'projects:timer-stop' %}">{% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}"><button class="btn btn-danger" type="submit">Stop</button></form>
     </div>
 </section>
@@ -40,7 +45,7 @@
             <small>{{ entry.start_time|date:'M j, Y g:i a' }}{% if entry.description %} · {{ entry.description }}{% endif %}</small>
         </div>
         <div class="time-value">
-            {% if entry.is_running %}<span class="status-badge">Running</span>{% else %}<strong>{{ entry.duration_hours|hours_minutes }}</strong>{% endif %}
+            {% if entry.is_paused %}<span class="status-badge status-badge--paused">Paused</span>{% elif entry.is_running %}<span class="status-badge">Running</span>{% else %}<strong>{{ entry.duration_hours|hours_minutes }}</strong>{% endif %}
             <small>{% if entry.billable %}Billable{% else %}Non-billable{% endif %} · {{ entry.get_status_display }}</small>
         </div>
         {% if not entry.is_running and entry.status == 'logged' %}

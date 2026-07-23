@@ -15,6 +15,8 @@ from projects.tests.test_projects import project_data
 from projects.time_services import (
     TimerAlreadyRunning,
     delete_manual_entry,
+    pause_timer,
+    resume_timer,
     save_manual_entry,
     start_timer,
     stop_timer,
@@ -189,6 +191,76 @@ class TimerServiceTests(TestCase):
         with self.assertRaises(ValidationError):
             delete_manual_entry(user=self.user, entry=entry)
         self.assertTrue(TimeEntry.objects.filter(pk=entry.pk, end_time__isnull=True).exists())
+
+    def test_pause_freezes_duration_and_resume_excludes_the_break(self):
+        start_timer(user=self.user, project=self.project, at=self.started_at)
+
+        pause_timer(user=self.user, at=self.started_at + timedelta(minutes=30))
+        entry = TimeEntry.objects.get(user=self.user)
+        self.assertTrue(entry.is_paused)
+        self.assertEqual(entry.duration, timedelta(minutes=30))
+
+        # Elapsed time must stay frozen while paused, no matter how much real
+        # time passes before resume is called.
+        entry.refresh_from_db()
+        self.assertEqual(entry.duration, timedelta(minutes=30))
+
+        resume_timer(user=self.user, at=self.started_at + timedelta(hours=2))
+        entry.refresh_from_db()
+        self.assertFalse(entry.is_paused)
+        # Resumed means actively ticking again, so duration now grows with
+        # real time rather than staying frozen; the pause exclusion is instead
+        # verified once the entry is stopped, below.
+
+        stopped = stop_timer(user=self.user, at=self.started_at + timedelta(hours=2, minutes=15))
+        self.assertEqual(stopped.duration, timedelta(minutes=45))
+        self.assertEqual(stopped.duration_hours, Decimal("0.75"))
+
+    def test_stop_while_paused_folds_the_break_into_duration(self):
+        start_timer(user=self.user, project=self.project, at=self.started_at)
+        pause_timer(user=self.user, at=self.started_at + timedelta(minutes=20))
+
+        stopped = stop_timer(user=self.user, at=self.started_at + timedelta(hours=3))
+
+        self.assertFalse(stopped.is_paused)
+        self.assertEqual(stopped.duration, timedelta(minutes=20))
+
+    def test_pause_requires_a_running_timer(self):
+        with self.assertRaises(ValidationError):
+            pause_timer(user=self.user)
+
+    def test_pause_rejects_an_already_paused_timer(self):
+        start_timer(user=self.user, project=self.project, at=self.started_at)
+        pause_timer(user=self.user, at=self.started_at + timedelta(minutes=10))
+
+        with self.assertRaises(ValidationError):
+            pause_timer(user=self.user, at=self.started_at + timedelta(minutes=20))
+
+    def test_resume_requires_a_paused_timer(self):
+        start_timer(user=self.user, project=self.project, at=self.started_at)
+
+        with self.assertRaises(ValidationError):
+            resume_timer(user=self.user)
+
+    def test_resume_requires_a_running_timer(self):
+        with self.assertRaises(ValidationError):
+            resume_timer(user=self.user)
+
+    def test_actual_hours_excludes_paused_duration(self):
+        entry = save_manual_entry(
+            user=self.user,
+            project=self.project,
+            entry_data={
+                "start_time": self.started_at,
+                "end_time": self.started_at + timedelta(hours=3),
+                "description": "Design session with a break",
+                "billable": True,
+            },
+        )
+        entry.paused_duration = timedelta(minutes=45)
+        entry.save(update_fields=["paused_duration"])
+
+        self.assertEqual(self.project.actual_hours, Decimal("2.25"))
 
 
 class TimeEntryViewTests(TestCase):
@@ -427,3 +499,48 @@ class TimeEntryViewTests(TestCase):
 
         self.assertEqual(response.status_code, 404)
         self.assertTrue(TimeEntry.objects.filter(pk=hidden.pk).exists())
+
+    def test_pause_and_resume_flow_via_header_widget(self):
+        started_at = timezone.now() - timedelta(minutes=10)
+        start_timer(user=self.user, project=self.project, at=started_at)
+
+        pause_response = self.client.post(reverse("projects:timer-pause"), follow=True)
+        self.assertRedirects(pause_response, reverse("projects:time-list"))
+        self.assertContains(pause_response, "Timer paused.")
+        self.assertContains(pause_response, "Paused")
+        self.assertContains(pause_response, 'data-timer-paused="true"')
+        self.assertContains(pause_response, reverse("projects:timer-resume"))
+
+        resume_response = self.client.post(reverse("projects:timer-resume"), follow=True)
+        self.assertRedirects(resume_response, reverse("projects:time-list"))
+        self.assertContains(resume_response, "Timer resumed.")
+        self.assertContains(resume_response, 'data-timer-paused="false"')
+        self.assertContains(resume_response, reverse("projects:timer-pause"))
+
+        self.assertFalse(TimeEntry.objects.get(user=self.user).is_paused)
+
+    def test_pause_without_a_running_timer_shows_error(self):
+        response = self.client.post(reverse("projects:timer-pause"), follow=True)
+
+        self.assertRedirects(response, reverse("projects:time-list"))
+        self.assertContains(response, "No timer is currently running.")
+
+    def test_resume_without_a_paused_timer_shows_error(self):
+        start_timer(user=self.user, project=self.project, at=timezone.now() - timedelta(minutes=5))
+
+        response = self.client.post(reverse("projects:timer-resume"), follow=True)
+
+        self.assertRedirects(response, reverse("projects:time-list"))
+        self.assertContains(response, "This timer is not paused.")
+
+    def test_paused_entry_shows_paused_badge_instead_of_running(self):
+        start_timer(user=self.user, project=self.project, at=timezone.now() - timedelta(minutes=10))
+        self.client.post(reverse("projects:timer-pause"))
+
+        list_response = self.client.get(reverse("projects:time-list"))
+        self.assertContains(list_response, "Timer paused")  # running-card banner
+        self.assertContains(list_response, "status-badge--paused")  # ledger row badge
+
+        detail_response = self.client.get(reverse("projects:detail", args=(self.project.pk,)))
+        self.assertContains(detail_response, "Paused")
+        self.assertNotContains(detail_response, ">Running<")

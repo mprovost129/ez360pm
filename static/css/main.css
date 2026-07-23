@@ -434,6 +434,7 @@ button[type="submit"]:not(.btn):active {
 .button-group { display: flex; align-items: center; flex-wrap: wrap; gap: 0.5rem; }
 .button-group form { margin: 0; }
 .status-badge { display: inline-block; padding: 0.1rem 0.4rem; color: #215b3a; background: #dcefe4; border-radius: 999px; font-size: 0.7rem; }
+.status-badge--paused { color: #8a5a00; background: #fdecc8; }
 .muted, .help-text { color: #6c7d8d; }
 .empty-state { padding: 2rem; color: #6c7d8d; text-align: center; }
 .note-row { padding: 1rem 0; border-bottom: 1px solid #e8edf1; }

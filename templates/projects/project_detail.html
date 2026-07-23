@@ -48,7 +48,7 @@
     <section class="content-card detail-wide">
         <div class="section-heading"><h2>Recent time</h2><a href="{% url 'projects:time-list' %}?project={{ project.pk }}">View all time</a></div>
         {% for entry in recent_time_entries %}
-        <div class="detail-row"><span><strong>{{ entry.start_time|date:'M j, Y g:i a' }}</strong>{% if entry.description %}<small>{{ entry.description }}</small>{% endif %}</span><span>{% if entry.is_running %}Running{% else %}{{ entry.duration_hours|hours_minutes }}{% endif %}</span></div>
+        <div class="detail-row"><span><strong>{{ entry.start_time|date:'M j, Y g:i a' }}</strong>{% if entry.description %}<small>{{ entry.description }}</small>{% endif %}</span><span>{% if entry.is_paused %}Paused{% elif entry.is_running %}Running{% else %}{{ entry.duration_hours|hours_minutes }}{% endif %}</span></div>
         {% empty %}<p class="muted">No time recorded.</p>{% endfor %}
     </section>
     <section class="content-card detail-wide">

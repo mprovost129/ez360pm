@@ -16,6 +16,8 @@ from .time_forms import TimeEntryForm, TimeFilterForm, TimerStartForm
 from .time_services import (
     TimerAlreadyRunning,
     delete_manual_entry,
+    pause_timer,
+    resume_timer,
     start_timer,
     stop_timer,
 )
@@ -115,6 +117,30 @@ def timer_stop(request):
         messages.error(request, exc.message)
     else:
         messages.success(request, f"Timer stopped for {entry.project.number}.")
+    return redirect(_safe_next(request))
+
+
+@login_required
+@require_POST
+def timer_pause(request):
+    try:
+        pause_timer(user=request.user)
+    except ValidationError as exc:
+        messages.error(request, exc.message)
+    else:
+        messages.success(request, "Timer paused.")
+    return redirect(_safe_next(request))
+
+
+@login_required
+@require_POST
+def timer_resume(request):
+    try:
+        resume_timer(user=request.user)
+    except ValidationError as exc:
+        messages.error(request, exc.message)
+    else:
+        messages.success(request, "Timer resumed.")
     return redirect(_safe_next(request))
 
 

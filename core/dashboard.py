@@ -18,7 +18,9 @@ def dashboard_context(company):
         time_entries__line_item__isnull=True,
     )
     duration_expression = ExpressionWrapper(
-        F("time_entries__end_time") - F("time_entries__start_time"),
+        F("time_entries__end_time")
+        - F("time_entries__start_time")
+        - F("time_entries__paused_duration"),
         output_field=DurationField(),
     )
     leads = (
@@ -69,7 +71,7 @@ def dashboard_context(company):
         count=Count("pk"),
         duration=Sum(
             ExpressionWrapper(
-                F("end_time") - F("start_time"),
+                F("end_time") - F("start_time") - F("paused_duration"),
                 output_field=DurationField(),
             )
         ),

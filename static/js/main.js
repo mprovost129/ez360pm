@@ -19,6 +19,7 @@ function monotonicNow() {
 
 function initializeRunningTimers() {
     document.querySelectorAll("[data-running-timer]").forEach((timer) => {
+        if (timer.dataset.timerPaused === "true") return;
         const startedAt = Number(timer.dataset.timerStartMs);
         const serverNow = Number(timer.dataset.timerServerNowMs);
         if (!Number.isFinite(startedAt) || !Number.isFinite(serverNow)) return;
@@ -31,6 +32,7 @@ function initializeRunningTimers() {
 
 function updateRunningTimers() {
     document.querySelectorAll("[data-running-timer]").forEach((timer) => {
+        if (timer.dataset.timerPaused === "true") return;
         const state = runningTimerStates.get(timer);
         const clock = timer.querySelector("[data-timer-clock]");
         if (!state || !clock) return;

@@ -23,11 +23,13 @@ def running_timer(request):
     context = {"running_time_entry": entry}
     if entry is not None:
         server_now = timezone.now()
+        # Shifting the reference point forward by completed pause time lets the
+        # client tick with simple now-minus-start math, unaware of pausing.
+        effective_start = entry.start_time + entry.paused_duration
         context.update(
-            running_timer_start_ms=int(entry.start_time.timestamp() * 1000),
+            running_timer_is_paused=entry.is_paused,
+            running_timer_start_ms=int(effective_start.timestamp() * 1000),
             running_timer_server_now_ms=int(server_now.timestamp() * 1000),
-            running_timer_elapsed=_format_elapsed(
-                (server_now - entry.start_time).total_seconds()
-            ),
+            running_timer_elapsed=_format_elapsed(entry.duration.total_seconds()),
         )
     return context

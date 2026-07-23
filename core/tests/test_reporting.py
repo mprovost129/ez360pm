@@ -132,6 +132,26 @@ class DashboardAndReportingTests(TestCase):
         self.assertNotContains(response, "LEAD-OTHER")
         self.assertNotContains(response, "$900.00")
 
+    def test_unbilled_hours_excludes_paused_duration(self):
+        active = self.make_project("ACTIVE-PAUSED", Project.Status.ACTIVE)
+        start = datetime(2026, 7, 10, 13, tzinfo=UTC)
+        entry = save_manual_entry(
+            user=self.user,
+            project=active,
+            entry_data={
+                "start_time": start,
+                "end_time": start + timedelta(hours=3),
+                "description": "Design with a lunch break",
+                "billable": True,
+            },
+        )
+        entry.paused_duration = timedelta(hours=1)
+        entry.save(update_fields=["paused_duration"])
+
+        response = self.client.get(reverse("core:home"))
+
+        self.assertEqual(response.context["unbilled_hours"], Decimal("2.00"))
+
     def test_revenue_view_uses_payment_received_month_and_company(self):
         project = self.make_project("REVENUE-1", Project.Status.ACTIVE)
         invoice = self.make_invoice(project, amount="75.00")

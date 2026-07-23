@@ -53,6 +53,51 @@ def start_timer(*, user, project, description="", billable=True, at=None):
 
 
 @transaction.atomic
+def pause_timer(*, user, at=None):
+    entry = (
+        TimeEntry.objects.select_for_update()
+        .select_related("project")
+        .filter(user=user, company=user.company, end_time__isnull=True)
+        .first()
+    )
+    if entry is None:
+        raise ValidationError("No timer is currently running.")
+    if entry.paused_at is not None:
+        raise ValidationError("This timer is already paused.")
+
+    paused_at = at or timezone.now()
+    if paused_at <= entry.start_time:
+        raise ValidationError("Pause time must be after the timer's start time.")
+    entry.paused_at = paused_at
+    entry.full_clean()
+    entry.save(update_fields=["paused_at"])
+    return entry
+
+
+@transaction.atomic
+def resume_timer(*, user, at=None):
+    entry = (
+        TimeEntry.objects.select_for_update()
+        .select_related("project")
+        .filter(user=user, company=user.company, end_time__isnull=True)
+        .first()
+    )
+    if entry is None:
+        raise ValidationError("No timer is currently running.")
+    if entry.paused_at is None:
+        raise ValidationError("This timer is not paused.")
+
+    resumed_at = at or timezone.now()
+    if resumed_at <= entry.paused_at:
+        raise ValidationError("Resume time must be after the pause time.")
+    entry.paused_duration += resumed_at - entry.paused_at
+    entry.paused_at = None
+    entry.full_clean()
+    entry.save(update_fields=["paused_duration", "paused_at"])
+    return entry
+
+
+@transaction.atomic
 def stop_timer(*, user, at=None):
     entry = (
         TimeEntry.objects.select_for_update()
@@ -66,9 +111,14 @@ def stop_timer(*, user, at=None):
     stopped_at = at or timezone.now()
     if stopped_at <= entry.start_time:
         raise ValidationError("Timer stop time must be after its start time.")
+    if entry.paused_at is not None:
+        if stopped_at <= entry.paused_at:
+            raise ValidationError("Timer stop time must be after its start time.")
+        entry.paused_duration += stopped_at - entry.paused_at
+        entry.paused_at = None
     entry.end_time = stopped_at
     entry.full_clean()
-    entry.save(update_fields=["end_time"])
+    entry.save(update_fields=["end_time", "paused_duration", "paused_at"])
     return entry
 
 
