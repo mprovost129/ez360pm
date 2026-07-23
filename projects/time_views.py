@@ -1,3 +1,5 @@
+from functools import wraps
+
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
@@ -6,7 +8,6 @@ from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views import View
-from django.views.decorators.http import require_POST
 from django.views.generic import CreateView, FormView, ListView, UpdateView
 
 from core.mixins import CompanyScopedQuerysetMixin
@@ -32,6 +33,24 @@ def _safe_next(request, fallback="projects:time-list"):
     ):
         return next_url
     return reverse(fallback)
+
+
+def _post_only(view_func):
+    """Run the view on POST; redirect (not 405) on any other method.
+
+    A bookmark, browser history revisit, or link-prefetch landing on one of
+    these action URLs via GET should bounce somewhere useful rather than show
+    a bare error page. The action itself still requires POST plus its CSRF
+    token, so this changes nothing about who can trigger it.
+    """
+
+    @wraps(view_func)
+    def wrapped(request, *args, **kwargs):
+        if request.method != "POST":
+            return redirect(_safe_next(request))
+        return view_func(request, *args, **kwargs)
+
+    return wrapped
 
 
 class TimeEntryListView(LoginRequiredMixin, CompanyScopedQuerysetMixin, ListView):
@@ -109,7 +128,7 @@ class TimerStartView(LoginRequiredMixin, FormView):
 
 
 @login_required
-@require_POST
+@_post_only
 def timer_stop(request):
     try:
         entry = stop_timer(user=request.user)
@@ -121,7 +140,7 @@ def timer_stop(request):
 
 
 @login_required
-@require_POST
+@_post_only
 def timer_pause(request):
     try:
         pause_timer(user=request.user)
@@ -133,7 +152,7 @@ def timer_pause(request):
 
 
 @login_required
-@require_POST
+@_post_only
 def timer_resume(request):
     try:
         resume_timer(user=request.user)

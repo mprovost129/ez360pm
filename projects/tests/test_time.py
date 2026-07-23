@@ -544,3 +544,8 @@ class TimeEntryViewTests(TestCase):
         detail_response = self.client.get(reverse("projects:detail", args=(self.project.pk,)))
         self.assertContains(detail_response, "Paused")
         self.assertNotContains(detail_response, ">Running<")
+
+    def test_get_on_timer_action_urls_redirects_instead_of_405(self):
+        for name in ("projects:timer-stop", "projects:timer-pause", "projects:timer-resume"):
+            response = self.client.get(reverse(name))
+            self.assertRedirects(response, reverse("projects:time-list"))

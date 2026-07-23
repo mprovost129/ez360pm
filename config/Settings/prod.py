@@ -11,6 +11,13 @@ ALLOWED_HOSTS = [value.strip() for value in os.environ['ALLOWED_HOSTS'].split(',
 # Whitenoise — insert after SecurityMiddleware
 MIDDLEWARE.insert(1, 'whitenoise.middleware.WhiteNoiseMiddleware')  # noqa: F405
 
+# Render sits as a single trusted reverse-proxy hop in front of this app.
+# Without restoring the real client IP, every request's REMOTE_ADDR is the
+# proxy's own address, which silently breaks Axes login lockout and the
+# public document Stripe checkout rate limiter (both keyed on client IP).
+# Must run before AxesMiddleware.
+MIDDLEWARE.insert(2, 'core.middleware.RealClientIPMiddleware')  # noqa: F405
+
 USE_S3_MEDIA = s3_media_enabled(os.environ)
 
 STORAGES = {
