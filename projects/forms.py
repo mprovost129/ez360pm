@@ -8,6 +8,26 @@ from .services import create_project
 
 
 class ProjectForm(CompanyScopedModelForm):
+    field_groups = (
+        ("Project", ("client", "number", "name", "description")),
+        (
+            "Site",
+            (
+                "address_1",
+                "address_2",
+                "city",
+                "state",
+                "postal_code",
+                "municipality",
+                "parcel_id",
+            ),
+        ),
+        (
+            "Billing",
+            ("billing_type", "hourly_rate", "fixed_fee", "estimated_hours"),
+        ),
+    )
+
     number = forms.CharField(
         max_length=30,
         required=False,

@@ -18,7 +18,7 @@
             <thead><tr><th>Description</th><th>Qty</th><th>Rate</th><th>Tax</th><th>Amount</th>{% if invoice.is_editable %}<th><span class="visually-hidden">Actions</span></th>{% endif %}</tr></thead>
             <tbody>
             {% for line in invoice.line_items.all %}
-            <tr><td>{{ line.description }}{% if line.time_entries.all %}<small>{{ line.time_entries.count }} time entr{{ line.time_entries.count|pluralize:'y,ies' }}</small>{% endif %}</td><td>{{ line.quantity }}</td><td>${{ line.rate|floatformat:2 }}</td><td>{{ line.tax_rate }}%</td><td>${{ line.line_total }}</td>{% if invoice.is_editable %}<td class="line-actions"><a href="{% url 'documents:line-update' invoice.pk line.pk %}">Edit</a><form method="post" action="{% url 'documents:line-delete' invoice.pk line.pk %}">{% csrf_token %}<button class="link-button" type="submit">Remove</button></form></td>{% endif %}</tr>
+            <tr><td>{{ line.description }}{% if line.time_entries.all %}<small>{{ line.time_entries.count }} time entr{{ line.time_entries.count|pluralize:'y,ies' }}</small>{% endif %}</td><td>{{ line.quantity }}</td><td>${{ line.rate|floatformat:2 }}</td><td>{{ line.tax_rate }}%</td><td>${{ line.line_total }}</td>{% if invoice.is_editable %}<td class="line-actions"><a href="{% url 'documents:line-update' invoice.pk line.pk %}">Edit</a><form method="post" action="{% url 'documents:line-delete' invoice.pk line.pk %}" data-confirm="Remove this invoice line?">{% csrf_token %}<button class="link-button" type="submit">Remove</button></form></td>{% endif %}</tr>
             {% empty %}<tr><td colspan="6">No charges yet.</td></tr>{% endfor %}
             </tbody>
         </table>

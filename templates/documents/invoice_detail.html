@@ -7,7 +7,7 @@
     <div><p class="eyebrow">{{ invoice.get_invoice_kind_display }} invoice · {{ invoice.get_status_display }}</p><h1>{{ invoice.number }}</h1></div>
     <div class="button-group">
         <a class="btn btn-light" href="{% url 'documents:invoice-pdf' invoice.pk %}" target="_blank">PDF</a>
-        {% if invoice.is_editable %}<a class="btn btn-light" href="{% url 'documents:invoice-update' invoice.pk %}">Edit</a><form method="post" action="{% url 'documents:invoice-issue' invoice.pk %}">{% csrf_token %}<button class="btn btn-success" type="submit">Issue invoice</button></form>{% endif %}
+        {% if invoice.is_editable %}<a class="btn btn-light" href="{% url 'documents:invoice-update' invoice.pk %}">Edit</a><form method="post" action="{% url 'documents:invoice-issue' invoice.pk %}" data-confirm="Issue this invoice? Draft editing will end and its public link will become active.">{% csrf_token %}<button class="btn btn-success" type="submit">Issue invoice</button></form>{% endif %}
         {% if invoice.status == 'sent' or invoice.status == 'viewed' or invoice.status == 'partially_paid' %}<a class="btn btn-success" href="{% url 'documents:invoice-send' invoice.pk %}">Email invoice</a>{% endif %}
         {% if invoice.status == 'sent' or invoice.status == 'viewed' or invoice.status == 'partially_paid' %}<a class="btn btn-primary" href="{% url 'documents:payment-create' invoice.pk %}">Record payment</a><a class="btn btn-outline-danger" href="{% url 'documents:invoice-void' invoice.pk %}">Void</a>{% endif %}
     </div>
@@ -31,21 +31,21 @@
 </section>
 {% endif %}
 
-{% if invoice.deliveries.all %}<section class="content-card invoice-panel"><h2>Delivery history</h2>{% for delivery in invoice.deliveries.all %}<div class="detail-row"><span><strong>{{ delivery.recipient_email }}</strong><small>{{ delivery.get_purpose_display }} · {{ delivery.created_at|date:'M j, Y g:i a' }}</small></span><span>{{ delivery.get_status_display }}{% if delivery.error_code %}<small>{{ delivery.error_code }}</small>{% endif %}</span></div>{% endfor %}</section>{% endif %}
+{% if invoice.deliveries.all %}<section class="content-card invoice-panel"><h2>Delivery history</h2>{% for delivery in invoice.deliveries.all %}<div class="detail-row"><span><strong>{{ delivery.recipient_email }}</strong><small>{{ delivery.get_purpose_display }} · {{ delivery.created_at|date:'M j, Y g:i a' }}</small></span><span>{{ delivery.get_status_display }}{% if delivery.error_code %}<small>{{ delivery.failure_message }}</small>{% endif %}</span></div>{% endfor %}</section>{% endif %}
 
 {% if invoice.credits_received.all or credit_form %}
 <section class="content-card invoice-panel">
     <h2>Retainer credits</h2>
-    {% for credit in invoice.credits_received.all %}<div class="detail-row"><span><strong>-${{ credit.amount }}</strong><small>From {{ credit.source_invoice.number }}</small></span>{% if invoice.is_editable %}<form class="inline-form" method="post" action="{% url 'documents:credit-delete' invoice.pk credit.pk %}">{% csrf_token %}<button class="link-button" type="submit">Remove</button></form>{% endif %}</div>{% endfor %}
+    {% for credit in invoice.credits_received.all %}<div class="detail-row"><span><strong>-${{ credit.amount }}</strong><small>From {{ credit.source_invoice.number }}</small></span>{% if invoice.is_editable %}<form class="inline-form" method="post" action="{% url 'documents:credit-delete' invoice.pk credit.pk %}" data-confirm="Remove this ${{ credit.amount }} retainer credit from the invoice?">{% csrf_token %}<button class="link-button" type="submit">Remove</button></form>{% endif %}</div>{% endfor %}
     {% if credit_form %}<form method="post" action="{% url 'documents:credit-create' invoice.pk %}" class="form-grid compact-form">{% csrf_token %}{{ credit_form.as_p }}<div class="form-actions"><button class="btn btn-primary" type="submit">Apply retainer credit</button></div></form>{% endif %}
 </section>
 {% endif %}
 
 <section class="content-card invoice-panel">
     <div class="section-heading"><h2>Payments</h2></div>
-    {% for payment in invoice.payments.all %}<div class="detail-row"><span><strong>${{ payment.amount }} · {{ payment.get_method_display }}</strong><small>{{ payment.received_at|date:'M j, Y' }}{% if payment.reference %} · {{ payment.reference }}{% endif %}{% if payment.fee_amount %} · ${{ payment.fee_amount }} fee · ${{ payment.net_amount }} net{% endif %}</small></span>{% if payment.method != 'stripe' %}<span><a href="{% url 'documents:payment-update' invoice.pk payment.pk %}">Edit</a> · <form class="inline-form" method="post" action="{% url 'documents:payment-delete' invoice.pk payment.pk %}">{% csrf_token %}<button class="link-button" type="submit">Remove</button></form></span>{% endif %}</div>{% empty %}<p class="muted">No payments recorded.</p>{% endfor %}
+    {% for payment in invoice.payments.all %}<div class="detail-row"><span><strong>${{ payment.amount }} · {{ payment.get_method_display }}</strong><small>{{ payment.received_at|date:'M j, Y' }}{% if payment.reference %} · {{ payment.reference }}{% endif %}{% if payment.fee_amount %} · ${{ payment.fee_amount }} fee · ${{ payment.net_amount }} net{% endif %}</small></span>{% if payment.method != 'stripe' %}<span><a href="{% url 'documents:payment-update' invoice.pk payment.pk %}">Edit</a> · <form class="inline-form" method="post" action="{% url 'documents:payment-delete' invoice.pk payment.pk %}" data-confirm="Remove this ${{ payment.amount }} payment? Revenue and the invoice balance will be recalculated.">{% csrf_token %}<button class="link-button" type="submit">Remove</button></form></span>{% endif %}</div>{% empty %}<p class="muted">No payments recorded.</p>{% endfor %}
 </section>
 
-{% if invoice.status == 'void' %}<section class="content-card invoice-panel warning-panel"><h2>Void invoice</h2><p>{{ invoice.void_reason|default:'No reason recorded.' }}</p><p>Time remains invoiced to avoid accidental double billing.</p><form method="post" action="{% url 'documents:invoice-release-time' invoice.pk %}">{% csrf_token %}<button class="btn btn-warning" type="submit">Release time for rebilling</button></form></section>{% endif %}
+{% if invoice.status == 'void' %}<section class="content-card invoice-panel warning-panel"><h2>Void invoice</h2><p>{{ invoice.void_reason|default:'No reason recorded.' }}</p><p>Time remains invoiced to avoid accidental double billing.</p><form method="post" action="{% url 'documents:invoice-release-time' invoice.pk %}" data-confirm="Release all attached time for rebilling? The entries will become available to add to another invoice.">{% csrf_token %}<button class="btn btn-warning" type="submit">Release time for rebilling</button></form></section>{% endif %}
 {% if invoice.is_editable %}<div class="danger-zone"><a href="{% url 'documents:invoice-delete' invoice.pk %}">Delete draft invoice</a></div>{% endif %}
 {% endblock %}

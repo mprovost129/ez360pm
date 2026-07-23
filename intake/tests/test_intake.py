@@ -52,6 +52,27 @@ class NoteWorkflowTests(TestCase):
         self.assertRedirects(response, reverse("core:home"))
         self.assertEqual(Note.objects.get().body, "Name not captured yet.")
 
+    def test_invalid_quick_add_preserves_entered_details(self):
+        response = self.client.post(
+            reverse("intake:quick-add"),
+            {
+                "contact_first_name": "Morgan",
+                "contact_last_name": "Taylor",
+                "prospect_company_name": "Taylor Household",
+                "body": "",
+                "next": "/",
+            },
+            follow=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        form = response.context["quick_note_form"]
+        self.assertTrue(form.is_bound)
+        self.assertEqual(form["contact_first_name"].value(), "Morgan")
+        self.assertEqual(form["contact_last_name"].value(), "Taylor")
+        self.assertEqual(form["prospect_company_name"].value(), "Taylor Household")
+        self.assertIn("body", form.errors)
+
     def test_quick_add_rejects_external_next_url(self):
         response = self.client.post(
             reverse("intake:quick-add"),

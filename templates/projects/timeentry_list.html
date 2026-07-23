@@ -51,7 +51,7 @@
         {% if not entry.is_running and entry.status == 'logged' %}
         <div class="button-group">
             <a class="btn btn-sm btn-light" href="{% url 'projects:time-update' entry.pk %}">Edit</a>
-            <form method="post" action="{% url 'projects:time-delete' entry.pk %}">{% csrf_token %}<button class="btn btn-sm btn-outline-danger" type="submit">Delete</button></form>
+            <form method="post" action="{% url 'projects:time-delete' entry.pk %}" data-confirm="Delete this time entry? This cannot be undone.">{% csrf_token %}<button class="btn btn-sm btn-outline-danger" type="submit">Delete</button></form>
         </div>
         {% endif %}
     </article>

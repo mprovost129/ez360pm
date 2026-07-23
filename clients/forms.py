@@ -19,6 +19,21 @@ CLIENT_FIELDS = (
 
 
 class ClientForm(CompanyScopedModelForm):
+    field_groups = (
+        ("Client", ("company_name", "internal_note")),
+        (
+            "Billing address",
+            (
+                "billing_address_1",
+                "billing_address_2",
+                "billing_city",
+                "billing_state",
+                "billing_postal_code",
+                "billing_country",
+            ),
+        ),
+    )
+
     class Meta:
         model = Client
         fields = CLIENT_FIELDS
@@ -30,6 +45,20 @@ class ClientCreateForm(ClientForm):
     contact_last_name = forms.CharField(max_length=150)
     contact_email = forms.EmailField()
     contact_phone = forms.CharField(max_length=50)
+
+    field_groups = (
+        ("Client", ("company_name", "internal_note")),
+        (
+            "Primary contact",
+            (
+                "contact_first_name",
+                "contact_last_name",
+                "contact_email",
+                "contact_phone",
+            ),
+        ),
+        ("Billing address", ClientForm.field_groups[1][1]),
+    )
 
     @transaction.atomic
     def save(self, commit=True):
@@ -69,4 +98,3 @@ class ContactForm(forms.ModelForm):
             contact_data=data,
         )
         return self.instance
-

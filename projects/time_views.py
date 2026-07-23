@@ -12,6 +12,7 @@ from django.views.generic import CreateView, FormView, ListView, UpdateView
 
 from core.mixins import CompanyScopedQuerysetMixin
 
+from .context_processors import _format_elapsed
 from .models import TimeEntry
 from .time_forms import TimeEntryForm, TimeFilterForm, TimerStartForm
 from .time_services import (
@@ -135,7 +136,11 @@ def timer_stop(request):
     except ValidationError as exc:
         messages.error(request, exc.message)
     else:
-        messages.success(request, f"Timer stopped for {entry.project.number}.")
+        elapsed = _format_elapsed(entry.duration.total_seconds())
+        messages.success(
+            request,
+            f"Timer stopped for {entry.project.number}. {elapsed} recorded.",
+        )
     return redirect(_safe_next(request))
 
 

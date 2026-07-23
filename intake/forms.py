@@ -45,6 +45,15 @@ class QuickNoteForm(CompanyScopedModelForm):
 
 
 class NoteForm(CompanyScopedModelForm):
+    field_groups = (
+        (
+            "Caller",
+            ("contact_first_name", "contact_last_name", "prospect_company_name"),
+        ),
+        ("Note", ("body",)),
+        ("Attach to", ("client", "project")),
+    )
+
     class Meta:
         model = Note
         fields = (

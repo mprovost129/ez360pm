@@ -1,7 +1,8 @@
 <div class="header-timer">
     {% if running_time_entry %}
     <div class="header-timer__running" data-running-timer data-timer-paused="{{ running_timer_is_paused|yesno:'true,false' }}" data-timer-start-ms="{{ running_timer_start_ms }}" data-timer-server-now-ms="{{ running_timer_server_now_ms }}">
-        <a href="{% url 'projects:detail' running_time_entry.project.pk %}">{{ running_time_entry.project.number }}</a>
+        <a href="{% url 'projects:detail' running_time_entry.project.pk %}" title="{{ running_time_entry.project.name }}">{{ running_time_entry.project.number }} · {{ running_time_entry.project.name }}</a>
+        {% if running_time_entry.description %}<span class="header-timer__description">{{ running_time_entry.description }}</span>{% endif %}
         {% if running_timer_is_paused %}<span class="status-badge status-badge--paused">Paused</span>{% endif %}
         <span class="timer-clock" data-timer-clock aria-live="off">{{ running_timer_elapsed }}</span>
         {% if running_timer_is_paused %}

@@ -32,6 +32,7 @@ class ProjectListView(LoginRequiredMixin, CompanyScopedQuerysetMixin, ListView):
     model = Project
     context_object_name = "projects"
     template_name = "projects/project_list.html"
+    paginate_by = 50
 
     def get_queryset(self):
         queryset = super().get_queryset()

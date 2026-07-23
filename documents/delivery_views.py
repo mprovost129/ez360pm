@@ -54,6 +54,6 @@ class DocumentSendView(LoginRequiredMixin, FormView):
         else:
             messages.error(
                 self.request,
-                f"Email was not sent. Delivery error: {delivery.error_code}.",
+                f"Email was not sent. {delivery.failure_message}",
             )
         return redirect(self.success_url_name, pk=self.document.pk)

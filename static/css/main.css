@@ -222,6 +222,15 @@ button[type="submit"]:not(.btn):active {
     text-decoration: none;
 }
 
+.header-timer__description {
+    max-width: 180px;
+    overflow: hidden;
+    color: #66788a;
+    font-size: 0.8rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 .brand-cluster,
 .company-identity {
     display: flex;
@@ -313,6 +322,17 @@ button[type="submit"]:not(.btn):active {
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     gap: 0.35rem;
+}
+
+.quick-note__error {
+    margin-bottom: 0.4rem;
+    color: var(--bs-danger);
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+
+.quick-note .errorlist {
+    margin: -0.2rem 0 0.4rem;
 }
 
 .note-lead {
@@ -526,6 +546,11 @@ button[type="submit"]:not(.btn):active {
 .month-nav input[type="month"] { width: auto; }
 .danger-link { color: var(--bs-danger); }
 .form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; max-width: 960px; }
+.structured-form { display: grid; gap: 1.25rem; max-width: 960px; }
+.form-section { padding: 0 0 1.25rem; border: 0; border-bottom: 1px solid var(--bs-border-color); }
+.form-section legend { grid-column: 1 / -1; margin-bottom: 0; color: var(--ez-navy); font-size: 1.05rem; font-weight: 700; }
+.form-error-summary { padding: 0.75rem 1rem; color: #842029; background: #f8d7da; border: 1px solid #f5c2c7; border-radius: 0.4rem; }
+.required-marker { color: var(--bs-danger); }
 .form-field { min-width: 0; }
 .form-field label { display: block; margin-bottom: 0.3rem; font-weight: 600; }
 .form-field input:not([type="checkbox"]), .form-field select, .form-field textarea { width: 100%; max-width: none; }

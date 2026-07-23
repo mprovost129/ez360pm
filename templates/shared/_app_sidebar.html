@@ -1,12 +1,13 @@
 <aside class="app-sidebar" aria-label="Primary navigation">
     <form class="quick-note" method="post" action="{% url 'intake:quick-add' %}">
         {% csrf_token %}
+        {% if quick_note_form.errors %}<div class="quick-note__error" role="alert">Please add note details.</div>{% endif %}
         <div class="quick-note__name">
-            {{ quick_note_form.contact_first_name }}
-            {{ quick_note_form.contact_last_name }}
+            <div class="{% if quick_note_form.contact_first_name.errors %}form-field--error{% endif %}">{{ quick_note_form.contact_first_name }}{{ quick_note_form.contact_first_name.errors }}</div>
+            <div class="{% if quick_note_form.contact_last_name.errors %}form-field--error{% endif %}">{{ quick_note_form.contact_last_name }}{{ quick_note_form.contact_last_name.errors }}</div>
         </div>
-        {{ quick_note_form.prospect_company_name }}
-        {{ quick_note_form.body }}
+        <div class="{% if quick_note_form.prospect_company_name.errors %}form-field--error{% endif %}">{{ quick_note_form.prospect_company_name }}{{ quick_note_form.prospect_company_name.errors }}</div>
+        <div class="{% if quick_note_form.body.errors %}form-field--error{% endif %}">{{ quick_note_form.body }}{{ quick_note_form.body.errors }}</div>
         <input type="hidden" name="next" value="{{ request.get_full_path }}">
         <button class="btn btn-primary btn-sm" type="submit">Save note</button>
     </form>

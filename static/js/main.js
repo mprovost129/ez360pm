@@ -77,3 +77,48 @@ function initializeProjectBillingFields() {
 }
 
 initializeProjectBillingFields();
+
+function initializeProtectedForms() {
+    document.addEventListener("submit", (event) => {
+        const form = event.target;
+        if (!(form instanceof HTMLFormElement)) return;
+
+        if (form.dataset.submitting === "true") {
+            event.preventDefault();
+            return;
+        }
+
+        const confirmation = form.dataset.confirm;
+        if (confirmation && !window.confirm(confirmation)) {
+            event.preventDefault();
+            return;
+        }
+
+        form.dataset.submitting = "true";
+        form.setAttribute("aria-busy", "true");
+        window.setTimeout(() => {
+            form.querySelectorAll('button[type="submit"], input[type="submit"]').forEach(
+                (control) => {
+                    control.disabled = true;
+                    control.setAttribute("aria-disabled", "true");
+                },
+            );
+        }, 0);
+    });
+}
+
+initializeProtectedForms();
+
+function focusFirstFormError() {
+    const errorSummary = document.querySelector(".form-error-summary");
+    const invalidField = document.querySelector(
+        ".form-field--error input, .form-field--error select, .form-field--error textarea",
+    );
+    if (invalidField) {
+        invalidField.focus();
+    } else if (errorSummary) {
+        errorSummary.focus();
+    }
+}
+
+focusFirstFormError();

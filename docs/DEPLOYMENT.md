@@ -41,13 +41,11 @@ document links in email and Stripe redirects are built from this value.
 
 The production image collects static assets with nonsecret build-only settings,
 runs as the unprivileged `ez360pm` user, applies pending migrations before each
-container start, bootstraps the personal owner from `EZ360PM_OWNER_PASSWORD`,
-writes Gunicorn logs to stdout/stderr, honors the platform's `PORT` and
-`WEB_CONCURRENCY` values, and exposes a Docker health check against `/health/`.
-If migration or initial owner creation fails, Gunicorn does not start and the
-deployment is not promoted to receive traffic. After the owner is created,
-remove `EZ360PM_OWNER_PASSWORD` from the deployment environment; later starts
-will preserve the existing password.
+container start, writes Gunicorn logs to stdout/stderr, honors the platform's
+`PORT` and `WEB_CONCURRENCY` values, and exposes a Docker health check against
+`/health/`. If migration fails, Gunicorn does not start and the deployment is
+not promoted to receive traffic. `EZ360PM_OWNER_PASSWORD` is strictly a one-time
+bootstrap value and must not remain in the deployment environment afterward.
 
 `.dockerignore` excludes `.env`, repository metadata, local virtualenvs, logs,
 media, test output, and other workstation files from the build context. Never

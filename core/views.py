@@ -78,6 +78,7 @@ class DraftDocumentListView(LoginRequiredMixin, ListView):
     model = Document
     context_object_name = "documents"
     template_name = "core/draft_documents.html"
+    paginate_by = 50
 
     def get_queryset(self):
         return Document.objects.for_company(self.request.user.company).filter(

@@ -41,6 +41,7 @@ class ProposalListView(LoginRequiredMixin, CompanyScopedQuerysetMixin, ListView)
     model = Document
     context_object_name = "proposals"
     template_name = "documents/proposal_list.html"
+    paginate_by = 50
 
     def get_queryset(self):
         queryset = super().get_queryset().filter(doc_type=Document.Type.PROPOSAL)

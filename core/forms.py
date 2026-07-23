@@ -5,6 +5,8 @@ from django.core.exceptions import ImproperlyConfigured
 class CompanyScopedModelForm(forms.ModelForm):
     """Base form that requires company context for ownership and FK scoping."""
 
+    field_groups = ()
+
     def __init__(self, *args, company=None, **kwargs):
         if company is None:
             raise ImproperlyConfigured(
@@ -24,6 +26,26 @@ class CompanyScopedModelForm(forms.ModelForm):
             field.queryset = queryset.for_company(self.company)
         else:
             field.queryset = queryset.filter(**{company_lookup: self.company})
+
+    @property
+    def grouped_fields(self):
+        """Return configured BoundField groups, without dropping added fields."""
+
+        if not self.field_groups:
+            return ()
+
+        grouped = []
+        used = set()
+        for heading, names in self.field_groups:
+            fields = [self[name] for name in names if name in self.fields]
+            if fields:
+                grouped.append((heading, fields))
+                used.update(field.name for field in fields)
+
+        remaining = [self[name] for name in self.fields if name not in used]
+        if remaining:
+            grouped.append(("Options", remaining))
+        return grouped
 
     def save(self, commit=True):
         if hasattr(self.instance, "company_id"):

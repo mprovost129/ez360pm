@@ -314,6 +314,68 @@ class DeliveryAndStripeTests(TestCase):
         self.assertContains(configured, "Pay $100.00")
         self.assertNotContains(unconfigured, "Pay $100.00")
 
+    def test_customer_payment_journey_updates_view_status_revenue_and_net(self):
+        invoice = self.make_invoice()
+        public_path = reverse("public-documents:view", args=(invoice.public_token,))
+        delivery = send_document_email(
+            document=invoice,
+            recipient_name="Alex Smith",
+            recipient_email="alex@example.com",
+            document_url=f"https://app.example.com{public_path}",
+        )
+
+        self.assertEqual(delivery.status, DocumentDelivery.Status.SENT)
+        self.assertIn(public_path, mail.outbox[0].body)
+
+        public_response = self.client.get(public_path)
+        invoice.refresh_from_db()
+        self.assertEqual(public_response.status_code, 200)
+        self.assertEqual(invoice.status, Document.Status.VIEWED)
+        self.assertIsNotNone(invoice.viewed_at)
+
+        with patch(
+            "documents.stripe_views.create_checkout_session",
+            return_value=SimpleNamespace(url="https://checkout.stripe.test/session"),
+        ):
+            checkout_response = self.client.post(
+                reverse("public-documents:checkout", args=(invoice.public_token,))
+            )
+        self.assertEqual(checkout_response.status_code, 302)
+        self.assertEqual(
+            checkout_response.url,
+            "https://checkout.stripe.test/session",
+        )
+
+        self.set_stripe_fee(320)
+        event = self.stripe_event(invoice)
+        with patch(
+            "documents.stripe_views.stripe.Webhook.construct_event",
+            return_value=event,
+        ):
+            webhook_response = self.client.post(
+                reverse("webhooks:stripe"),
+                data=json.dumps(event).encode(),
+                content_type="application/json",
+                HTTP_STRIPE_SIGNATURE="signed-header",
+            )
+
+        self.assertEqual(webhook_response.status_code, 200)
+        invoice.refresh_from_db()
+        payment = invoice.payments.get()
+        self.assertEqual(invoice.status, Document.Status.PAID)
+        self.assertEqual(invoice.outstanding_balance, Decimal("0.00"))
+        self.assertEqual(payment.amount, Decimal("100.00"))
+        self.assertEqual(payment.fee_amount, Decimal("3.20"))
+        self.assertEqual(payment.net_amount, Decimal("96.80"))
+
+        revenue_response = self.client.get(
+            reverse("core:revenue"),
+            {"month": payment.received_at.strftime("%Y-%m")},
+        )
+        self.assertEqual(revenue_response.context["revenue_total"], Decimal("100.00"))
+        self.assertEqual(revenue_response.context["fee_total"], Decimal("3.20"))
+        self.assertEqual(revenue_response.context["net_total"], Decimal("96.80"))
+
     def test_webhook_payment_and_replay_share_idempotent_payment_service(self):
         invoice = self.make_invoice()
         event = self.stripe_event(invoice)

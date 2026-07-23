@@ -19,9 +19,13 @@ def quick_add(request):
     form = QuickNoteForm(request.POST, company=request.user.company)
     if form.is_valid():
         form.save()
+        request.session.pop("quick_note_draft", None)
         messages.success(request, "Note captured.")
     else:
-        messages.error(request, "Enter note text before saving.")
+        request.session["quick_note_draft"] = {
+            name: request.POST.get(name, "") for name in form.fields
+        }
+        messages.error(request, "Review the highlighted Quick Note fields.")
 
     next_url = request.POST.get("next", "")
     if not url_has_allowed_host_and_scheme(
@@ -37,6 +41,7 @@ class NoteListView(LoginRequiredMixin, CompanyScopedQuerysetMixin, ListView):
     model = Note
     context_object_name = "notes"
     template_name = "intake/note_list.html"
+    paginate_by = 50
 
     def get_queryset(self):
         queryset = super().get_queryset().select_related("client", "project")

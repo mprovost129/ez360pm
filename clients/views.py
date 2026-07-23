@@ -1,4 +1,5 @@
-from decimal import Decimal
+from datetime import timedelta
+from decimal import ROUND_HALF_UP, Decimal
 
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
@@ -39,6 +40,7 @@ class ClientListView(LoginRequiredMixin, CompanyScopedQuerysetMixin, ListView):
     model = Client
     context_object_name = "clients"
     template_name = "clients/client_list.html"
+    paginate_by = 50
 
     def get_queryset(self):
         return super().get_queryset().ordered_for_list().prefetch_related("contacts")
@@ -104,10 +106,19 @@ class ClientDetailView(LoginRequiredMixin, CompanyScopedQuerysetMixin, DetailVie
             .aggregate(value=Sum("balance_amount"))["value"]
             or Decimal("0.00")
         )
-        actual_hours = sum(
-            (project.actual_hours for project in client.projects.all()),
-            Decimal("0.00"),
+        durations = TimeEntry.objects.filter(
+            company=company,
+            project__client=client,
+            end_time__isnull=False,
+        ).values_list("start_time", "end_time", "paused_duration")
+        actual_duration = sum(
+            (max(end - start - paused, timedelta()) for start, end, paused in durations),
+            timedelta(),
         )
+        microseconds = actual_duration // timedelta(microseconds=1)
+        actual_hours = (
+            Decimal(microseconds) / Decimal("3600000000")
+        ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
         context.update(
             invoices=invoices,

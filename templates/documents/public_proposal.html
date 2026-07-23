@@ -10,7 +10,7 @@
     <h2>Accept proposal</h2>
     <p>By accepting, you confirm the proposal total and terms shown above.</p>
     <form method="post" action="{% url 'public-documents:accept' proposal.public_token %}" class="form-grid" novalidate>{% csrf_token %}{{ acceptance_form.non_field_errors }}{% for field in acceptance_form %}<div class="form-field{% if field.errors %} form-field--error{% endif %}"><label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{{ field.errors }}</div>{% endfor %}<div class="form-actions"><button class="btn btn-success" type="submit">Accept proposal</button></div></form>
-    <form method="post" action="{% url 'public-documents:decline' proposal.public_token %}">{% csrf_token %}<button class="link-button text-danger" type="submit">Decline proposal</button></form>
+    <form method="post" action="{% url 'public-documents:decline' proposal.public_token %}" data-confirm="Decline this proposal? This response will be recorded immediately.">{% csrf_token %}<button class="link-button text-danger" type="submit">Decline proposal</button></form>
 </section>
 {% endif %}
 </main></body></html>

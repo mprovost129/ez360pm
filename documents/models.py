@@ -327,6 +327,23 @@ class DocumentDelivery(models.Model):
     def __str__(self):
         return f"{self.document.number} to {self.recipient_email}: {self.status}"
 
+    @property
+    def failure_message(self):
+        """Turn provider error codes into useful next steps for the user."""
+
+        if not self.error_code:
+            return ""
+        code = self.error_code.lower()
+        if code == "email_not_configured":
+            return "Email is not configured. Review the email settings and try again."
+        if "authentication" in code:
+            return "The email provider rejected the login. Check the SMTP username and password."
+        if any(token in code for token in ("timeout", "connection", "socket")):
+            return "The email provider could not be reached. Check the SMTP host and try again."
+        if code == "provider_did_not_confirm_send":
+            return "The email provider did not confirm the send. Try again before sending it manually."
+        return "The email provider rejected the message. Review the email settings and try again."
+
 
 class InvoiceCredit(models.Model):
     source_invoice = models.ForeignKey(
