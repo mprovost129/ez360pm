@@ -44,14 +44,90 @@
         {% if client.internal_note %}<h3>Internal note</h3><p>{{ client.internal_note|linebreaksbr }}</p>{% endif %}
     </section>
 
-    <section class="content-card detail-wide">
-        <div class="section-heading"><h2>Projects</h2></div>
-        {% for project in client.projects.all %}
-        <a class="item-row" href="{% url 'projects:detail' project.pk %}">
-            <span><strong>{{ project.number }} · {{ project.name }}</strong><small>{{ project.get_status_display }}</small></span>
-            <i class="bi bi-chevron-right" aria-hidden="true"></i>
-        </a>
-        {% empty %}<p class="muted">No projects yet.</p>{% endfor %}
+    <section class="content-card detail-wide client-tabs">
+        <ul class="nav nav-tabs" id="client-tabs" role="tablist">
+            <li class="nav-item" role="presentation"><button class="nav-link active" id="tab-btn-projects" data-bs-toggle="tab" data-bs-target="#tab-projects" type="button" role="tab" aria-controls="tab-projects" aria-selected="true">Projects <span class="tab-count">{{ client.projects.all|length }}</span></button></li>
+            <li class="nav-item" role="presentation"><button class="nav-link" id="tab-btn-invoices" data-bs-toggle="tab" data-bs-target="#tab-invoices" type="button" role="tab" aria-controls="tab-invoices" aria-selected="false">Invoices <span class="tab-count">{{ invoices|length }}</span></button></li>
+            <li class="nav-item" role="presentation"><button class="nav-link" id="tab-btn-proposals" data-bs-toggle="tab" data-bs-target="#tab-proposals" type="button" role="tab" aria-controls="tab-proposals" aria-selected="false">Proposals <span class="tab-count">{{ proposals|length }}</span></button></li>
+            <li class="nav-item" role="presentation"><button class="nav-link" id="tab-btn-time" data-bs-toggle="tab" data-bs-target="#tab-time" type="button" role="tab" aria-controls="tab-time" aria-selected="false">Time <span class="tab-count">{{ time_entries|length }}</span></button></li>
+            <li class="nav-item" role="presentation"><button class="nav-link" id="tab-btn-payments" data-bs-toggle="tab" data-bs-target="#tab-payments" type="button" role="tab" aria-controls="tab-payments" aria-selected="false">Payments <span class="tab-count">{{ payments|length }}</span></button></li>
+            <li class="nav-item" role="presentation"><button class="nav-link" id="tab-btn-credits" data-bs-toggle="tab" data-bs-target="#tab-credits" type="button" role="tab" aria-controls="tab-credits" aria-selected="false">Credits <span class="tab-count">{{ credits|length }}</span></button></li>
+            <li class="nav-item" role="presentation"><button class="nav-link" id="tab-btn-notes" data-bs-toggle="tab" data-bs-target="#tab-notes" type="button" role="tab" aria-controls="tab-notes" aria-selected="false">Notes <span class="tab-count">{{ notes|length }}</span></button></li>
+            <li class="nav-item" role="presentation"><button class="nav-link" id="tab-btn-summary" data-bs-toggle="tab" data-bs-target="#tab-summary" type="button" role="tab" aria-controls="tab-summary" aria-selected="false">Summary</button></li>
+        </ul>
+        <div class="tab-content" id="client-tabs-content">
+            <div class="tab-pane fade show active" id="tab-projects" role="tabpanel" aria-labelledby="tab-btn-projects" tabindex="0">
+                {% for project in client.projects.all %}
+                <a class="item-row" href="{% url 'projects:detail' project.pk %}">
+                    <span><strong>{{ project.number }} · {{ project.name }}</strong><small>{{ project.get_status_display }}</small></span>
+                    <i class="bi bi-chevron-right" aria-hidden="true"></i>
+                </a>
+                {% empty %}<p class="empty-state">No projects yet.</p>{% endfor %}
+            </div>
+
+            <div class="tab-pane fade" id="tab-invoices" role="tabpanel" aria-labelledby="tab-btn-invoices" tabindex="0">
+                {% for invoice in invoices %}
+                <a class="item-row" href="{% url 'documents:invoice-detail' invoice.pk %}">
+                    <span><strong>{{ invoice.number }} · {{ invoice.project.name }}</strong><small>{{ invoice.get_invoice_kind_display }} · Due {{ invoice.due_date|date:'M j, Y' }}{% if invoice.is_overdue %} · Overdue{% endif %}</small></span>
+                    <span class="invoice-list-total"><strong>${{ invoice.total }}</strong><small>{{ invoice.get_status_display }} · ${{ invoice.outstanding_balance }} due</small></span>
+                </a>
+                {% empty %}<p class="empty-state">No invoices yet.</p>{% endfor %}
+            </div>
+
+            <div class="tab-pane fade" id="tab-proposals" role="tabpanel" aria-labelledby="tab-btn-proposals" tabindex="0">
+                {% for proposal in proposals %}
+                <a class="item-row" href="{% url 'proposals:detail' proposal.pk %}">
+                    <span><strong>{{ proposal.number }} · {{ proposal.project.name }}</strong><small>Issued {{ proposal.issue_date|date:'M j, Y' }}</small></span>
+                    <span class="invoice-list-total"><strong>${{ proposal.total }}</strong><small>{{ proposal.get_status_display }}</small></span>
+                </a>
+                {% empty %}<p class="empty-state">No proposals yet.</p>{% endfor %}
+            </div>
+
+            <div class="tab-pane fade" id="tab-time" role="tabpanel" aria-labelledby="tab-btn-time" tabindex="0">
+                {% for entry in time_entries %}
+                <div class="detail-row">
+                    <span><strong>{{ entry.project.number }} · {{ entry.project.name }}</strong><small>{{ entry.start_time|date:'M j, Y g:i a' }}{% if entry.description %} · {{ entry.description }}{% endif %}</small></span>
+                    <span>{% if entry.is_running %}<span class="status-badge">Running</span>{% else %}<strong>{{ entry.duration_hours }} h</strong>{% endif %}</span>
+                </div>
+                {% empty %}<p class="empty-state">No time recorded.</p>{% endfor %}
+            </div>
+
+            <div class="tab-pane fade" id="tab-payments" role="tabpanel" aria-labelledby="tab-btn-payments" tabindex="0">
+                {% for payment in payments %}
+                <a class="item-row" href="{% url 'documents:invoice-detail' payment.document.pk %}">
+                    <span><strong>{{ payment.document.number }} · {{ payment.get_method_display }}</strong><small>{{ payment.received_at|date:'M j, Y' }}{% if payment.reference %} · {{ payment.reference }}{% endif %}</small></span>
+                    <span class="invoice-list-total"><strong>${{ payment.amount }}</strong>{% if payment.fee_amount %}<small>${{ payment.net_amount }} net</small>{% endif %}</span>
+                </a>
+                {% empty %}<p class="empty-state">No payments recorded.</p>{% endfor %}
+            </div>
+
+            <div class="tab-pane fade" id="tab-credits" role="tabpanel" aria-labelledby="tab-btn-credits" tabindex="0">
+                {% for credit in credits %}
+                <a class="item-row" href="{% url 'documents:invoice-detail' credit.destination_invoice.pk %}">
+                    <span><strong>{{ credit.source_invoice.number }} → {{ credit.destination_invoice.number }}</strong><small>Applied {{ credit.created_at|date:'M j, Y' }}</small></span>
+                    <strong>${{ credit.amount }}</strong>
+                </a>
+                {% empty %}<p class="empty-state">No retainer credits applied.</p>{% endfor %}
+            </div>
+
+            <div class="tab-pane fade" id="tab-notes" role="tabpanel" aria-labelledby="tab-btn-notes" tabindex="0">
+                {% for note in notes %}
+                <div class="note-row">
+                    <div class="note-body">{{ note.body|linebreaksbr }}</div>
+                    <small class="muted">{{ note.created_at|date:'M j, Y g:i a' }}{% if note.project %} · {{ note.project.number }}{% endif %}</small>
+                </div>
+                {% empty %}<p class="empty-state">No notes attached.</p>{% endfor %}
+            </div>
+
+            <div class="tab-pane fade" id="tab-summary" role="tabpanel" aria-labelledby="tab-btn-summary" tabindex="0">
+                <div class="metric-grid metric-grid--compact">
+                    <div class="metric-card metric-card--money"><span>Total invoiced</span><strong>${{ total_invoiced }}</strong></div>
+                    <div class="metric-card metric-card--money"><span>Total received</span><strong>${{ total_received }}</strong></div>
+                    <div class="metric-card"><span>Outstanding</span><strong>${{ outstanding_total }}</strong></div>
+                    <div class="metric-card"><span>Hours logged</span><strong>{{ actual_hours }}</strong></div>
+                </div>
+            </div>
+        </div>
     </section>
 </div>
 {% endblock %}

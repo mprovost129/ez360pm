@@ -1,6 +1,9 @@
+from decimal import Decimal
+
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import ValidationError
+from django.db.models import Sum
 from django.db.models.deletion import ProtectedError
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse, reverse_lazy
@@ -13,10 +16,16 @@ from django.views.generic import (
 )
 
 from core.mixins import CompanyScopedQuerysetMixin
+from documents.models import Document, InvoiceCredit, Payment
+from documents.reporting import outstanding_invoices
+from intake.models import Note
+from projects.models import TimeEntry
 
 from .forms import ClientCreateForm, ClientForm, ContactForm
 from .models import Client, Contact
 from .services import delete_contact
+
+RECENT_TIME_ENTRY_LIMIT = 25
 
 
 class CompanyFormMixin:
@@ -42,6 +51,77 @@ class ClientDetailView(LoginRequiredMixin, CompanyScopedQuerysetMixin, DetailVie
 
     def get_queryset(self):
         return super().get_queryset().prefetch_related("contacts", "projects")
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        client = self.object
+        company = self.request.user.company
+
+        invoices = (
+            Document.objects.for_company(company)
+            .filter(doc_type=Document.Type.INVOICE, project__client=client)
+            .select_related("project")
+            .order_by("-issue_date", "-number")
+        )
+        proposals = (
+            Document.objects.for_company(company)
+            .filter(doc_type=Document.Type.PROPOSAL, project__client=client)
+            .select_related("project")
+            .order_by("-issue_date", "-number")
+        )
+        time_entries = (
+            TimeEntry.objects.filter(company=company, project__client=client)
+            .select_related("project", "user")
+            .order_by("-start_time")[:RECENT_TIME_ENTRY_LIMIT]
+        )
+        payments = (
+            Payment.objects.filter(document__company=company, document__project__client=client)
+            .select_related("document", "document__project")
+            .order_by("-received_at", "-created_at")
+        )
+        credits = (
+            InvoiceCredit.objects.filter(
+                destination_invoice__company=company,
+                destination_invoice__project__client=client,
+            )
+            .select_related("source_invoice", "destination_invoice")
+            .order_by("-created_at")
+        )
+        notes = (
+            Note.objects.for_company(company)
+            .filter(client=client, is_archived=False)
+            .select_related("project")
+            .order_by("-created_at")
+        )
+
+        total_invoiced = invoices.exclude(
+            status__in=(Document.Status.DRAFT, Document.Status.VOID)
+        ).aggregate(value=Sum("total"))["value"] or Decimal("0.00")
+        total_received = payments.aggregate(value=Sum("amount"))["value"] or Decimal("0.00")
+        outstanding_total = (
+            outstanding_invoices(company)
+            .filter(project__client=client)
+            .aggregate(value=Sum("balance_amount"))["value"]
+            or Decimal("0.00")
+        )
+        actual_hours = sum(
+            (project.actual_hours for project in client.projects.all()),
+            Decimal("0.00"),
+        )
+
+        context.update(
+            invoices=invoices,
+            proposals=proposals,
+            time_entries=time_entries,
+            payments=payments,
+            credits=credits,
+            notes=notes,
+            total_invoiced=total_invoiced,
+            total_received=total_received,
+            outstanding_total=outstanding_total,
+            actual_hours=actual_hours,
+        )
+        return context
 
 
 class ClientCreateView(LoginRequiredMixin, CompanyFormMixin, CreateView):

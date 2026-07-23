@@ -440,6 +440,10 @@ button[type="submit"]:not(.btn):active {
 .note-row:last-child { border-bottom: 0; }
 .note-row--archived { opacity: 0.65; }
 .note-body { margin-bottom: 0.5rem; }
+.client-tabs .nav-tabs { margin-bottom: 1rem; }
+.client-tabs .tab-content { padding-top: 0.25rem; }
+.tab-count { display: inline-block; min-width: 1.2rem; padding: 0.05rem 0.35rem; margin-left: 0.3rem; color: #56697b; background: #eef1f4; border-radius: 999px; font-size: 0.7rem; }
+.nav-tabs .nav-link.active .tab-count { color: #fff; background: var(--ez-blue); }
 .note-meta { display: flex; gap: 0.75rem; margin-bottom: 0.75rem; color: #6c7d8d; font-size: 0.8rem; }
 .note-source { padding: 1rem 1.25rem; background: #f5f8fa; border-left: 4px solid #7b9ab5; }
 .running-card { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 1rem 1.25rem; margin-bottom: 1rem; color: #17324d; background: #e7f4eb; border: 1px solid #b9dbc4; border-radius: 0.65rem; }
