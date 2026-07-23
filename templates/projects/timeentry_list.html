@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load core_extras %}
 
 {% block title %}Time | EZ360PM{% endblock %}
 
@@ -39,7 +40,7 @@
             <small>{{ entry.start_time|date:'M j, Y g:i a' }}{% if entry.description %} · {{ entry.description }}{% endif %}</small>
         </div>
         <div class="time-value">
-            {% if entry.is_running %}<span class="status-badge">Running</span>{% else %}<strong>{{ entry.duration_hours }} h</strong>{% endif %}
+            {% if entry.is_running %}<span class="status-badge">Running</span>{% else %}<strong>{{ entry.duration_hours|hours_minutes }}</strong>{% endif %}
             <small>{% if entry.billable %}Billable{% else %}Non-billable{% endif %} · {{ entry.get_status_display }}</small>
         </div>
         {% if not entry.is_running and entry.status == 'logged' %}

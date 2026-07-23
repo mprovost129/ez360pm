@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load core_extras %}
 
 {% block title %}Dashboard | EZ360PM{% endblock %}
 {% block meta_description %}EZ360PM project dashboard.{% endblock %}
@@ -12,7 +13,7 @@
 <div class="metric-grid">
     <a class="metric-card" href="{% url 'projects:list' %}?status=lead"><span>Leads</span><strong>{{ lead_count }}</strong></a>
     <a class="metric-card" href="{% url 'projects:list' %}?status=approved"><span>Awaiting start</span><strong>{{ approved_count }}</strong></a>
-    <a class="metric-card" href="{% url 'projects:time-list' %}?unbilled=on"><span>Unbilled time</span><strong>{{ unbilled_hours }} h</strong><small>{{ unbilled_count }} entr{{ unbilled_count|pluralize:'y,ies' }}</small></a>
+    <a class="metric-card" href="{% url 'projects:time-list' %}?unbilled=on"><span>Unbilled time</span><strong>{{ unbilled_hours|hours_minutes }}</strong><small>{{ unbilled_count }} entr{{ unbilled_count|pluralize:'y,ies' }}</small></a>
     <a class="metric-card" href="{% url 'core:draft-documents' %}"><span>Draft documents</span><strong>{{ draft_count }}</strong></a>
     <a class="metric-card" href="{% url 'documents:outstanding-list' %}"><span>Outstanding</span><strong>{{ unpaid_count }}</strong><small>{{ overdue_count }} overdue</small></a>
     <a class="metric-card metric-card--money" href="{% url 'core:revenue' %}?month={{ revenue_month|date:'Y-m' }}"><span>{{ revenue_month|date:'F' }} revenue</span><strong>${{ month_revenue }}</strong><small>Payments received</small></a>

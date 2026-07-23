@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load core_extras %}
 
 {% block title %}{{ client.display_name }} | EZ360PM{% endblock %}
 
@@ -87,7 +88,7 @@
                 {% for entry in time_entries %}
                 <div class="detail-row">
                     <span><strong>{{ entry.project.number }} · {{ entry.project.name }}</strong><small>{{ entry.start_time|date:'M j, Y g:i a' }}{% if entry.description %} · {{ entry.description }}{% endif %}</small></span>
-                    <span>{% if entry.is_running %}<span class="status-badge">Running</span>{% else %}<strong>{{ entry.duration_hours }} h</strong>{% endif %}</span>
+                    <span>{% if entry.is_running %}<span class="status-badge">Running</span>{% else %}<strong>{{ entry.duration_hours|hours_minutes }}</strong>{% endif %}</span>
                 </div>
                 {% empty %}<p class="empty-state">No time recorded.</p>{% endfor %}
             </div>
@@ -124,7 +125,7 @@
                     <div class="metric-card metric-card--money"><span>Total invoiced</span><strong>${{ total_invoiced }}</strong></div>
                     <div class="metric-card metric-card--money"><span>Total received</span><strong>${{ total_received }}</strong></div>
                     <div class="metric-card"><span>Outstanding</span><strong>${{ outstanding_total }}</strong></div>
-                    <div class="metric-card"><span>Hours logged</span><strong>{{ actual_hours }}</strong></div>
+                    <div class="metric-card"><span>Hours logged</span><strong>{{ actual_hours|hours_minutes }}</strong></div>
                 </div>
             </div>
         </div>

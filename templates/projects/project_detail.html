@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load core_extras %}
 
 {% block title %}{{ project.number }} | EZ360PM{% endblock %}
 
@@ -7,6 +8,7 @@
     <div><p class="eyebrow">{{ project.number }} · {{ project.get_status_display }}</p><h1>{{ project.name }}</h1></div>
     <div class="button-group">
         {% if project.accepts_time and not running_time_entry %}<a class="btn btn-success" href="{% url 'projects:timer-start' %}?project={{ project.pk }}">Start timer</a>{% endif %}
+        {% if project.accepts_time %}<a class="btn btn-light" href="{% url 'projects:time-create' %}?project={{ project.pk }}">Add manual entry</a>{% endif %}
         {% if project.status == 'lead' %}<a class="btn btn-primary" href="{% url 'proposals:create' %}?project={{ project.pk }}">New proposal</a>{% endif %}
         <a class="btn btn-primary" href="{% url 'documents:invoice-create' %}?project={{ project.pk }}">New invoice</a>
         {% if can_start_without_retainer %}<form method="post" action="{% url 'projects:start-without-retainer' project.pk %}">{% csrf_token %}<button class="btn btn-success" type="submit">Start without retainer</button></form>{% endif %}
@@ -32,7 +34,7 @@
         {% if project.hourly_rate is not None %}<p><strong>${{ project.hourly_rate|floatformat:2 }}</strong> / hour</p>{% endif %}
         {% if project.fixed_fee is not None %}<p><strong>${{ project.fixed_fee|floatformat:2 }}</strong> fixed fee</p>{% endif %}
         {% if project.estimated_hours is not None %}<p>{{ project.estimated_hours|floatformat:2 }} estimated hours</p>{% endif %}
-        <p><strong>{{ project.actual_hours }} actual hours</strong></p>
+        <p><strong>{{ project.actual_hours|hours_minutes }} actual</strong></p>
         {% if project.effective_hourly_rate is not None %}<p>${{ project.effective_hourly_rate }} effective hourly rate</p>{% endif %}
     </section>
     <section class="content-card">
@@ -46,7 +48,7 @@
     <section class="content-card detail-wide">
         <div class="section-heading"><h2>Recent time</h2><a href="{% url 'projects:time-list' %}?project={{ project.pk }}">View all time</a></div>
         {% for entry in recent_time_entries %}
-        <div class="detail-row"><span><strong>{{ entry.start_time|date:'M j, Y g:i a' }}</strong>{% if entry.description %}<small>{{ entry.description }}</small>{% endif %}</span><span>{% if entry.is_running %}Running{% else %}{{ entry.duration_hours }} h{% endif %}</span></div>
+        <div class="detail-row"><span><strong>{{ entry.start_time|date:'M j, Y g:i a' }}</strong>{% if entry.description %}<small>{{ entry.description }}</small>{% endif %}</span><span>{% if entry.is_running %}Running{% else %}{{ entry.duration_hours|hours_minutes }}{% endif %}</span></div>
         {% empty %}<p class="muted">No time recorded.</p>{% endfor %}
     </section>
     <section class="content-card detail-wide">

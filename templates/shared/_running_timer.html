@@ -10,6 +10,6 @@
         </form>
     </div>
     {% else %}
-    <a class="btn btn-sm btn-success" href="{% url 'projects:timer-start' %}"><i class="bi bi-play-fill" aria-hidden="true"></i> Start timer</a>
+    <a class="btn btn-sm btn-success" href="{% url 'projects:timer-start' %}{% if project %}?project={{ project.pk }}{% endif %}"><i class="bi bi-play-fill" aria-hidden="true"></i> Start timer</a>
     {% endif %}
 </div>

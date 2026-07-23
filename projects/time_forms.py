@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 from django import forms
 
 from core.forms import CompanyScopedModelForm
@@ -34,28 +36,37 @@ class TimeEntryForm(CompanyScopedModelForm):
             time_attrs={"type": "time", "step": 60},
         )
     )
-    end_time = forms.SplitDateTimeField(
-        widget=forms.SplitDateTimeWidget(
-            date_attrs={"type": "date"},
-            time_attrs={"type": "time", "step": 60},
-        )
+    duration_hours = forms.IntegerField(min_value=0, label="Hours", initial=0)
+    duration_minutes = forms.IntegerField(
+        min_value=0, max_value=59, label="Minutes", initial=0
     )
 
     class Meta:
         model = TimeEntry
-        fields = ("project", "start_time", "end_time", "description", "billable")
+        fields = ("project", "start_time", "description", "billable")
 
     def __init__(self, *args, company=None, user, **kwargs):
         self.user = user
         super().__init__(*args, company=company, **kwargs)
         self.fields["project"].queryset = Project.objects.for_company(self.company)
+        if self.instance.pk and self.instance.end_time:
+            total_minutes = int(
+                (self.instance.end_time - self.instance.start_time).total_seconds() // 60
+            )
+            hours, minutes = divmod(total_minutes, 60)
+            self.fields["duration_hours"].initial = hours
+            self.fields["duration_minutes"].initial = minutes
 
     def clean(self):
         cleaned = super().clean()
         start = cleaned.get("start_time")
-        end = cleaned.get("end_time")
-        if start and end and end <= start:
-            self.add_error("end_time", "End time must be after start time.")
+        hours = cleaned.get("duration_hours")
+        minutes = cleaned.get("duration_minutes")
+        if start and hours is not None and minutes is not None:
+            if hours == 0 and minutes == 0:
+                self.add_error(None, "Enter a duration greater than zero.")
+            else:
+                cleaned["end_time"] = start + timedelta(hours=hours, minutes=minutes)
         return cleaned
 
     def save(self, commit=True):
@@ -63,8 +74,9 @@ class TimeEntryForm(CompanyScopedModelForm):
             raise ValueError("TimeEntryForm must be saved with commit=True.")
         data = {
             field: self.cleaned_data[field]
-            for field in ("start_time", "end_time", "description", "billable")
+            for field in ("start_time", "description", "billable")
         }
+        data["end_time"] = self.cleaned_data["end_time"]
         self.instance = save_manual_entry(
             user=self.user,
             project=self.cleaned_data["project"],

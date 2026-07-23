@@ -134,6 +134,12 @@ class TimeEntryCreateView(LoginRequiredMixin, TimeEntryFormMixin, CreateView):
     template_name = "shared/form.html"
     extra_context = {"page_title": "Add time entry", "submit_label": "Save time"}
 
+    def get_initial(self):
+        initial = super().get_initial()
+        if self.request.GET.get("project"):
+            initial["project"] = self.request.GET["project"]
+        return initial
+
 
 class TimeEntryUpdateView(
     LoginRequiredMixin,

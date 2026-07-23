@@ -275,8 +275,8 @@ class TimeEntryViewTests(TestCase):
                 "project": self.project.pk,
                 "start_time_0": "2026-07-20",
                 "start_time_1": "09:00",
-                "end_time_0": "2026-07-20",
-                "end_time_1": "11:30",
+                "duration_hours": "2",
+                "duration_minutes": "30",
                 "description": "Floor plans",
                 "billable": "on",
             },
@@ -285,13 +285,74 @@ class TimeEntryViewTests(TestCase):
         self.assertRedirects(response, reverse("projects:time-list"))
         entry = TimeEntry.objects.get(company=self.company)
         self.assertEqual(entry.duration_hours, Decimal("2.50"))
+        self.assertEqual(entry.end_time - entry.start_time, timedelta(hours=2, minutes=30))
 
         list_response = self.client.get(
             reverse("projects:time-list"),
             {"project": self.project.pk},
         )
         self.assertContains(list_response, "Floor plans")
+        self.assertContains(list_response, "2h 30m")
         self.assertNotContains(list_response, "HIDDEN-TIME")
+
+    def test_manual_entry_rejects_zero_duration(self):
+        response = self.client.post(
+            reverse("projects:time-create"),
+            {
+                "project": self.project.pk,
+                "start_time_0": "2026-07-20",
+                "start_time_1": "09:00",
+                "duration_hours": "0",
+                "duration_minutes": "0",
+                "description": "No time actually worked",
+                "billable": "on",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Enter a duration greater than zero.")
+        self.assertFalse(TimeEntry.objects.exists())
+
+    def test_edit_form_prefills_duration_from_existing_entry(self):
+        entry = TimeEntry.objects.create(
+            company=self.company,
+            project=self.project,
+            user=self.user,
+            start_time=datetime(2026, 7, 20, 9, tzinfo=UTC),
+            end_time=datetime(2026, 7, 20, 10, 15, tzinfo=UTC),
+        )
+
+        response = self.client.get(reverse("projects:time-update", args=(entry.pk,)))
+
+        form = response.context["form"]
+        self.assertNotIn("end_time", form.fields)
+        self.assertEqual(form.fields["duration_hours"].initial, 1)
+        self.assertEqual(form.fields["duration_minutes"].initial, 15)
+
+    def test_manual_entry_create_defaults_project_from_query_param(self):
+        response = self.client.get(
+            reverse("projects:time-create"), {"project": self.project.pk}
+        )
+
+        self.assertEqual(
+            response.context["form"].initial.get("project"), str(self.project.pk)
+        )
+
+    def test_project_detail_links_default_to_current_project(self):
+        response = self.client.get(reverse("projects:detail", args=(self.project.pk,)))
+
+        self.assertContains(
+            response,
+            f"{reverse('projects:time-create')}?project={self.project.pk}",
+        )
+
+    def test_header_start_timer_link_defaults_to_project_being_viewed(self):
+        response = self.client.get(reverse("projects:detail", args=(self.project.pk,)))
+
+        self.assertContains(
+            response,
+            f"{reverse('projects:timer-start')}?project={self.project.pk}",
+        )
 
     def test_other_company_entry_cannot_be_edited(self):
         hidden = TimeEntry.objects.create(
