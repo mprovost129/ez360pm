@@ -100,32 +100,45 @@ The architecture, relationships, and screen map are detailed in:
 - [x] Clarify customer-facing versus internal inputs. Rename ambiguous fields
   such as Notes, Rate, Quantity, Tax rate, Invoice kind, and Accept payments,
   with explicit help text where a mistake could reach a customer.
-- [ ] Reduce repetitive setup: keep a project fixed when launched from its
+- [x] Reduce repetitive setup: keep a project fixed when launched from its
   detail page, hide automatic document numbers unless overridden, default line
   quantity and tax, and provide sensible reusable terms and invoice due dates.
   - [x] Lock project context; default quantity, tax, and a 30-day invoice due
     date; explain automatic numbering.
+  - [x] Add company settings for reusable proposal terms, invoice terms,
+    invoice due days, and default tax rate.
 - [ ] Improve pricing-line input with inline editing, calculated line/document
   totals, Save and add another, currency/percentage formatting, and controls
   that use the existing line ordering.
   - [x] First pass: default common values, calculate line and taxed totals live,
     and keep the add-price form on the document draft.
+  - [x] Add adjacent up/down controls that persist the existing line order.
 - [x] Add a draft-readiness summary for customer/project, scope, positive
   pricing, terms, total, and recipient email, followed by a clear Review and
   send path instead of disconnected issue and email actions.
-- [ ] Improve proposal preparation with an obvious Scope of work starting
+- [x] Improve proposal preparation with an obvious Scope of work starting
   section, adjacent edit/reorder controls, an accurate customer preview, and a
   calculated dollar preview when creating a percentage retainer.
   - [x] Default Scope of work and show a live percentage-retainer amount.
-- [ ] Replace the raw unbilled-time checkbox list with rows showing date,
+- [x] Replace the raw unbilled-time checkbox list with rows showing date,
   description, hours, rate, and amount; include Select all and a grouping
   preview before attaching entries to an invoice.
   - [x] Detailed selectable rows and Select all are implemented.
-- [ ] Make final-invoice reconciliation clearer by surfacing available retainer
+- [x] Make final-invoice reconciliation clearer by surfacing available retainer
   credit, offering Apply maximum available credit, and warning when final
   pricing differs from the accepted proposal or project fixed fee.
   - [x] Show available credit, prefill the safe maximum for one retainer, and
     warn when invoice charges differ from the accepted proposal.
+
+#### Delivery and payment clarity
+
+- [x] Label document activity as "Link opened" and explain that automated email
+  security scanners can trigger the first-open timestamp.
+- [x] Send one idempotent internal email notification for each successful Stripe
+  Payment Intent and retain the attempt in the invoice delivery history.
+- [x] Reconcile an initially unavailable Stripe fee from later `charge.succeeded`
+  or `charge.updated` webhooks so gross revenue, fees, and net revenue stay
+  accurate without creating a second payment.
 
 ### Workflow traceability
 

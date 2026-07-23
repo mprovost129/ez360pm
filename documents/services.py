@@ -133,6 +133,36 @@ def delete_line_item(*, line):
 
 
 @transaction.atomic
+def move_line_item(*, document, line, direction):
+    document = Document.objects.select_for_update().get(pk=document.pk)
+    _require_draft(document)
+    lines = list(document.line_items.select_for_update().order_by("order", "pk"))
+    try:
+        index = next(index for index, candidate in enumerate(lines) if candidate.pk == line.pk)
+    except StopIteration:
+        raise ValidationError("Line item does not belong to this document.") from None
+    offset = {"up": -1, "down": 1}.get(direction)
+    if offset is None:
+        raise ValidationError("Unknown line movement direction.")
+    target_index = index + offset
+    if target_index < 0 or target_index >= len(lines):
+        return lines[index]
+
+    moving = lines[index]
+    target = lines[target_index]
+    moving_order = moving.order
+    target_order = target.order
+    temporary_order = max(candidate.order for candidate in lines) + 1
+    moving.order = temporary_order
+    moving.save(update_fields=["order"])
+    target.order = moving_order
+    target.save(update_fields=["order"])
+    moving.order = target_order
+    moving.save(update_fields=["order"])
+    return moving
+
+
+@transaction.atomic
 def attach_time_to_invoice(*, invoice, entries, grouping):
     invoice = Document.objects.select_for_update().select_related("project").get(pk=invoice.pk)
     _require_draft(invoice)

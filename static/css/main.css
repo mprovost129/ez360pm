@@ -538,6 +538,8 @@ button[type="submit"]:not(.btn):active {
 .time-entry-choice:has(input:checked) { background: #eef6ff; border-color: var(--ez-blue); }
 .time-entry-choice input { margin-top: 0.2rem; }
 .calculation-preview { margin-top: 0.5rem; padding: 0.65rem 0.75rem; color: var(--ez-navy); background: #eef6ff; border-radius: 0.35rem; font-weight: 700; }
+.ordering-actions { display: inline-flex; align-items: center; gap: 0.4rem; }
+.access-note { max-width: 1000px; margin: -0.5rem 0 1rem; color: #66788a; font-size: 0.85rem; }
 .success-panel { border-color: #8fc5a2; background: #f2fbf5; }
 .filter-links { display: flex; flex-wrap: wrap; gap: 1rem; margin-bottom: 1rem; }
 .integration-state { display: inline-block; padding: 0.25rem 0.65rem; border-radius: 999px; font-weight: 700; }

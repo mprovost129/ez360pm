@@ -14,6 +14,7 @@
 </div>
 
 {% if invoice.status != 'draft' %}<div class="public-link"><strong>Public link:</strong> <a href="{% url 'public-documents:view' invoice.public_token %}" target="_blank">{{ request.scheme }}://{{ request.get_host }}{% url 'public-documents:view' invoice.public_token %}</a></div>{% endif %}
+{% if invoice.viewed_at %}<p class="access-note"><strong>Link first opened:</strong> {{ invoice.viewed_at|date:'M j, Y g:i a' }}. Email security scanners can open links; payment is the confirmed customer action.</p>{% endif %}
 
 {% if invoice.is_editable %}
 <section class="content-card draft-readiness">
@@ -53,7 +54,7 @@
 <section class="content-card invoice-panel">
     <h2>Retainer credits</h2>
     {% for credit in invoice.credits_received.all %}<div class="detail-row"><span><strong>-${{ credit.amount }}</strong><small>From {{ credit.source_invoice.number }}</small></span>{% if invoice.is_editable %}<form class="inline-form" method="post" action="{% url 'documents:credit-delete' invoice.pk credit.pk %}" data-confirm="Remove this ${{ credit.amount }} retainer credit from the invoice?">{% csrf_token %}<button class="link-button" type="submit">Remove</button></form>{% endif %}</div>{% endfor %}
-    {% if credit_form %}<form method="post" action="{% url 'documents:credit-create' invoice.pk %}" class="form-grid compact-form">{% csrf_token %}{{ credit_form.as_p }}<div class="form-actions"><button class="btn btn-primary" type="submit">Apply retainer credit</button></div></form>{% endif %}
+    {% if credit_form %}<form method="post" action="{% url 'documents:credit-create' invoice.pk %}" class="form-grid compact-form" data-retainer-credit-form>{% csrf_token %}{% for field in credit_form %}<div class="form-field{% if field.errors %} form-field--error{% endif %}"><label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{% if field.help_text %}<div class="help-text">{{ field.help_text }}</div>{% endif %}{{ field.errors }}</div>{% endfor %}<div class="form-actions"><button class="btn btn-light" type="button" data-apply-max-credit>Apply maximum available</button><button class="btn btn-primary" type="submit">Apply retainer credit</button></div></form>{% endif %}
 </section>
 {% endif %}
 

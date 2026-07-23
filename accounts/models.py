@@ -1,7 +1,7 @@
 from decimal import Decimal
 
 from django.contrib.auth.models import AbstractUser
-from django.core.validators import MinValueValidator
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.db.models.functions import Lower
 
@@ -26,6 +26,18 @@ class Company(models.Model):
         validators=[MinValueValidator(Decimal("0.00"))],
     )
     accept_payments_default = models.BooleanField(default=False)
+    default_proposal_terms = models.TextField(blank=True)
+    default_invoice_terms = models.TextField(blank=True)
+    default_invoice_due_days = models.PositiveSmallIntegerField(
+        default=30,
+        validators=[MinValueValidator(0), MaxValueValidator(365)],
+    )
+    default_tax_rate = models.DecimalField(
+        max_digits=6,
+        decimal_places=3,
+        default=Decimal("0.000"),
+        validators=[MinValueValidator(Decimal("0"))],
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

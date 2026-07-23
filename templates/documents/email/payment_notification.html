@@ -1,0 +1,4 @@
+<p>Payment received for invoice <strong>{{ invoice.number }}</strong>.</p>
+<p>Client: {{ invoice.project.client.display_name }}<br>Project: {{ invoice.project.number }} · {{ invoice.project.name }}</p>
+<p>Gross payment: <strong>${{ payment.amount }}</strong><br>Stripe fee: ${{ payment.fee_amount }}<br>Net deposited: <strong>${{ payment.net_amount }}</strong></p>
+<p><a href="{{ document_url }}">View the invoice</a></p>

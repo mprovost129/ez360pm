@@ -7,7 +7,7 @@ from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils import timezone
 
-from .models import Document, DocumentDelivery
+from .models import Document, DocumentDelivery, Payment
 
 logger = logging.getLogger(__name__)
 
@@ -138,4 +138,44 @@ def send_acceptance_notification(*, proposal, document_url):
         document_url=document_url,
         template_base="acceptance_notification",
         context={"proposal": proposal},
+    )
+
+
+def send_payment_notification(*, payment):
+    payment = Payment.objects.select_related(
+        "document",
+        "document__company",
+        "document__project",
+        "document__project__client",
+    ).get(pk=payment.pk)
+    invoice = payment.document
+    recipient_email = invoice.company.email
+    if not recipient_email:
+        recipient_email = (
+            invoice.company.users.order_by("is_superuser", "pk")
+            .values_list("email", flat=True)
+            .first()
+            or ""
+        )
+    if not recipient_email:
+        return None
+
+    dedupe_key = f"stripe-payment:{payment.stripe_payment_intent_id}"
+    delivery, created = DocumentDelivery.objects.get_or_create(
+        dedupe_key=dedupe_key,
+        defaults={
+            "document": invoice,
+            "purpose": DocumentDelivery.Purpose.PAYMENT_NOTIFICATION,
+            "recipient_name": invoice.company.name,
+            "recipient_email": recipient_email,
+        },
+    )
+    if not created:
+        return delivery
+    return _send_delivery(
+        delivery=delivery,
+        subject=f"Payment received for invoice {invoice.number}",
+        document_url=public_document_url(invoice),
+        template_base="payment_notification",
+        context={"invoice": invoice, "payment": payment},
     )

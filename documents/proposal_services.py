@@ -100,6 +100,26 @@ def delete_proposal_section(*, proposal, index):
 
 
 @transaction.atomic
+def move_proposal_section(*, proposal, index, direction):
+    proposal = Document.objects.select_for_update().get(pk=proposal.pk)
+    if proposal.doc_type != Document.Type.PROPOSAL or not proposal.is_editable:
+        raise ValidationError("Only draft proposals can be edited.")
+    sections = list(proposal.body_sections)
+    if index < 0 or index >= len(sections):
+        raise ValidationError("Proposal section no longer exists.")
+    offset = {"up": -1, "down": 1}.get(direction)
+    if offset is None:
+        raise ValidationError("Unknown section movement direction.")
+    target = index + offset
+    if target < 0 or target >= len(sections):
+        return proposal
+    sections[index], sections[target] = sections[target], sections[index]
+    proposal.body_sections = sections
+    proposal.save(update_fields=["body_sections", "updated_at"])
+    return proposal
+
+
+@transaction.atomic
 def accept_proposal(*, proposal, signer_name, signer_email, ip_address, at=None):
     proposal = Document.objects.select_for_update().select_related("project").get(pk=proposal.pk)
     if proposal.doc_type != Document.Type.PROPOSAL:

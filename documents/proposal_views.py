@@ -22,10 +22,16 @@ from .proposal_forms import (
 )
 from .proposal_services import (
     delete_proposal_section,
+    move_proposal_section,
     save_proposal_section,
     withdraw_proposal,
 )
-from .services import delete_draft_document, delete_line_item, issue_document
+from .services import (
+    delete_draft_document,
+    delete_line_item,
+    issue_document,
+    move_line_item,
+)
 
 
 def scoped_proposal(request, pk, *, draft=False):
@@ -192,6 +198,20 @@ class ProposalSectionDeleteView(LoginRequiredMixin, View):
         return redirect("proposals:detail", pk=proposal.pk)
 
 
+class ProposalSectionMoveView(LoginRequiredMixin, View):
+    def post(self, request, proposal_pk, index, direction):
+        proposal = scoped_proposal(request, proposal_pk, draft=True)
+        try:
+            move_proposal_section(
+                proposal=proposal,
+                index=index,
+                direction=direction,
+            )
+        except ValidationError as exc:
+            messages.error(request, "; ".join(exc.messages))
+        return redirect("proposals:detail", pk=proposal.pk)
+
+
 class ProposalLineMixin(LoginRequiredMixin):
     proposal = None
 
@@ -231,6 +251,17 @@ class ProposalLineDeleteView(LoginRequiredMixin, View):
         proposal = scoped_proposal(request, proposal_pk, draft=True)
         line = get_object_or_404(proposal.line_items, pk=line_pk)
         delete_line_item(line=line)
+        return redirect("proposals:detail", pk=proposal.pk)
+
+
+class ProposalLineMoveView(LoginRequiredMixin, View):
+    def post(self, request, proposal_pk, line_pk, direction):
+        proposal = scoped_proposal(request, proposal_pk, draft=True)
+        line = get_object_or_404(proposal.line_items, pk=line_pk)
+        try:
+            move_line_item(document=proposal, line=line, direction=direction)
+        except ValidationError as exc:
+            messages.error(request, "; ".join(exc.messages))
         return redirect("proposals:detail", pk=proposal.pk)
 
 

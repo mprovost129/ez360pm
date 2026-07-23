@@ -4,5 +4,33 @@
 
 {% block content %}
 <div class="page-heading"><div><p class="eyebrow">Settings</p><h1>Company</h1></div><a class="btn btn-light" href="{% url 'accounts:integrations' %}">Integration status</a></div>
-<form method="post" enctype="multipart/form-data" class="content-card form-grid" novalidate>{% csrf_token %}{{ form.non_field_errors }}{% for field in form %}<div class="form-field{% if field.errors %} form-field--error{% endif %}">{% if field.field.widget.input_type == 'checkbox' %}<label class="checkbox-label">{{ field }} {{ field.label }}</label>{% else %}<label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{% endif %}{% if field.help_text %}<div class="help-text">{{ field.help_text }}</div>{% endif %}{{ field.errors }}</div>{% endfor %}<div class="form-actions"><button class="btn btn-primary" type="submit">Save settings</button></div></form>
+<form method="post" enctype="multipart/form-data" class="content-card structured-form" novalidate>
+    {% csrf_token %}
+    {% if form.errors %}<div class="form-error-summary" role="alert" tabindex="-1"><strong>Please correct the highlighted fields.</strong>{{ form.non_field_errors }}</div>{% endif %}
+    <fieldset class="form-section form-grid"><legend>Company identity</legend>
+        {% include 'shared/_form_field.html' with field=form.name %}
+        {% include 'shared/_form_field.html' with field=form.phone %}
+        {% include 'shared/_form_field.html' with field=form.email %}
+        {% include 'shared/_form_field.html' with field=form.logo %}
+    </fieldset>
+    <fieldset class="form-section form-grid"><legend>Company address</legend>
+        {% include 'shared/_form_field.html' with field=form.address_1 %}
+        {% include 'shared/_form_field.html' with field=form.address_2 %}
+        {% include 'shared/_form_field.html' with field=form.city %}
+        {% include 'shared/_form_field.html' with field=form.state %}
+        {% include 'shared/_form_field.html' with field=form.postal_code %}
+        {% include 'shared/_form_field.html' with field=form.country %}
+    </fieldset>
+    <fieldset class="form-section form-grid"><legend>Project and payment defaults</legend>
+        {% include 'shared/_form_field.html' with field=form.default_hourly_rate %}
+        {% include 'shared/_form_field.html' with field=form.default_tax_rate %}
+        {% include 'shared/_form_field.html' with field=form.default_invoice_due_days %}
+        {% include 'shared/_form_field.html' with field=form.accept_payments_default %}
+    </fieldset>
+    <fieldset class="form-section form-grid"><legend>Document terms</legend>
+        {% include 'shared/_form_field.html' with field=form.default_proposal_terms %}
+        {% include 'shared/_form_field.html' with field=form.default_invoice_terms %}
+    </fieldset>
+    <div class="form-actions"><button class="btn btn-primary" type="submit">Save settings</button></div>
+</form>
 {% endblock %}

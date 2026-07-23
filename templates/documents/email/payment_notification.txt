@@ -1,0 +1,9 @@
+Payment received for invoice {{ invoice.number }}.
+
+Client: {{ invoice.project.client.display_name }}
+Project: {{ invoice.project.number }} - {{ invoice.project.name }}
+Gross payment: ${{ payment.amount }}
+Stripe fee: ${{ payment.fee_amount }}
+Net deposited: ${{ payment.net_amount }}
+
+View the invoice: {{ document_url }}

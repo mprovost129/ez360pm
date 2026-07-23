@@ -61,7 +61,10 @@ class InvoiceCreateForm(CompanyScopedModelForm):
         self.fields["accept_payments"].initial = company.accept_payments_default
         self.fields["invoice_kind"].initial = Document.InvoiceKind.FINAL
         if not self.is_bound:
-            self.fields["due_date"].initial = timezone.localdate() + timedelta(days=30)
+            self.fields["due_date"].initial = timezone.localdate() + timedelta(
+                days=company.default_invoice_due_days
+            )
+            self.fields["terms"].initial = company.default_invoice_terms
         project_id = self.initial.get("project")
         if project_id:
             locked_project = self.fields["project"].queryset.filter(pk=project_id).first()
@@ -134,7 +137,7 @@ class LineItemForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         if not self.is_bound and not self.instance.pk:
             self.fields["quantity"].initial = Decimal("1.00")
-            self.fields["tax_rate"].initial = Decimal("0")
+            self.fields["tax_rate"].initial = document.company.default_tax_rate
 
     def save(self, commit=True):
         if not commit:
@@ -146,6 +149,23 @@ class LineItemForm(forms.ModelForm):
             line_data=data,
         )
         return self.instance
+
+
+class TimeEntryCheckboxSelectMultiple(forms.CheckboxSelectMultiple):
+    def create_option(self, name, value, label, selected, index, **kwargs):
+        option = super().create_option(name, value, label, selected, index, **kwargs)
+        entry = getattr(value, "instance", None)
+        if entry is not None:
+            rate = entry.project.hourly_rate or Decimal("0.00")
+            option["attrs"].update(
+                {
+                    "data-description": entry.description.strip()
+                    or "Professional services",
+                    "data-hours": str(entry.duration_hours),
+                    "data-amount": str(rate * entry.duration_hours),
+                }
+            )
+        return option
 
 
 class TimeEntryChoiceField(forms.ModelMultipleChoiceField):
@@ -164,7 +184,7 @@ class TimeEntryChoiceField(forms.ModelMultipleChoiceField):
 class TimeAttachmentForm(forms.Form):
     entries = TimeEntryChoiceField(
         queryset=TimeEntry.objects.none(),
-        widget=forms.CheckboxSelectMultiple,
+        widget=TimeEntryCheckboxSelectMultiple,
         label="Unbilled time",
     )
     grouping = forms.ChoiceField(

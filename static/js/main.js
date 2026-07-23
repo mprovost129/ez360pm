@@ -150,14 +150,44 @@ function initializeTimeSelection() {
     document.querySelectorAll("[data-select-all-time]").forEach((button) => {
         const form = button.closest("form");
         const choices = form?.querySelectorAll('[data-time-entry-choices] input[type="checkbox"]');
+        const grouping = form?.querySelector('[name="grouping"]');
+        const preview = form?.querySelector("[data-time-grouping-preview]");
         if (!choices?.length) return;
+
+        const updatePreview = () => {
+            const selected = Array.from(choices).filter((choice) => choice.checked);
+            if (!selected.length) {
+                preview.textContent = "Select time entries to preview the invoice lines.";
+                return;
+            }
+            const hours = selected.reduce(
+                (total, choice) => total + (Number(choice.dataset.hours) || 0),
+                0,
+            );
+            const amount = selected.reduce(
+                (total, choice) => total + (Number(choice.dataset.amount) || 0),
+                0,
+            );
+            let lineCount = 1;
+            if (grouping.value === "individual") {
+                lineCount = selected.length;
+            } else if (grouping.value === "description") {
+                lineCount = new Set(selected.map((choice) => choice.dataset.description)).size;
+            }
+            preview.textContent = `${selected.length} selected · ${hours.toFixed(2)} hours · $${amount.toFixed(2)} · ${lineCount} invoice line${lineCount === 1 ? "" : "s"}`;
+        };
+
         button.addEventListener("click", () => {
             const shouldSelect = Array.from(choices).some((choice) => !choice.checked);
             choices.forEach((choice) => {
                 choice.checked = shouldSelect;
             });
             button.textContent = shouldSelect ? "Clear all" : "Select all";
+            updatePreview();
         });
+        choices.forEach((choice) => choice.addEventListener("change", updatePreview));
+        grouping?.addEventListener("change", updatePreview);
+        updatePreview();
     });
 }
 
@@ -183,6 +213,22 @@ function initializeRetainerPreview() {
     update();
 }
 
+function initializeMaximumRetainerCredit() {
+    document.querySelectorAll("[data-retainer-credit-form]").forEach((form) => {
+        const source = form.querySelector('[name="source_invoice"]');
+        const amount = form.querySelector('[name="amount"]');
+        const apply = form.querySelector("[data-apply-max-credit]");
+        if (!source || !amount || !apply) return;
+        apply.addEventListener("click", () => {
+            const available = Number(source.selectedOptions[0]?.dataset.available) || 0;
+            const remaining = Number(amount.dataset.remainingCharges) || 0;
+            amount.value = Math.min(available, remaining).toFixed(2);
+            amount.focus();
+        });
+    });
+}
+
 initializeLineItemPreviews();
 initializeTimeSelection();
 initializeRetainerPreview();
+initializeMaximumRetainerCredit();

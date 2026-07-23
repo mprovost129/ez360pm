@@ -28,6 +28,7 @@ urlpatterns = [
     path("<int:invoice_pk>/lines/new/", views.LineItemCreateView.as_view(), name="line-create"),
     path("<int:invoice_pk>/lines/<int:line_pk>/edit/", views.LineItemUpdateView.as_view(), name="line-update"),
     path("<int:invoice_pk>/lines/<int:line_pk>/delete/", views.LineItemDeleteView.as_view(), name="line-delete"),
+    path("<int:invoice_pk>/lines/<int:line_pk>/move/<str:direction>/", views.LineItemMoveView.as_view(), name="line-move"),
     path("<int:invoice_pk>/payments/new/", views.PaymentCreateView.as_view(), name="payment-create"),
     path("<int:invoice_pk>/payments/<int:payment_pk>/edit/", views.PaymentUpdateView.as_view(), name="payment-update"),
     path("<int:invoice_pk>/payments/<int:payment_pk>/delete/", views.PaymentDeleteView.as_view(), name="payment-delete"),

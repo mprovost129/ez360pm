@@ -17,6 +17,7 @@ from documents.services import (
     delete_line_item,
     delete_payment,
     issue_document,
+    move_line_item,
     record_payment,
     record_public_view,
     release_void_invoice_time,
@@ -367,6 +368,16 @@ class InvoiceViewTests(TestCase):
         self.assertEqual(invoice.total, Decimal("250.00"))
 
     def test_invoice_authoring_defaults_and_locks_project_context(self):
+        self.company.default_invoice_due_days = 14
+        self.company.default_invoice_terms = "Due after delivery."
+        self.company.default_tax_rate = Decimal("5.300")
+        self.company.save(
+            update_fields=[
+                "default_invoice_due_days",
+                "default_invoice_terms",
+                "default_tax_rate",
+            ]
+        )
         response = self.client.get(
             reverse("documents:invoice-create"),
             {"project": self.project.pk},
@@ -377,8 +388,9 @@ class InvoiceViewTests(TestCase):
         self.assertEqual(form.fields["project"].initial, self.project)
         self.assertEqual(
             form.fields["due_date"].initial,
-            timezone.localdate() + timedelta(days=30),
+            timezone.localdate() + timedelta(days=14),
         )
+        self.assertEqual(form.fields["terms"].initial, "Due after delivery.")
         self.assertEqual(form.fields["notes"].label, "Internal notes")
         self.assertEqual(
             form.fields["accept_payments"].label,
@@ -403,11 +415,32 @@ class InvoiceViewTests(TestCase):
 
         line_form = response.context["line_item_form"]
         self.assertEqual(line_form.fields["quantity"].initial, Decimal("1.00"))
+        self.assertEqual(line_form.fields["tax_rate"].initial, Decimal("0.000"))
         self.assertContains(response, "Line amount")
         self.assertContains(response, "Select all")
         self.assertContains(response, "Design development")
         self.assertContains(response, "$175.00/hr")
         self.assertContains(response, "Draft readiness")
+
+    def test_draft_invoice_lines_can_be_reordered(self):
+        invoice = self.make_invoice()
+        second = save_line_item(
+            document=invoice,
+            line_data={
+                "description": "Second phase",
+                "rate": Decimal("50.00"),
+                "quantity": Decimal("1.00"),
+                "tax_rate": Decimal("0"),
+            },
+        )
+        first = invoice.line_items.exclude(pk=second.pk).get()
+
+        move_line_item(document=invoice, line=second, direction="up")
+
+        self.assertEqual(
+            list(invoice.line_items.values_list("pk", flat=True)),
+            [second.pk, first.pk],
+        )
 
     def test_issue_and_email_continues_to_delivery_form(self):
         invoice = self.make_invoice()

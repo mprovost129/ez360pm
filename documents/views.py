@@ -34,6 +34,7 @@ from .services import (
     delete_line_item,
     delete_payment,
     issue_document,
+    move_line_item,
     release_void_invoice_time,
     void_invoice,
 )
@@ -279,6 +280,17 @@ class LineItemDeleteView(LoginRequiredMixin, View):
         line = get_object_or_404(invoice.line_items, pk=line_pk)
         delete_line_item(line=line)
         messages.success(request, "Line removed and attached time released.")
+        return redirect("documents:invoice-detail", pk=invoice.pk)
+
+
+class LineItemMoveView(LoginRequiredMixin, View):
+    def post(self, request, invoice_pk, line_pk, direction):
+        invoice = scoped_invoice(request, invoice_pk, draft=True)
+        line = get_object_or_404(invoice.line_items, pk=line_pk)
+        try:
+            move_line_item(document=invoice, line=line, direction=direction)
+        except ValidationError as exc:
+            messages.error(request, exc.message)
         return redirect("documents:invoice-detail", pk=invoice.pk)
 
 

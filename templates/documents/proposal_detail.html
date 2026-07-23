@@ -14,6 +14,7 @@
     </div>
 </div>
 {% if proposal.status != 'draft' %}<div class="public-link"><strong>Public link:</strong> <a href="{% url 'public-documents:view' proposal.public_token %}" target="_blank">{{ request.scheme }}://{{ request.get_host }}{% url 'public-documents:view' proposal.public_token %}</a></div>{% endif %}
+{% if proposal.viewed_at %}<p class="access-note"><strong>Link first opened:</strong> {{ proposal.viewed_at|date:'M j, Y g:i a' }}. Email security scanners can open links; acceptance is the confirmed customer action.</p>{% endif %}
 {% if proposal.status == 'accepted' %}<section class="content-card invoice-panel success-panel"><h2>Accepted</h2><p><strong>{{ proposal.accepted_by_name }}</strong> ({{ proposal.accepted_by_email }}) accepted ${{ proposal.accepted_total }} on {{ proposal.responded_at|date:'M j, Y g:i a' }}.</p></section>{% endif %}
 {% if proposal.is_editable %}
 <section class="content-card draft-readiness">

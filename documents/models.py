@@ -23,7 +23,7 @@ class Document(CompanyOwnedModel):
     class Status(models.TextChoices):
         DRAFT = "draft", "Draft"
         SENT = "sent", "Sent"
-        VIEWED = "viewed", "Viewed"
+        VIEWED = "viewed", "Link opened"
         ACCEPTED = "accepted", "Accepted"
         DECLINED = "declined", "Declined"
         WITHDRAWN = "withdrawn", "Withdrawn"
@@ -292,6 +292,7 @@ class DocumentDelivery(models.Model):
     class Purpose(models.TextChoices):
         CLIENT_DOCUMENT = "client_document", "Client document"
         ACCEPTANCE_NOTIFICATION = "acceptance_notification", "Acceptance notification"
+        PAYMENT_NOTIFICATION = "payment_notification", "Payment notification"
 
     class Status(models.TextChoices):
         PENDING = "pending", "Pending"
@@ -316,6 +317,7 @@ class DocumentDelivery(models.Model):
         default=Status.PENDING,
     )
     provider_message_id = models.CharField(max_length=255, blank=True)
+    dedupe_key = models.CharField(max_length=255, blank=True)
     error_code = models.CharField(max_length=100, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     sent_at = models.DateTimeField(blank=True, null=True)
@@ -323,6 +325,13 @@ class DocumentDelivery(models.Model):
     class Meta:
         ordering = ("-created_at", "-pk")
         indexes = [models.Index(fields=("document", "status"))]
+        constraints = [
+            models.UniqueConstraint(
+                fields=("dedupe_key",),
+                condition=~Q(dedupe_key=""),
+                name="documents_delivery_dedupe_key_unique",
+            )
+        ]
 
     def __str__(self):
         return f"{self.document.number} to {self.recipient_email}: {self.status}"

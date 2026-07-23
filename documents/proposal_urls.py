@@ -26,7 +26,9 @@ urlpatterns = [
     path("<int:proposal_pk>/sections/new/", proposal_views.ProposalSectionView.as_view(), name="section-create"),
     path("<int:proposal_pk>/sections/<int:index>/edit/", proposal_views.ProposalSectionView.as_view(), name="section-update"),
     path("<int:proposal_pk>/sections/<int:index>/delete/", proposal_views.ProposalSectionDeleteView.as_view(), name="section-delete"),
+    path("<int:proposal_pk>/sections/<int:index>/move/<str:direction>/", proposal_views.ProposalSectionMoveView.as_view(), name="section-move"),
     path("<int:proposal_pk>/prices/new/", proposal_views.ProposalLineCreateView.as_view(), name="line-create"),
     path("<int:proposal_pk>/prices/<int:line_pk>/edit/", proposal_views.ProposalLineUpdateView.as_view(), name="line-update"),
     path("<int:proposal_pk>/prices/<int:line_pk>/delete/", proposal_views.ProposalLineDeleteView.as_view(), name="line-delete"),
+    path("<int:proposal_pk>/prices/<int:line_pk>/move/<str:direction>/", proposal_views.ProposalLineMoveView.as_view(), name="line-move"),
 ]

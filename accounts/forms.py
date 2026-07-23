@@ -19,7 +19,23 @@ class CompanySettingsForm(forms.ModelForm):
             "logo",
             "default_hourly_rate",
             "accept_payments_default",
+            "default_proposal_terms",
+            "default_invoice_terms",
+            "default_invoice_due_days",
+            "default_tax_rate",
         )
+        labels = {
+            "accept_payments_default": "Allow Stripe payments by default",
+            "default_proposal_terms": "Default proposal terms",
+            "default_invoice_terms": "Default invoice terms",
+            "default_invoice_due_days": "Default invoice payment period (days)",
+            "default_tax_rate": "Default tax rate (%)",
+        }
+        widgets = {
+            "default_proposal_terms": forms.Textarea(attrs={"rows": 4}),
+            "default_invoice_terms": forms.Textarea(attrs={"rows": 4}),
+            "default_tax_rate": forms.NumberInput(attrs={"step": "0.001", "min": "0"}),
+        }
 
     def clean_logo(self):
         logo = self.cleaned_data.get("logo")

@@ -385,6 +385,14 @@ class DeliveryAndStripeTests(TestCase):
 
         self.assertEqual(first.pk, replay.pk)
         self.assertEqual(Payment.objects.filter(document=invoice).count(), 1)
+        notifications = DocumentDelivery.objects.filter(
+            document=invoice,
+            purpose=DocumentDelivery.Purpose.PAYMENT_NOTIFICATION,
+        )
+        self.assertEqual(notifications.count(), 1)
+        self.assertEqual(notifications.get().status, DocumentDelivery.Status.SENT)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn("Payment received", mail.outbox[0].subject)
         invoice.refresh_from_db()
         self.assertEqual(invoice.status, Document.Status.PAID)
         self.assertEqual(invoice.outstanding_balance, Decimal("0.00"))
@@ -465,6 +473,28 @@ class DeliveryAndStripeTests(TestCase):
         self.assertEqual(payment.fee_amount, Decimal("0.00"))
         invoice.refresh_from_db()
         self.assertEqual(invoice.status, Document.Status.PAID)
+
+    def test_later_charge_event_reconciles_temporarily_missing_fee(self):
+        invoice = self.make_invoice()
+        self.mock_stripe_fee.side_effect = stripe.StripeError("fee not available yet")
+        payment = process_stripe_event(event=self.stripe_event(invoice))
+        self.assertEqual(payment.fee_amount, Decimal("0.00"))
+
+        reconciled = process_stripe_event(
+            event={
+                "type": "charge.updated",
+                "data": {
+                    "object": {
+                        "payment_intent": "pi_phase5",
+                        "balance_transaction": {"fee": 320},
+                    }
+                },
+            }
+        )
+
+        reconciled.refresh_from_db()
+        self.assertEqual(reconciled.pk, payment.pk)
+        self.assertEqual(reconciled.fee_amount, Decimal("3.20"))
 
     def test_manual_payment_carries_no_provider_fee(self):
         invoice = self.make_invoice()

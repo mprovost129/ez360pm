@@ -268,6 +268,10 @@ class CompanySettingsTests(TestCase):
                 "email": "office@example.com",
                 "default_hourly_rate": "185.00",
                 "accept_payments_default": "on",
+                "default_proposal_terms": "Valid for 30 days.",
+                "default_invoice_terms": "Payment due on receipt.",
+                "default_invoice_due_days": "21",
+                "default_tax_rate": "5.300",
             },
         )
 
@@ -277,6 +281,9 @@ class CompanySettingsTests(TestCase):
         self.assertEqual(self.company.name, "Provost Home Design")
         self.assertEqual(self.company.default_hourly_rate, Decimal("185.00"))
         self.assertTrue(self.company.accept_payments_default)
+        self.assertEqual(self.company.default_proposal_terms, "Valid for 30 days.")
+        self.assertEqual(self.company.default_invoice_due_days, 21)
+        self.assertEqual(self.company.default_tax_rate, Decimal("5.300"))
         self.assertEqual(self.other_company.name, "Other Studio")
 
     def test_settings_require_login(self):

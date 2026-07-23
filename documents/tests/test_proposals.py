@@ -16,6 +16,7 @@ from documents.proposal_services import (
     create_proposal,
     create_retainer_invoice,
     decline_proposal,
+    move_proposal_section,
     remove_retainer_credit,
     save_proposal_section,
     withdraw_proposal,
@@ -267,6 +268,8 @@ class ProposalWorkflowTests(TestCase):
         self.assertEqual(proposal.total, Decimal("1000.00"))
 
     def test_estimate_authoring_locks_project_and_guides_scope(self):
+        self.company.default_proposal_terms = "Valid for 45 days."
+        self.company.save(update_fields=["default_proposal_terms"])
         create_response = self.client.get(
             reverse("proposals:create"),
             {"project": self.project.pk},
@@ -276,6 +279,7 @@ class ProposalWorkflowTests(TestCase):
         self.assertTrue(form.fields["project"].disabled)
         self.assertEqual(form.fields["project"].initial, self.project)
         self.assertEqual(form.fields["notes"].label, "Internal notes")
+        self.assertEqual(form.fields["terms"].initial, "Valid for 45 days.")
         self.assertContains(create_response, "New estimate / proposal")
 
         proposal = self.make_proposal()
@@ -287,6 +291,19 @@ class ProposalWorkflowTests(TestCase):
         self.assertContains(detail, "Draft readiness")
         self.assertContains(detail, "Line amount")
         self.assertEqual(section.context["form"].initial["heading"], "Scope of work")
+
+    def test_draft_proposal_sections_can_be_reordered(self):
+        proposal = self.make_proposal()
+        save_proposal_section(proposal=proposal, heading="First", body="One")
+        save_proposal_section(proposal=proposal, heading="Second", body="Two")
+
+        move_proposal_section(proposal=proposal, index=1, direction="up")
+
+        proposal.refresh_from_db()
+        self.assertEqual(
+            [section["heading"] for section in proposal.body_sections],
+            ["Second", "First"],
+        )
 
     def test_issue_and_email_continues_to_delivery_form(self):
         proposal = self.make_proposal()

@@ -49,6 +49,8 @@ class ProposalCreateForm(CompanyScopedModelForm):
         self.instance.invoice_kind = ""
         self.instance.due_date = None
         self.fields["project"].queryset = Project.objects.for_company(company)
+        if not self.is_bound:
+            self.fields["terms"].initial = company.default_proposal_terms
         project_id = self.initial.get("project")
         if project_id:
             locked_project = self.fields["project"].queryset.filter(pk=project_id).first()
@@ -138,11 +140,14 @@ class RetainerInvoiceForm(forms.Form):
         )
         self.fields["number"].help_text = "Leave blank to generate the next invoice number."
         self.fields["terms"].label = "Customer terms"
+        self.fields["terms"].initial = proposal.company.default_invoice_terms
         self.fields["notes"].label = "Internal notes"
         self.fields["notes"].help_text = "Only you can see these notes."
         self.fields["accept_payments"].label = "Allow online payment with Stripe"
         self.fields["issue_date"].initial = today
-        self.fields["due_date"].initial = today + timedelta(days=30)
+        self.fields["due_date"].initial = today + timedelta(
+            days=proposal.company.default_invoice_due_days
+        )
         self.fields["accept_payments"].initial = proposal.company.accept_payments_default
 
     def save(self):
@@ -158,6 +163,17 @@ class RetainerInvoiceForm(forms.Form):
         )
 
 
+class RetainerSelect(forms.Select):
+    def create_option(self, name, value, label, selected, index, **kwargs):
+        option = super().create_option(name, value, label, selected, index, **kwargs)
+        invoice = getattr(value, "instance", None)
+        if invoice is not None:
+            option["attrs"]["data-available"] = str(
+                available_retainer_credit(invoice)
+            )
+        return option
+
+
 class RetainerChoiceField(forms.ModelChoiceField):
     def label_from_instance(self, invoice):
         available = available_retainer_credit(invoice)
@@ -168,6 +184,7 @@ class InvoiceCreditForm(forms.Form):
     source_invoice = RetainerChoiceField(
         queryset=Document.objects.none(),
         label="Paid retainer",
+        widget=RetainerSelect,
     )
     amount = forms.DecimalField(min_value=Decimal("0.01"), max_digits=12, decimal_places=2)
 
@@ -186,14 +203,15 @@ class InvoiceCreditForm(forms.Form):
         self.fields["amount"].help_text = (
             "The credit cannot exceed the retainer available or the remaining invoice charges."
         )
+        remaining = max(
+            destination_invoice.subtotal
+            + destination_invoice.tax_total
+            - destination_invoice.credit_total,
+            Decimal("0.00"),
+        )
+        self.fields["amount"].widget.attrs["data-remaining-charges"] = str(remaining)
         if not self.is_bound and paid_retainers.count() == 1:
             available = available_retainer_credit(paid_retainers.first())
-            remaining = max(
-                destination_invoice.subtotal
-                + destination_invoice.tax_total
-                - destination_invoice.credit_total,
-                Decimal("0.00"),
-            )
             self.fields["amount"].initial = min(available, remaining)
 
     def clean(self):

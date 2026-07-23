@@ -7,6 +7,7 @@ from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.utils import timezone
 
+from .delivery_services import send_payment_notification
 from .models import Document, Payment
 from .services import money, record_payment
 
@@ -115,14 +116,56 @@ def _retrieve_stripe_fee(payment_intent_id):
     return money(Decimal(fee_cents) / Decimal("100"))
 
 
+def _fee_from_charge(charge):
+    balance_transaction = _value(charge, "balance_transaction")
+    if isinstance(balance_transaction, str):
+        try:
+            balance_transaction = stripe.BalanceTransaction.retrieve(
+                balance_transaction,
+                api_key=settings.STRIPE_SECRET_KEY,
+            )
+        except stripe.StripeError:
+            logger.warning(
+                "Stripe balance transaction lookup failed transaction=%s",
+                balance_transaction,
+            )
+            return None
+    fee_cents = _value(balance_transaction, "fee") if balance_transaction else None
+    if fee_cents is None:
+        return None
+    return money(Decimal(fee_cents) / Decimal("100"))
+
+
+def _reconcile_charge_fee(charge):
+    payment_intent = _value(charge, "payment_intent")
+    payment_intent_id = _value(payment_intent, "id") if payment_intent else None
+    if isinstance(payment_intent, str):
+        payment_intent_id = payment_intent
+    if not payment_intent_id:
+        return None
+    payment = Payment.objects.filter(
+        stripe_payment_intent_id=payment_intent_id,
+    ).first()
+    if payment is None:
+        return None
+    fee_amount = _fee_from_charge(charge)
+    if fee_amount is not None and payment.fee_amount != fee_amount:
+        payment.fee_amount = fee_amount
+        payment.save(update_fields=["fee_amount"])
+    return payment
+
+
 def process_stripe_event(*, event):
     event_type = _value(event, "type")
+    event_object = _value(_value(event, "data", {}), "object", {})
+    if event_type in {"charge.succeeded", "charge.updated"}:
+        return _reconcile_charge_fee(event_object)
     if event_type not in {
         "checkout.session.completed",
         "checkout.session.async_payment_succeeded",
     }:
         return None
-    session = _value(_value(event, "data", {}), "object", {})
+    session = event_object
     if event_type == "checkout.session.completed" and _value(session, "payment_status") != "paid":
         return None
 
@@ -149,7 +192,7 @@ def process_stripe_event(*, event):
         raise ValidationError("Stripe event does not match an invoice.") from None
     amount = money(Decimal(amount_total) / Decimal("100"))
     fee_amount = _retrieve_stripe_fee(payment_intent_id)
-    return record_payment(
+    payment = record_payment(
         invoice=invoice,
         payment_data={
             "amount": amount,
@@ -164,3 +207,5 @@ def process_stripe_event(*, event):
         # Stripe to retry a webhook that can never succeed.
         allow_overpayment=True,
     )
+    send_payment_notification(payment=payment)
+    return payment
