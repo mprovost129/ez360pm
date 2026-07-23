@@ -7,7 +7,12 @@
     <h1>Projects</h1>
     <a class="btn btn-primary" href="{% url 'projects:create' %}">New project</a>
 </div>
-<nav class="filter-links"><a href="{% url 'projects:list' %}">All</a>{% for value, label in status_choices %}<a href="?status={{ value }}">{{ label }}</a>{% endfor %}</nav>
+<form method="get" class="content-card filter-bar">
+    {% if selected_status %}<input type="hidden" name="status" value="{{ selected_status }}">{% endif %}
+    <div class="form-field"><label for="project-search">Search</label><input id="project-search" name="q" type="search" value="{{ request.GET.q }}" placeholder="Project, customer, address, or parcel"></div>
+    <button class="btn btn-light" type="submit">Search</button>{% if request.GET.q %}<a class="btn btn-link" href="{% url 'projects:list' %}{% if selected_status %}?status={{ selected_status }}{% endif %}">Clear</a>{% endif %}
+</form>
+<nav class="filter-links"><a href="{% url 'projects:list' %}{% if request.GET.q %}?q={{ request.GET.q|urlencode }}{% endif %}">All</a>{% for value, label in status_choices %}<a href="?status={{ value }}{% if request.GET.q %}&amp;q={{ request.GET.q|urlencode }}{% endif %}">{{ label }}</a>{% endfor %}</nav>
 <section class="content-card">
     {% for project in projects %}
     <a class="item-row" href="{% url 'projects:detail' project.pk %}">

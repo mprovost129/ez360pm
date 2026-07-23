@@ -8,6 +8,11 @@
     <a class="btn btn-primary" href="{% url 'clients:create' %}">New client</a>
 </div>
 
+<form method="get" class="content-card filter-bar">
+    <div class="form-field"><label for="client-search">Search</label><input id="client-search" name="q" type="search" value="{{ request.GET.q }}" placeholder="Company, contact, email, or phone"></div>
+    <button class="btn btn-light" type="submit">Search</button>{% if request.GET.q %}<a class="btn btn-link" href="{% url 'clients:list' %}">Clear</a>{% endif %}
+</form>
+
 <section class="content-card">
     {% if clients %}
     <div class="item-list">

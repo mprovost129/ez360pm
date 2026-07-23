@@ -4,6 +4,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import ValidationError
+from django.db.models import Q
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
@@ -69,6 +70,17 @@ class InvoiceListView(LoginRequiredMixin, CompanyScopedQuerysetMixin, ListView):
             company=self.request.user.company,
         )
         if self.filter_form.is_valid():
+            query = self.filter_form.cleaned_data.get("q")
+            if query:
+                queryset = queryset.filter(
+                    Q(number__icontains=query)
+                    | Q(project__number__icontains=query)
+                    | Q(project__name__icontains=query)
+                    | Q(project__client__company_name__icontains=query)
+                    | Q(project__client__contacts__first_name__icontains=query)
+                    | Q(project__client__contacts__last_name__icontains=query)
+                    | Q(project__client__contacts__email__icontains=query)
+                ).distinct()
             for field in ("status", "invoice_kind", "project"):
                 value = self.filter_form.cleaned_data.get(field)
                 if value:
@@ -253,7 +265,8 @@ class InvoiceChildFormMixin(LoginRequiredMixin):
         return kwargs
 
     def get_success_url(self):
-        return reverse("documents:invoice-detail", args=(self.invoice.pk,))
+        anchor = "add-line" if self.request.POST.get("add_another") == "1" else "document-preview"
+        return f"{reverse('documents:invoice-detail', args=(self.invoice.pk,))}#{anchor}"
 
 
 class LineItemCreateView(InvoiceChildFormMixin, CreateView):
@@ -261,6 +274,11 @@ class LineItemCreateView(InvoiceChildFormMixin, CreateView):
     form_class = LineItemForm
     template_name = "shared/form.html"
     extra_context = {"page_title": "Add invoice line", "submit_label": "Add line"}
+
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        messages.success(self.request, "Invoice line added.")
+        return response
 
 
 class LineItemUpdateView(InvoiceChildFormMixin, UpdateView):

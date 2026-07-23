@@ -1,11 +1,12 @@
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.shortcuts import get_object_or_404, redirect
+from django.views import View
 from django.views.generic import FormView
 
 from .delivery_forms import DocumentDeliveryForm
 from .delivery_services import public_document_url, send_document_email
-from .models import Document
+from .models import Document, DocumentDelivery
 
 
 class DocumentSendView(LoginRequiredMixin, FormView):
@@ -57,3 +58,30 @@ class DocumentSendView(LoginRequiredMixin, FormView):
                 f"Email was not sent. {delivery.failure_message}",
             )
         return redirect(self.success_url_name, pk=self.document.pk)
+
+
+class DocumentDeliveryResendView(LoginRequiredMixin, View):
+    def post(self, request, pk, delivery_pk):
+        delivery = get_object_or_404(
+            DocumentDelivery.objects.select_related("document"),
+            pk=delivery_pk,
+            document_id=pk,
+            document__company=request.user.company,
+            purpose=DocumentDelivery.Purpose.CLIENT_DOCUMENT,
+        )
+        repeated = send_document_email(
+            document=delivery.document,
+            recipient_name=delivery.recipient_name,
+            recipient_email=delivery.recipient_email,
+            document_url=public_document_url(delivery.document),
+        )
+        if repeated.status == DocumentDelivery.Status.SENT:
+            messages.success(request, f"Email resent to {repeated.recipient_email}.")
+        else:
+            messages.error(request, f"Email was not sent. {repeated.failure_message}")
+        destination = (
+            "proposals:detail"
+            if delivery.document.doc_type == Document.Type.PROPOSAL
+            else "documents:invoice-detail"
+        )
+        return redirect(destination, pk=delivery.document_id)

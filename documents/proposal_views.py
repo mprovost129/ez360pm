@@ -2,6 +2,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import ValidationError
+from django.db.models import Q
 from django.http import Http404, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -57,6 +58,17 @@ class ProposalListView(LoginRequiredMixin, CompanyScopedQuerysetMixin, ListView)
             queryset = queryset.filter(status=status)
         if project:
             queryset = queryset.filter(project_id=project)
+        query = self.request.GET.get("q", "").strip()
+        if query:
+            queryset = queryset.filter(
+                Q(number__icontains=query)
+                | Q(project__number__icontains=query)
+                | Q(project__name__icontains=query)
+                | Q(project__client__company_name__icontains=query)
+                | Q(project__client__contacts__first_name__icontains=query)
+                | Q(project__client__contacts__last_name__icontains=query)
+                | Q(project__client__contacts__email__icontains=query)
+            ).distinct()
         return queryset.select_related("project", "project__client").prefetch_related(
             "project__client__contacts"
         )
@@ -225,7 +237,8 @@ class ProposalLineMixin(LoginRequiredMixin):
         return kwargs
 
     def get_success_url(self):
-        return reverse("proposals:detail", args=(self.proposal.pk,))
+        anchor = "add-line" if self.request.POST.get("add_another") == "1" else "document-preview"
+        return f"{reverse('proposals:detail', args=(self.proposal.pk,))}#{anchor}"
 
 
 class ProposalLineCreateView(ProposalLineMixin, CreateView):
@@ -233,6 +246,11 @@ class ProposalLineCreateView(ProposalLineMixin, CreateView):
     form_class = LineItemForm
     template_name = "shared/form.html"
     extra_context = {"page_title": "Add proposal price", "submit_label": "Add price"}
+
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        messages.success(self.request, "Proposal price added.")
+        return response
 
 
 class ProposalLineUpdateView(ProposalLineMixin, UpdateView):

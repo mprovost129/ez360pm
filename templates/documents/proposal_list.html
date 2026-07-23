@@ -7,13 +7,19 @@
     <div><p class="eyebrow">Agreements</p><h1>Proposals</h1></div>
     <a class="btn btn-primary" href="{% url 'proposals:create' %}">New estimate / proposal</a>
 </div>
+<form method="get" class="content-card filter-bar">
+    {% if request.GET.status %}<input type="hidden" name="status" value="{{ request.GET.status }}">{% endif %}
+    {% if request.GET.project %}<input type="hidden" name="project" value="{{ request.GET.project }}">{% endif %}
+    <div class="form-field"><label for="proposal-search">Search</label><input id="proposal-search" name="q" type="search" value="{{ request.GET.q }}" placeholder="Proposal, project, or customer"></div>
+    <button class="btn btn-light" type="submit">Search</button>{% if request.GET.q %}<a class="btn btn-link" href="{% url 'proposals:list' %}">Clear</a>{% endif %}
+</form>
 <nav class="filter-links" aria-label="Proposal status">
-    <a href="{% url 'proposals:list' %}">All</a>
-    <a href="?status=draft">Estimates / Drafts</a>
-    <a href="?status=sent">Sent</a>
-    <a href="?status=viewed">Link opened</a>
-    <a href="?status=accepted">Accepted</a>
-    <a href="?status=declined">Declined</a>
+    <a href="{% url 'proposals:list' %}{% if request.GET.q %}?q={{ request.GET.q|urlencode }}{% endif %}">All</a>
+    <a href="?status=draft{% if request.GET.q %}&amp;q={{ request.GET.q|urlencode }}{% endif %}">Estimates / Drafts</a>
+    <a href="?status=sent{% if request.GET.q %}&amp;q={{ request.GET.q|urlencode }}{% endif %}">Sent</a>
+    <a href="?status=viewed{% if request.GET.q %}&amp;q={{ request.GET.q|urlencode }}{% endif %}">Link opened</a>
+    <a href="?status=accepted{% if request.GET.q %}&amp;q={{ request.GET.q|urlencode }}{% endif %}">Accepted</a>
+    <a href="?status=declined{% if request.GET.q %}&amp;q={{ request.GET.q|urlencode }}{% endif %}">Declined</a>
 </nav>
 <section class="content-card item-list">
     {% for proposal in proposals %}

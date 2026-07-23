@@ -11,6 +11,18 @@
 </div>
 {% endif %}
 <blockquote class="note-source">{{ note.body|linebreaksbr }}</blockquote>
+{% if existing_client_form.is_bound or existing_client_form.fields.client.queryset %}
+<form method="post" class="content-card structured-form" novalidate>
+    {% csrf_token %}
+    <input type="hidden" name="conversion_action" value="use_existing">
+    <fieldset class="form-section form-grid">
+        <legend>Use an existing client</legend>
+        {% for field in existing_client_form %}{% include 'shared/_form_field.html' with field=field %}{% endfor %}
+    </fieldset>
+    <div class="form-actions"><button class="btn btn-primary" type="submit">Use selected client</button></div>
+</form>
+<div class="section-divider"><span>or create a new client</span></div>
+{% endif %}
 <form method="post" class="content-card structured-form" novalidate>
     {% csrf_token %}
     {% if form.errors %}<div class="form-error-summary" role="alert" tabindex="-1"><strong>Please correct the highlighted fields.</strong>{{ form.non_field_errors }}</div>{% endif %}

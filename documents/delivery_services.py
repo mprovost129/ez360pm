@@ -84,11 +84,13 @@ def send_document_email(*, document, recipient_name, recipient_email, document_u
         Document.Type.PROPOSAL: {
             Document.Status.SENT,
             Document.Status.VIEWED,
+            Document.Status.ACCEPTED,
         },
         Document.Type.INVOICE: {
             Document.Status.SENT,
             Document.Status.VIEWED,
             Document.Status.PARTIALLY_PAID,
+            Document.Status.PAID,
         },
     }
     if document.status not in allowed[document.doc_type]:

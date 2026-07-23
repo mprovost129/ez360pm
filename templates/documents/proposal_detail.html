@@ -29,13 +29,13 @@
 {% endif %}
 {% include 'documents/_proposal_document.html' %}
 {% if line_item_form %}
-<section class="content-card invoice-panel">
+<section class="content-card invoice-panel" id="add-line">
     <h2>Add price</h2>
     {% url 'proposals:line-create' proposal.pk as line_action %}
     {% include 'documents/_line_item_editor.html' with form=line_item_form action=line_action submit_label='Add price and continue' %}
 </section>
 {% endif %}
-{% if proposal.deliveries.all %}<section class="content-card invoice-panel"><h2>Delivery history</h2>{% for delivery in proposal.deliveries.all %}<div class="detail-row"><span><strong>{{ delivery.recipient_email }}</strong><small>{{ delivery.get_purpose_display }} · {{ delivery.created_at|date:'M j, Y g:i a' }}</small></span><span>{{ delivery.get_status_display }}{% if delivery.error_code %}<small>{{ delivery.failure_message }}</small>{% endif %}</span></div>{% endfor %}</section>{% endif %}
+{% if proposal.deliveries.all %}<section class="content-card invoice-panel"><h2>Delivery history</h2>{% for delivery in proposal.deliveries.all %}<div class="detail-row"><span><strong>{{ delivery.recipient_email }}</strong><small>{{ delivery.get_purpose_display }} · {{ delivery.created_at|date:'M j, Y g:i a' }}</small></span><span>{{ delivery.get_status_display }}{% if delivery.error_code %}<small>{{ delivery.failure_message }}</small>{% endif %}{% if delivery.purpose == 'client_document' %}<form class="inline-form" method="post" action="{% url 'proposals:delivery-resend' proposal.pk delivery.pk %}" data-confirm="{% if delivery.status == 'failed' %}Retry{% else %}Resend{% endif %} this proposal email to {{ delivery.recipient_email }}?">{% csrf_token %}<button class="link-button" type="submit">{% if delivery.status == 'failed' %}Retry{% else %}Resend{% endif %}</button></form>{% endif %}</span></div>{% endfor %}</section>{% endif %}
 {% if proposal.derived_invoices.all %}<section class="content-card invoice-panel"><h2>Invoices from this proposal</h2>{% for invoice in proposal.derived_invoices.all %}<a class="item-row" href="{% url 'documents:invoice-detail' invoice.pk %}"><span><strong>{{ invoice.number }} · {{ invoice.get_invoice_kind_display }}</strong><small>{{ invoice.get_status_display }}</small></span><strong>${{ invoice.total }}</strong></a>{% endfor %}</section>{% endif %}
 {% if proposal.is_editable %}<div class="danger-zone"><a href="{% url 'proposals:delete' proposal.pk %}">Delete draft proposal</a></div>{% endif %}
 {% endblock %}

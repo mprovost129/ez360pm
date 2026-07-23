@@ -245,6 +245,11 @@ class VoidInvoiceForm(forms.Form):
 
 
 class InvoiceFilterForm(forms.Form):
+    q = forms.CharField(
+        required=False,
+        label="Search",
+        widget=forms.TextInput(attrs={"placeholder": "Invoice, project, or customer"}),
+    )
     status = forms.ChoiceField(
         required=False,
         choices=[("", "All statuses")] + Document.Status.choices,

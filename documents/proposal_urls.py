@@ -20,6 +20,11 @@ urlpatterns = [
         ),
         name="send",
     ),
+    path(
+        "<int:pk>/deliveries/<int:delivery_pk>/resend/",
+        delivery_views.DocumentDeliveryResendView.as_view(),
+        name="delivery-resend",
+    ),
     path("<int:pk>/withdraw/", proposal_views.proposal_withdraw, name="withdraw"),
     path("<int:pk>/retainer/", proposal_views.RetainerCreateView.as_view(), name="retainer-create"),
     path("<int:pk>/pdf/", proposal_views.ProposalPdfView.as_view(), name="pdf"),

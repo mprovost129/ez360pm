@@ -58,6 +58,7 @@ class RevenueView(LoginRequiredMixin, ListView):
             "value"
         ] or Decimal("0.00")
         context["net_total"] = context["revenue_total"] - context["fee_total"]
+        context["pending_fee_count"] = self.object_list.filter(fee_pending=True).count()
         context["method_totals"] = self.object_list.values("method").annotate(
             total=Sum("amount")
         )

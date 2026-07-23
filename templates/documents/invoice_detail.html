@@ -34,7 +34,7 @@
 {% include 'documents/_invoice_document.html' %}
 
 {% if line_item_form %}
-<section class="content-card invoice-panel">
+<section class="content-card invoice-panel" id="add-line">
     <h2>Add line</h2>
     {% url 'documents:line-create' invoice.pk as line_action %}
     {% include 'documents/_line_item_editor.html' with form=line_item_form action=line_action submit_label='Add line and continue' %}
@@ -48,7 +48,7 @@
 </section>
 {% endif %}
 
-{% if invoice.deliveries.all %}<section class="content-card invoice-panel"><h2>Delivery history</h2>{% for delivery in invoice.deliveries.all %}<div class="detail-row"><span><strong>{{ delivery.recipient_email }}</strong><small>{{ delivery.get_purpose_display }} · {{ delivery.created_at|date:'M j, Y g:i a' }}</small></span><span>{{ delivery.get_status_display }}{% if delivery.error_code %}<small>{{ delivery.failure_message }}</small>{% endif %}</span></div>{% endfor %}</section>{% endif %}
+{% if invoice.deliveries.all %}<section class="content-card invoice-panel"><h2>Delivery history</h2>{% for delivery in invoice.deliveries.all %}<div class="detail-row"><span><strong>{{ delivery.recipient_email }}</strong><small>{{ delivery.get_purpose_display }} · {{ delivery.created_at|date:'M j, Y g:i a' }}</small></span><span>{{ delivery.get_status_display }}{% if delivery.error_code %}<small>{{ delivery.failure_message }}</small>{% endif %}{% if delivery.purpose == 'client_document' %}<form class="inline-form" method="post" action="{% url 'documents:delivery-resend' invoice.pk delivery.pk %}" data-confirm="{% if delivery.status == 'failed' %}Retry{% else %}Resend{% endif %} this invoice email to {{ delivery.recipient_email }}?">{% csrf_token %}<button class="link-button" type="submit">{% if delivery.status == 'failed' %}Retry{% else %}Resend{% endif %}</button></form>{% endif %}</span></div>{% endfor %}</section>{% endif %}
 
 {% if invoice.credits_received.all or credit_form %}
 <section class="content-card invoice-panel">
@@ -60,7 +60,7 @@
 
 <section class="content-card invoice-panel">
     <div class="section-heading"><h2>Payments</h2></div>
-    {% for payment in invoice.payments.all %}<div class="detail-row"><span><strong>${{ payment.amount }} · {{ payment.get_method_display }}</strong><small>{{ payment.received_at|date:'M j, Y' }}{% if payment.reference %} · {{ payment.reference }}{% endif %}{% if payment.fee_amount %} · ${{ payment.fee_amount }} fee · ${{ payment.net_amount }} net{% endif %}</small></span>{% if payment.method != 'stripe' %}<span><a href="{% url 'documents:payment-update' invoice.pk payment.pk %}">Edit</a> · <form class="inline-form" method="post" action="{% url 'documents:payment-delete' invoice.pk payment.pk %}" data-confirm="Remove this ${{ payment.amount }} payment? Revenue and the invoice balance will be recalculated.">{% csrf_token %}<button class="link-button" type="submit">Remove</button></form></span>{% endif %}</div>{% empty %}<p class="muted">No payments recorded.</p>{% endfor %}
+    {% for payment in invoice.payments.all %}<div class="detail-row"><span><strong>${{ payment.amount }} · {{ payment.get_method_display }}</strong><small>{{ payment.received_at|date:'M j, Y' }}{% if payment.reference %} · {{ payment.reference }}{% endif %}{% if payment.fee_pending %} · Stripe fee awaiting provider{% elif payment.fee_amount %} · ${{ payment.fee_amount }} fee · ${{ payment.net_amount }} net{% endif %}</small></span>{% if payment.method != 'stripe' %}<span><a href="{% url 'documents:payment-update' invoice.pk payment.pk %}">Edit</a> · <form class="inline-form" method="post" action="{% url 'documents:payment-delete' invoice.pk payment.pk %}" data-confirm="Remove this ${{ payment.amount }} payment? Revenue and the invoice balance will be recalculated.">{% csrf_token %}<button class="link-button" type="submit">Remove</button></form></span>{% endif %}</div>{% empty %}<p class="muted">No payments recorded.</p>{% endfor %}
 </section>
 
 {% if invoice.status == 'void' %}<section class="content-card invoice-panel warning-panel"><h2>Void invoice</h2><p>{{ invoice.void_reason|default:'No reason recorded.' }}</p><p>Time remains invoiced to avoid accidental double billing.</p><form method="post" action="{% url 'documents:invoice-release-time' invoice.pk %}" data-confirm="Release all attached time for rebilling? The entries will become available to add to another invoice.">{% csrf_token %}<button class="btn btn-warning" type="submit">Release time for rebilling</button></form></section>{% endif %}

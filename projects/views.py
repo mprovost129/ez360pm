@@ -2,6 +2,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import ValidationError
+from django.db.models import Q
 from django.db.models.deletion import ProtectedError
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse, reverse_lazy
@@ -39,6 +40,18 @@ class ProjectListView(LoginRequiredMixin, CompanyScopedQuerysetMixin, ListView):
         status = self.request.GET.get("status")
         if status in Project.Status.values:
             queryset = queryset.filter(status=status)
+        query = self.request.GET.get("q", "").strip()
+        if query:
+            queryset = queryset.filter(
+                Q(number__icontains=query)
+                | Q(name__icontains=query)
+                | Q(client__company_name__icontains=query)
+                | Q(client__contacts__first_name__icontains=query)
+                | Q(client__contacts__last_name__icontains=query)
+                | Q(address_1__icontains=query)
+                | Q(municipality__icontains=query)
+                | Q(parcel_id__icontains=query)
+            ).distinct()
         return queryset.select_related("client").prefetch_related("client__contacts")
 
     def get_context_data(self, **kwargs):

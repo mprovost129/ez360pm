@@ -9,7 +9,13 @@ from django.views.generic import FormView, ListView, UpdateView
 
 from core.mixins import CompanyScopedQuerysetMixin
 
-from .forms import ClientFromNoteForm, NoteForm, ProjectFromNoteForm, QuickNoteForm
+from .forms import (
+    ClientFromNoteForm,
+    ExistingClientFromNoteForm,
+    NoteForm,
+    ProjectFromNoteForm,
+    QuickNoteForm,
+)
 from .models import Note
 
 
@@ -114,7 +120,32 @@ class CreateClientFromNoteView(LoginRequiredMixin, FormView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context["note"] = self.note
+        context.setdefault(
+            "existing_client_form",
+            ExistingClientFromNoteForm(
+                note=self.note,
+                company=self.request.user.company,
+            ),
+        )
         return context
+
+    def post(self, request, *args, **kwargs):
+        if request.POST.get("conversion_action") == "use_existing":
+            form = ExistingClientFromNoteForm(
+                request.POST,
+                note=self.note,
+                company=request.user.company,
+            )
+            if form.is_valid():
+                client = form.save()
+                messages.success(request, f"Note attached to {client.display_name}.")
+                if form.cleaned_data["create_project"]:
+                    return redirect("intake:create-project", pk=self.note.pk)
+                return redirect("clients:detail", pk=client.pk)
+            return self.render_to_response(
+                self.get_context_data(existing_client_form=form)
+            )
+        return super().post(request, *args, **kwargs)
 
     def form_valid(self, form):
         client = form.save()

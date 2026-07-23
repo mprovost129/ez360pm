@@ -120,6 +120,47 @@ class ClientFromNoteForm(ClientCreateForm):
         return client
 
 
+class ExistingClientFromNoteForm(forms.Form):
+    client = forms.ModelChoiceField(
+        queryset=Client.objects.none(),
+        label="Existing client",
+        help_text="Choose a match instead of creating a duplicate client.",
+    )
+    create_project = forms.BooleanField(
+        required=False,
+        initial=True,
+        label="Create a project next",
+    )
+    archive_note = forms.BooleanField(
+        required=False,
+        initial=True,
+        label="Archive note after client-only conversion",
+    )
+
+    def __init__(self, *args, note, company, **kwargs):
+        self.note = note
+        super().__init__(*args, **kwargs)
+        clients = Client.objects.for_company(company).ordered_for_list()
+        self.fields["client"].queryset = clients
+        if not self.is_bound and note.prospect_company_name:
+            match = clients.filter(company_name__iexact=note.prospect_company_name).first()
+            if match:
+                self.fields["client"].initial = match
+
+    @transaction.atomic
+    def save(self):
+        client = self.cleaned_data["client"]
+        self.note.client = client
+        self.note.project = None
+        self.note.is_archived = (
+            self.cleaned_data["archive_note"]
+            and not self.cleaned_data["create_project"]
+        )
+        self.note.full_clean()
+        self.note.save(update_fields=["client", "project", "is_archived", "updated_at"])
+        return client
+
+
 class ProjectFromNoteForm(ProjectForm):
     archive_note = forms.BooleanField(required=False, initial=True)
 

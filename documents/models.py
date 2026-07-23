@@ -250,6 +250,10 @@ class Payment(models.Model):
         validators=[MinValueValidator(Decimal("0"))],
         help_text="Processing fee withheld by the provider (0 for manual payments).",
     )
+    fee_pending = models.BooleanField(
+        default=False,
+        help_text="Stripe has not yet supplied the final processing fee.",
+    )
     method = models.CharField(max_length=20, choices=Method.choices)
     received_at = models.DateField(default=timezone.localdate)
     reference = models.CharField(max_length=255, blank=True)

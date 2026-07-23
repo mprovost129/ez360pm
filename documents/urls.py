@@ -21,6 +21,11 @@ urlpatterns = [
         ),
         name="invoice-send",
     ),
+    path(
+        "<int:pk>/deliveries/<int:delivery_pk>/resend/",
+        delivery_views.DocumentDeliveryResendView.as_view(),
+        name="delivery-resend",
+    ),
     path("<int:pk>/void/", views.InvoiceVoidView.as_view(), name="invoice-void"),
     path("<int:pk>/release-time/", views.ReleaseVoidTimeView.as_view(), name="invoice-release-time"),
     path("<int:pk>/pdf/", views.InvoicePdfView.as_view(), name="invoice-pdf"),

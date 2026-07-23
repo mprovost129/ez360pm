@@ -363,7 +363,10 @@ class InvoiceViewTests(TestCase):
                 "tax_rate": "0",
             },
         )
-        self.assertRedirects(line_response, reverse("documents:invoice-detail", args=(invoice.pk,)))
+        self.assertRedirects(
+            line_response,
+            f"{reverse('documents:invoice-detail', args=(invoice.pk,))}#document-preview",
+        )
         invoice.refresh_from_db()
         self.assertEqual(invoice.total, Decimal("250.00"))
 
@@ -395,6 +398,35 @@ class InvoiceViewTests(TestCase):
         self.assertEqual(
             form.fields["accept_payments"].label,
             "Allow online payment with Stripe",
+        )
+
+    def test_invoice_list_searches_project_number(self):
+        invoice = self.make_invoice()
+
+        response = self.client.get(
+            reverse("documents:invoice-list"),
+            {"q": self.project.number},
+        )
+
+        self.assertEqual(list(response.context["invoices"]), [invoice])
+
+    def test_invoice_line_can_save_and_return_to_add_another(self):
+        invoice = self.make_invoice()
+
+        response = self.client.post(
+            reverse("documents:line-create", args=(invoice.pk,)),
+            {
+                "description": "Permit coordination",
+                "rate": "100.00",
+                "quantity": "1.00",
+                "tax_rate": "0",
+                "add_another": "1",
+            },
+        )
+
+        self.assertRedirects(
+            response,
+            f"{reverse('documents:invoice-detail', args=(invoice.pk,))}#add-line",
         )
 
     def test_invoice_detail_improves_line_and_time_authoring_context(self):

@@ -174,6 +174,46 @@ class NoteWorkflowTests(TestCase):
         self.assertEqual(form.initial["contact_last_name"], "Taylor")
         self.assertEqual(form.initial["company_name"], "Taylor Household")
 
+    def test_client_conversion_can_attach_existing_client_without_duplicate(self):
+        existing = create_client(self.company, company_name="Taylor Household")
+        note = Note.objects.create(
+            company=self.company,
+            prospect_company_name="Taylor Household",
+            body="Porch addition inquiry.",
+        )
+
+        response = self.client.post(
+            reverse("intake:create-client", args=(note.pk,)),
+            {
+                "conversion_action": "use_existing",
+                "client": existing.pk,
+                "archive_note": "on",
+            },
+        )
+
+        self.assertRedirects(response, reverse("clients:detail", args=(existing.pk,)))
+        note.refresh_from_db()
+        self.assertEqual(note.client, existing)
+        self.assertTrue(note.is_archived)
+        self.assertEqual(Client.objects.filter(company=self.company).count(), 1)
+
+    def test_client_conversion_rejects_existing_client_from_other_company(self):
+        hidden = create_client(self.other_company, company_name="Hidden Client")
+        note = Note.objects.create(company=self.company, body="New inquiry.")
+
+        response = self.client.post(
+            reverse("intake:create-client", args=(note.pk,)),
+            {
+                "conversion_action": "use_existing",
+                "client": hidden.pk,
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Select a valid choice")
+        note.refresh_from_db()
+        self.assertIsNone(note.client_id)
+
     def test_client_conversion_can_continue_to_project(self):
         note = Note.objects.create(
             company=self.company,

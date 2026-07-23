@@ -97,7 +97,7 @@
                 {% for payment in payments %}
                 <a class="item-row" href="{% url 'documents:invoice-detail' payment.document.pk %}">
                     <span><strong>{{ payment.document.number }} · {{ payment.get_method_display }}</strong><small>{{ payment.received_at|date:'M j, Y' }}{% if payment.reference %} · {{ payment.reference }}{% endif %}</small></span>
-                    <span class="invoice-list-total"><strong>${{ payment.amount }}</strong>{% if payment.fee_amount %}<small>${{ payment.net_amount }} net</small>{% endif %}</span>
+                    <span class="invoice-list-total"><strong>${{ payment.amount }}</strong>{% if payment.fee_pending %}<small>Stripe fee pending</small>{% elif payment.fee_amount %}<small>${{ payment.net_amount }} net</small>{% endif %}</span>
                 </a>
                 {% empty %}<p class="empty-state">No payments recorded.</p>{% endfor %}
             </div>

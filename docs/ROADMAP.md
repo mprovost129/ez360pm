@@ -140,6 +140,31 @@ The architecture, relationships, and screen map are detailed in:
   or `charge.updated` webhooks so gross revenue, fees, and net revenue stay
   accurate without creating a second payment.
 
+#### Current-feature improvement queue
+
+- [ ] Finish the single-page proposal/invoice builder with inline pricing edits,
+  Save and add another, and continuously visible totals and preview.
+  - [x] Add separate Save and review / Save and add another paths that return to
+    the live document preview or the next-line form.
+- [x] Add company-scoped search to Clients, Projects, Proposals, and Invoices by
+  the identifiers and customer details used during daily work.
+- [x] Add Resend to same recipient and Retry failed delivery actions while
+  preserving every email attempt in delivery history.
+- [x] Let Quick Note conversion find and attach an existing client before
+  creating a new one, reducing accidental duplicate customer records.
+- [x] Distinguish a Stripe fee that is awaiting provider data from a confirmed
+  zero fee, then show the reconciled amount when it arrives.
+- [ ] Add filtered hours, billable value, and today's total to the Time page and
+  warn about overlapping manual time entries.
+- [ ] Prioritize dashboard attention lists by age and expose how long leads,
+  drafts, unpaid invoices, and unbilled time have been waiting.
+- [ ] Send an internal notification when a proposal is declined and make the
+  customer's response prominent on the proposal.
+- [ ] Allow an existing proposal or draft invoice to be duplicated into a new
+  draft without copying lifecycle or payment history.
+- [ ] Group project-page actions by workflow stage so the most likely next
+  action is prominent and secondary actions remain available.
+
 ### Workflow traceability
 
 | Required workflow step | Primary delivery phase | Proof at the exit gate |

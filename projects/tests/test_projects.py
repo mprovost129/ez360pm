@@ -153,3 +153,19 @@ class ProjectViewTests(TestCase):
         response = self.client.get(reverse("projects:detail", args=(project.pk,)))
 
         self.assertEqual(response.status_code, 404)
+
+    def test_project_list_searches_project_and_client_details(self):
+        visible = create_project(
+            company=self.company,
+            client=self.client_record,
+            project_data=project_data(number="SEARCH-42", name="Porch addition"),
+        )
+        create_project(
+            company=self.company,
+            client=self.client_record,
+            project_data=project_data(number="OTHER-42", name="Kitchen"),
+        )
+
+        response = self.client.get(reverse("projects:list"), {"q": "Porch"})
+
+        self.assertEqual(list(response.context["projects"]), [visible])

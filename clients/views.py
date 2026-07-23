@@ -4,7 +4,7 @@ from decimal import ROUND_HALF_UP, Decimal
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import ValidationError
-from django.db.models import Sum
+from django.db.models import Q, Sum
 from django.db.models.deletion import ProtectedError
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse, reverse_lazy
@@ -43,7 +43,17 @@ class ClientListView(LoginRequiredMixin, CompanyScopedQuerysetMixin, ListView):
     paginate_by = 50
 
     def get_queryset(self):
-        return super().get_queryset().ordered_for_list().prefetch_related("contacts")
+        queryset = super().get_queryset().ordered_for_list().prefetch_related("contacts")
+        query = self.request.GET.get("q", "").strip()
+        if query:
+            queryset = queryset.filter(
+                Q(company_name__icontains=query)
+                | Q(contacts__first_name__icontains=query)
+                | Q(contacts__last_name__icontains=query)
+                | Q(contacts__email__icontains=query)
+                | Q(contacts__phone__icontains=query)
+            ).distinct()
+        return queryset
 
 
 class ClientDetailView(LoginRequiredMixin, CompanyScopedQuerysetMixin, DetailView):

@@ -93,7 +93,7 @@ def create_checkout_session(*, invoice, success_url, cancel_url):
 
 
 def _retrieve_stripe_fee(payment_intent_id):
-    """Return the exact provider fee for a captured PaymentIntent, in dollars.
+    """Return the provider fee and whether Stripe has not finalized it yet.
 
     Revenue must be recorded even when Stripe's fee data is momentarily
     unavailable, so any failure degrades to a zero fee rather than blocking the
@@ -107,13 +107,13 @@ def _retrieve_stripe_fee(payment_intent_id):
         )
     except stripe.StripeError:
         logger.warning("Stripe fee lookup failed intent=%s", payment_intent_id)
-        return Decimal("0.00")
+        return Decimal("0.00"), True
     charge = _value(intent, "latest_charge")
     balance_txn = _value(charge, "balance_transaction") if charge else None
     fee_cents = _value(balance_txn, "fee") if balance_txn else None
     if fee_cents is None:
-        return Decimal("0.00")
-    return money(Decimal(fee_cents) / Decimal("100"))
+        return Decimal("0.00"), True
+    return money(Decimal(fee_cents) / Decimal("100")), False
 
 
 def _fee_from_charge(charge):
@@ -149,9 +149,12 @@ def _reconcile_charge_fee(charge):
     if payment is None:
         return None
     fee_amount = _fee_from_charge(charge)
-    if fee_amount is not None and payment.fee_amount != fee_amount:
+    if fee_amount is not None and (
+        payment.fee_amount != fee_amount or payment.fee_pending
+    ):
         payment.fee_amount = fee_amount
-        payment.save(update_fields=["fee_amount"])
+        payment.fee_pending = False
+        payment.save(update_fields=["fee_amount", "fee_pending"])
     return payment
 
 
@@ -191,12 +194,13 @@ def process_stripe_event(*, event):
     except (Document.DoesNotExist, TypeError, ValueError):
         raise ValidationError("Stripe event does not match an invoice.") from None
     amount = money(Decimal(amount_total) / Decimal("100"))
-    fee_amount = _retrieve_stripe_fee(payment_intent_id)
+    fee_amount, fee_pending = _retrieve_stripe_fee(payment_intent_id)
     payment = record_payment(
         invoice=invoice,
         payment_data={
             "amount": amount,
             "fee_amount": fee_amount,
+            "fee_pending": fee_pending,
             "method": Payment.Method.STRIPE,
             "received_at": timezone.localdate(),
             "reference": f"Stripe Checkout {_value(session, 'id', '')}"[:255],

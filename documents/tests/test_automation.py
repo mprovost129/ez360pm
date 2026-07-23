@@ -178,6 +178,62 @@ class DeliveryAndStripeTests(TestCase):
         self.assertContains(detail, "alex@example.com")
         self.assertContains(detail, "Sent")
 
+    def test_delivery_history_resend_preserves_both_attempts(self):
+        invoice = self.make_invoice()
+        original = send_document_email(
+            document=invoice,
+            recipient_name="Alex Smith",
+            recipient_email="alex@example.com",
+            document_url="https://app.example.com/d/original/",
+        )
+
+        response = self.client.post(
+            reverse("documents:delivery-resend", args=(invoice.pk, original.pk))
+        )
+
+        self.assertRedirects(
+            response,
+            reverse("documents:invoice-detail", args=(invoice.pk,)),
+        )
+        attempts = DocumentDelivery.objects.filter(
+            document=invoice,
+            purpose=DocumentDelivery.Purpose.CLIENT_DOCUMENT,
+        )
+        self.assertEqual(attempts.count(), 2)
+        self.assertEqual(len(mail.outbox), 2)
+
+    def test_failed_delivery_retry_preserves_failed_attempt(self):
+        invoice = self.make_invoice()
+        with patch(
+            "documents.delivery_services.EmailMultiAlternatives.send",
+            side_effect=RuntimeError("temporary failure"),
+        ):
+            failed = send_document_email(
+                document=invoice,
+                recipient_name="Alex Smith",
+                recipient_email="alex@example.com",
+                document_url="https://app.example.com/d/original/",
+            )
+
+        response = self.client.post(
+            reverse("documents:delivery-resend", args=(invoice.pk, failed.pk))
+        )
+
+        self.assertRedirects(
+            response,
+            reverse("documents:invoice-detail", args=(invoice.pk,)),
+        )
+        failed.refresh_from_db()
+        self.assertEqual(failed.status, DocumentDelivery.Status.FAILED)
+        self.assertEqual(
+            DocumentDelivery.objects.filter(
+                document=invoice,
+                purpose=DocumentDelivery.Purpose.CLIENT_DOCUMENT,
+            ).count(),
+            2,
+        )
+        self.assertEqual(len(mail.outbox), 1)
+
     def test_send_view_cannot_retrieve_another_company_document(self):
         other_company = Company.objects.create(name="Other Studio")
         other_project = create_project(
@@ -458,6 +514,7 @@ class DeliveryAndStripeTests(TestCase):
 
         self.assertEqual(payment.amount, Decimal("100.00"))
         self.assertEqual(payment.fee_amount, Decimal("3.20"))
+        self.assertFalse(payment.fee_pending)
         self.assertEqual(payment.net_amount, Decimal("96.80"))
         invoice.refresh_from_db()
         self.assertEqual(invoice.status, Document.Status.PAID)
@@ -471,6 +528,7 @@ class DeliveryAndStripeTests(TestCase):
 
         self.assertEqual(payment.amount, Decimal("100.00"))
         self.assertEqual(payment.fee_amount, Decimal("0.00"))
+        self.assertTrue(payment.fee_pending)
         invoice.refresh_from_db()
         self.assertEqual(invoice.status, Document.Status.PAID)
 
@@ -495,6 +553,7 @@ class DeliveryAndStripeTests(TestCase):
         reconciled.refresh_from_db()
         self.assertEqual(reconciled.pk, payment.pk)
         self.assertEqual(reconciled.fee_amount, Decimal("3.20"))
+        self.assertFalse(reconciled.fee_pending)
 
     def test_manual_payment_carries_no_provider_fee(self):
         invoice = self.make_invoice()

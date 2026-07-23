@@ -115,3 +115,11 @@ class ClientViewTests(TestCase):
 
         self.assertEqual(response.status_code, 404)
 
+    def test_client_list_searches_contacts_and_remains_company_scoped(self):
+        visible = create_client(self.company, company_name="Taylor Household")
+        create_client(self.company, company_name="Unrelated Client", last_name="Jones")
+        create_client(self.other_company, company_name="Hidden Taylor")
+
+        response = self.client.get(reverse("clients:list"), {"q": "Taylor"})
+
+        self.assertEqual(list(response.context["clients"]), [visible])

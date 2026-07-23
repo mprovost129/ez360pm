@@ -260,7 +260,10 @@ class ProposalWorkflowTests(TestCase):
             section_response,
             reverse("proposals:detail", args=(proposal.pk,)),
         )
-        self.assertRedirects(line_response, reverse("proposals:detail", args=(proposal.pk,)))
+        self.assertRedirects(
+            line_response,
+            f"{reverse('proposals:detail', args=(proposal.pk,))}#document-preview",
+        )
         self.assertRedirects(issue_response, reverse("proposals:detail", args=(proposal.pk,)))
         proposal.refresh_from_db()
         self.assertEqual(proposal.status, Document.Status.SENT)
@@ -291,6 +294,16 @@ class ProposalWorkflowTests(TestCase):
         self.assertContains(detail, "Draft readiness")
         self.assertContains(detail, "Line amount")
         self.assertEqual(section.context["form"].initial["heading"], "Scope of work")
+
+    def test_proposal_list_searches_project_number(self):
+        proposal = self.make_proposal()
+
+        response = self.client.get(
+            reverse("proposals:list"),
+            {"q": self.project.number},
+        )
+
+        self.assertEqual(list(response.context["proposals"]), [proposal])
 
     def test_draft_proposal_sections_can_be_reordered(self):
         proposal = self.make_proposal()
