@@ -9,7 +9,7 @@ from django.views.generic import FormView, ListView, UpdateView
 
 from core.mixins import CompanyScopedQuerysetMixin
 
-from .forms import ClientFromNoteForm, NoteForm, QuickNoteForm
+from .forms import ClientFromNoteForm, NoteForm, ProjectFromNoteForm, QuickNoteForm
 from .models import Note
 
 
@@ -81,15 +81,30 @@ class CreateClientFromNoteView(LoginRequiredMixin, FormView):
 
     def dispatch(self, request, *args, **kwargs):
         self.note = get_object_or_404(
-            Note.objects.for_company(request.user.company),
+            Note.objects.for_company(request.user.company).select_related("client", "project"),
             pk=kwargs["pk"],
         )
+        if self.note.project_id:
+            messages.info(request, "This note is already attached to a project.")
+            return redirect("projects:detail", pk=self.note.project_id)
+        if self.note.client_id:
+            messages.info(request, "This note is already attached to a client.")
+            return redirect("intake:create-project", pk=self.note.pk)
         return super().dispatch(request, *args, **kwargs)
 
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
         kwargs.update(company=self.request.user.company, note=self.note)
         return kwargs
+
+    def get_initial(self):
+        initial = super().get_initial()
+        initial.update(
+            company_name=self.note.prospect_company_name,
+            contact_first_name=self.note.contact_first_name,
+            contact_last_name=self.note.contact_last_name,
+        )
+        return initial
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -99,5 +114,57 @@ class CreateClientFromNoteView(LoginRequiredMixin, FormView):
     def form_valid(self, form):
         client = form.save()
         messages.success(self.request, "Client created from note.")
+        if form.cleaned_data["create_project"]:
+            return redirect("intake:create-project", pk=self.note.pk)
         return redirect("clients:detail", pk=client.pk)
 
+
+class CreateProjectFromNoteView(LoginRequiredMixin, FormView):
+    form_class = ProjectFromNoteForm
+    template_name = "shared/form.html"
+    note = None
+
+    def dispatch(self, request, *args, **kwargs):
+        self.note = get_object_or_404(
+            Note.objects.for_company(request.user.company).select_related("client", "project"),
+            pk=kwargs["pk"],
+        )
+        if self.note.project_id:
+            messages.info(request, "This note is already attached to a project.")
+            return redirect("projects:detail", pk=self.note.project_id)
+        if not self.note.client_id:
+            messages.info(request, "Create or attach a client before creating a project.")
+            return redirect("intake:create-client", pk=self.note.pk)
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_initial(self):
+        initial = super().get_initial()
+        client = self.note.client
+        initial.update(
+            client=client.pk,
+            description=self.note.body,
+            address_1=client.billing_address_1,
+            address_2=client.billing_address_2,
+            city=client.billing_city,
+            state=client.billing_state,
+            postal_code=client.billing_postal_code,
+        )
+        return initial
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs.update(company=self.request.user.company, note=self.note)
+        return kwargs
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context.update(
+            page_title="Create project from note",
+            submit_label="Create project",
+        )
+        return context
+
+    def form_valid(self, form):
+        project = form.save()
+        messages.success(self.request, f"Project {project.number} created from note.")
+        return redirect("projects:detail", pk=project.pk)

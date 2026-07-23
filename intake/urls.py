@@ -10,5 +10,5 @@ urlpatterns = [
     path("<int:pk>/edit/", views.NoteUpdateView.as_view(), name="update"),
     path("<int:pk>/archive/", views.toggle_archive, name="toggle-archive"),
     path("<int:pk>/create-client/", views.CreateClientFromNoteView.as_view(), name="create-client"),
+    path("<int:pk>/create-project/", views.CreateProjectFromNoteView.as_view(), name="create-project"),
 ]
-

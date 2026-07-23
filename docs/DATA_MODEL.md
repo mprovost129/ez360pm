@@ -79,7 +79,7 @@ Blank text fields store `""`; optional relationships/dates use `NULL`.
 | LineItem | nonnegative quantity/rate/tax; unique `(document, order)` | document must be editable draft |
 | Payment | positive amount; unique nonblank Stripe Payment Intent ID | document is invoice; amount does not unintentionally overpay |
 | InvoiceCredit | positive amount; source/destination pair rules | paid retainer -> final invoice, same project/company, within availability |
-| Note | none beyond ownership FKs | selected project determines client; unrelated client rejected |
+| Note | none beyond ownership FKs | optional prospect identity; selected project determines client; unrelated client rejected |
 
 Useful query indexes:
 

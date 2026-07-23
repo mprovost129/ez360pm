@@ -7,6 +7,9 @@ from projects.models import Project
 
 
 class Note(CompanyOwnedModel):
+    contact_first_name = models.CharField(max_length=150, blank=True)
+    contact_last_name = models.CharField(max_length=150, blank=True)
+    prospect_company_name = models.CharField(max_length=255, blank=True)
     body = models.TextField()
     client = models.ForeignKey(
         Client,
@@ -49,4 +52,3 @@ class Note(CompanyOwnedModel):
 
     def __str__(self):
         return self.body[:80]
-

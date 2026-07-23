@@ -10,6 +10,12 @@
 <section class="content-card">
     {% for note in notes %}
     <article class="note-row{% if note.is_archived %} note-row--archived{% endif %}">
+        {% if note.contact_first_name or note.contact_last_name or note.prospect_company_name %}
+        <div class="note-lead">
+            {% if note.contact_first_name or note.contact_last_name %}<strong>{{ note.contact_first_name }} {{ note.contact_last_name }}</strong>{% endif %}
+            {% if note.prospect_company_name %}<span>{{ note.prospect_company_name }}</span>{% endif %}
+        </div>
+        {% endif %}
         <div class="note-body">{{ note.body|linebreaksbr }}</div>
         <div class="note-meta">
             <span>{{ note.created_at|date:'M j, Y g:i a' }}</span>
@@ -17,7 +23,9 @@
         </div>
         <div class="button-group">
             <a class="btn btn-sm btn-light" href="{% url 'intake:update' note.pk %}">Edit / attach</a>
-            {% if not note.client and not note.project %}<a class="btn btn-sm btn-light" href="{% url 'intake:create-client' note.pk %}">Create client</a>{% endif %}
+            {% if not note.project %}
+                {% if note.client %}<a class="btn btn-sm btn-primary" href="{% url 'intake:create-project' note.pk %}">Create project</a>{% else %}<a class="btn btn-sm btn-primary" href="{% url 'intake:create-client' note.pk %}">Create client / project</a>{% endif %}
+            {% endif %}
             <form method="post" action="{% url 'intake:toggle-archive' note.pk %}">{% csrf_token %}<button class="btn btn-sm btn-light" type="submit">{% if note.is_archived %}Restore{% else %}Archive{% endif %}</button></form>
         </div>
     </article>

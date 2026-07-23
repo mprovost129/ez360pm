@@ -303,6 +303,32 @@ button[type="submit"]:not(.btn):active {
     font-size: 0.85rem;
 }
 
+.quick-note input[type="text"] {
+    width: 100%;
+    margin-bottom: 0.4rem;
+    font-size: 0.85rem;
+}
+
+.quick-note__name {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 0.35rem;
+}
+
+.note-lead {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 0.35rem;
+    color: var(--ez-navy);
+}
+
+.note-lead span {
+    color: #66788a;
+    font-size: 0.9rem;
+}
+
 .app-sidebar .nav {
     gap: 0.25rem;
 }

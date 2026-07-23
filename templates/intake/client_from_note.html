@@ -4,6 +4,12 @@
 
 {% block content %}
 <div class="page-heading"><h1>Create client from note</h1></div>
+{% if note.contact_first_name or note.contact_last_name or note.prospect_company_name %}
+<div class="note-lead">
+    {% if note.contact_first_name or note.contact_last_name %}<strong>{{ note.contact_first_name }} {{ note.contact_last_name }}</strong>{% endif %}
+    {% if note.prospect_company_name %}<span>{{ note.prospect_company_name }}</span>{% endif %}
+</div>
+{% endif %}
 <blockquote class="note-source">{{ note.body|linebreaksbr }}</blockquote>
 <form method="post" class="content-card form-grid" novalidate>
     {% csrf_token %}

@@ -54,7 +54,7 @@ UUID token.
 | Screen | Primary job | Primary action | Important secondary actions |
 | --- | --- | --- | --- |
 | Dashboard | show work needing attention | capture note | resume project, open draft/unpaid item |
-| Notes | empty the intake inbox | add note | attach, create client, archive |
+| Notes | empty the intake inbox | add note | attach, create client/project, archive |
 | Client detail | understand one billing relationship | create project | edit contacts/address, review history |
 | Project detail | operate one job | next workflow action | timer, notes, documents, status, profitability |
 | Time | reconcile work sessions | add manual entry | filter, edit logged time, open project |
@@ -121,15 +121,18 @@ these dashboard links.
 
 ## Quick-note interaction
 
-- The shell contains one multiline text box and a Save action.
+- The shell captures the caller's optional first name, last name, and company,
+  plus one multiline note and a Save action.
 - Body is the only required input; Enter behavior must not cause accidental save
   while typing multiline notes.
 - Successful save clears the field, confirms capture, and does not navigate away.
-- Optional client/project attachment happens later on the Notes screen.
+- Optional client/project attachment or conversion happens later on the Notes
+  screen.
 - Selecting a project automatically displays/derives its client; the client cannot
   be independently changed to an unrelated record.
-- Create client from note carries the original note context through the flow and
-  archives only after the user confirms the conversion.
+- Create client from note prefills the captured identity and can continue directly
+  to project creation. Project conversion prefills the linked client, its billing
+  address, and the note body, then attaches the note to the new lead project.
 
 The five-second requirement should be tested from a loaded authenticated screen,
 not from initial login.
