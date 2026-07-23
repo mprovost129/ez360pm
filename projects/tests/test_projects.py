@@ -103,6 +103,17 @@ class ProjectViewTests(TestCase):
         self.assertRedirects(response, reverse("projects:detail", args=(project.pk,)))
         self.assertRegex(project.number, r"^\d{7}$")
 
+    def test_project_create_flow_allows_blank_postal_code(self):
+        data = project_data(postal_code="")
+        data["client"] = self.client_record.pk
+        data["fixed_fee"] = ""
+
+        response = self.client.post(reverse("projects:create"), data)
+
+        project = Project.objects.get(company=self.company)
+        self.assertRedirects(response, reverse("projects:detail", args=(project.pk,)))
+        self.assertEqual(project.postal_code, "")
+
     def test_fixed_fee_clears_default_hourly_rate_and_selects_flat_fee(self):
         data = project_data(
             billing_type=Project.BillingType.HOURLY,
