@@ -59,13 +59,15 @@ class ProposalListView(LoginRequiredMixin, CompanyScopedQuerysetMixin, ListView)
     context_object_name = "proposals"
     template_name = "documents/proposal_list.html"
     paginate_by = 50
+    selected_status = ""
 
     def get_queryset(self):
         queryset = super().get_queryset().filter(doc_type=Document.Type.PROPOSAL)
         status = self.request.GET.get("status")
         project = self.request.GET.get("project")
-        if status in PROPOSAL_STATUS_VALUES:
-            queryset = queryset.filter(status=status)
+        self.selected_status = status if status in PROPOSAL_STATUS_VALUES else ""
+        if self.selected_status:
+            queryset = queryset.filter(status=self.selected_status)
         if project:
             queryset = queryset.filter(project_id=project)
         query = self.request.GET.get("q", "").strip()
@@ -86,6 +88,7 @@ class ProposalListView(LoginRequiredMixin, CompanyScopedQuerysetMixin, ListView)
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context["status_choices"] = PROPOSAL_STATUS_CHOICES
+        context["selected_status"] = self.selected_status
         return context
 
 

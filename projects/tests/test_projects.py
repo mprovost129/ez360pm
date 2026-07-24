@@ -216,6 +216,29 @@ class ProjectViewTests(TestCase):
             'class="is-active" aria-current="page">Active</a>',
         )
 
+    def test_invalid_project_status_is_normalized_to_all(self):
+        visible = create_project(
+            company=self.company,
+            client=self.client_record,
+            project_data=project_data(number="INVALID-FILTER"),
+        )
+
+        response = self.client.get(
+            reverse("projects:list"),
+            {"status": "not-a-project-status"},
+        )
+
+        self.assertEqual(list(response.context["projects"]), [visible])
+        self.assertEqual(response.context["selected_status"], "")
+        self.assertContains(
+            response,
+            'class="is-active" aria-current="page">All</a>',
+        )
+        self.assertNotContains(
+            response,
+            'name="status" value="not-a-project-status"',
+        )
+
     def test_project_detail_prioritizes_the_next_workflow_action(self):
         project = create_project(
             company=self.company,

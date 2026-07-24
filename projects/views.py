@@ -34,12 +34,14 @@ class ProjectListView(LoginRequiredMixin, CompanyScopedQuerysetMixin, ListView):
     context_object_name = "projects"
     template_name = "projects/project_list.html"
     paginate_by = 50
+    selected_status = ""
 
     def get_queryset(self):
         queryset = super().get_queryset()
         status = self.request.GET.get("status")
-        if status in Project.Status.values:
-            queryset = queryset.filter(status=status)
+        self.selected_status = status if status in Project.Status.values else ""
+        if self.selected_status:
+            queryset = queryset.filter(status=self.selected_status)
         query = self.request.GET.get("q", "").strip()
         if query:
             queryset = queryset.filter(
@@ -56,7 +58,7 @@ class ProjectListView(LoginRequiredMixin, CompanyScopedQuerysetMixin, ListView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context["selected_status"] = self.request.GET.get("status", "")
+        context["selected_status"] = self.selected_status
         context["status_choices"] = Project.Status.choices
         return context
 

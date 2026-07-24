@@ -8,14 +8,14 @@
     <a class="btn btn-primary" href="{% url 'proposals:create' %}">New estimate / proposal</a>
 </div>
 <form method="get" class="content-card filter-bar">
-    {% if request.GET.status %}<input type="hidden" name="status" value="{{ request.GET.status }}">{% endif %}
+    {% if selected_status %}<input type="hidden" name="status" value="{{ selected_status }}">{% endif %}
     {% if request.GET.project %}<input type="hidden" name="project" value="{{ request.GET.project }}">{% endif %}
     <div class="form-field"><label for="proposal-search">Search</label><input id="proposal-search" name="q" type="search" value="{{ request.GET.q }}" placeholder="Proposal, project, or customer"></div>
-    <button class="btn btn-light" type="submit">Search</button>{% if request.GET.q %}<a class="btn btn-link" href="{% url 'proposals:list' %}{% querystring q=None page=None %}">Clear search</a>{% endif %}
+    <button class="btn btn-light" type="submit">Search</button>{% if request.GET.q %}<a class="btn btn-link" href="{% url 'proposals:list' %}{% if selected_status %}{% querystring q=None status=selected_status page=None %}{% else %}{% querystring q=None status=None page=None %}{% endif %}">Clear search</a>{% endif %}
 </form>
 <nav class="filter-links" aria-label="Proposal status">
-    <a href="{% url 'proposals:list' %}{% querystring status=None page=None %}"{% if not request.GET.status %} class="is-active" aria-current="page"{% endif %}>All</a>
-    {% for value, label in status_choices %}<a href="{% url 'proposals:list' %}{% querystring status=value page=None %}"{% if request.GET.status == value %} class="is-active" aria-current="page"{% endif %}>{{ label }}</a>{% endfor %}
+    <a href="{% url 'proposals:list' %}{% querystring status=None page=None %}"{% if not selected_status %} class="is-active" aria-current="page"{% endif %}>All</a>
+    {% for value, label in status_choices %}<a href="{% url 'proposals:list' %}{% querystring status=value page=None %}"{% if selected_status == value %} class="is-active" aria-current="page"{% endif %}>{{ label }}</a>{% endfor %}
 </nav>
 <section class="content-card item-list">
     {% for proposal in proposals %}

@@ -388,6 +388,11 @@ class ProposalWorkflowTests(TestCase):
             invalid_response.context["proposals"],
             [withdrawn, draft],
         )
+        self.assertEqual(invalid_response.context["selected_status"], "")
+        self.assertContains(
+            invalid_response,
+            'class="is-active" aria-current="page">All</a>',
+        )
 
     def test_draft_proposal_sections_can_be_reordered(self):
         proposal = self.make_proposal()

@@ -196,6 +196,9 @@ The architecture, relationships, and screen map are detailed in:
   archive view.
 - [x] Distinguish empty Client and Project accounts from searches or status
   filters with no matches, and provide a clear way back to the full list.
+- [x] Normalize invalid or obsolete Project and Proposal status parameters to
+  All so the visible active filter, search form, and unfiltered results cannot
+  disagree or keep propagating a stale status value.
 
 ### Workflow traceability
 

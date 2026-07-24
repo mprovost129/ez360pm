@@ -10,7 +10,7 @@
 <form method="get" class="content-card filter-bar">
     {% if selected_status %}<input type="hidden" name="status" value="{{ selected_status }}">{% endif %}
     <div class="form-field"><label for="project-search">Search</label><input id="project-search" name="q" type="search" value="{{ request.GET.q }}" placeholder="Project, customer, address, or parcel"></div>
-    <button class="btn btn-light" type="submit">Search</button>{% if request.GET.q %}<a class="btn btn-link" href="{% url 'projects:list' %}{% querystring q=None page=None %}">Clear search</a>{% endif %}
+    <button class="btn btn-light" type="submit">Search</button>{% if request.GET.q %}<a class="btn btn-link" href="{% url 'projects:list' %}{% if selected_status %}{% querystring q=None status=selected_status page=None %}{% else %}{% querystring q=None status=None page=None %}{% endif %}">Clear search</a>{% endif %}
 </form>
 <nav class="filter-links" aria-label="Project status"><a href="{% url 'projects:list' %}{% querystring status=None page=None %}"{% if not selected_status %} class="is-active" aria-current="page"{% endif %}>All</a>{% for value, label in status_choices %}<a href="{% url 'projects:list' %}{% querystring status=value page=None %}"{% if selected_status == value %} class="is-active" aria-current="page"{% endif %}>{{ label }}</a>{% endfor %}</nav>
 <section class="content-card">
