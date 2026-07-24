@@ -182,6 +182,9 @@ The architecture, relationships, and screen map are detailed in:
   status filters or clearing a search, avoiding a jump back to all projects.
 - [x] Give Project, Proposal, and Outstanding Invoice filters a consistent,
   accessible active state and reset pagination whenever the filter changes.
+- [x] Keep the Client Time tab fast with its latest-25 limit while showing the
+  full time-entry count and clearly explaining when older entries are omitted;
+  retain all completed time in the client summary total.
 
 ### Workflow traceability
 

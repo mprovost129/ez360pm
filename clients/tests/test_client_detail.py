@@ -148,3 +148,30 @@ class ClientDetailConnectedInfoTests(TestCase):
         self.assertNotContains(
             response, reverse("documents:invoice-detail", args=(other_invoice.pk,))
         )
+
+    def test_time_tab_reports_full_count_when_recent_entries_are_limited(self):
+        now = timezone.now()
+        TimeEntry.objects.bulk_create(
+            [
+                TimeEntry(
+                    company=self.company,
+                    project=self.project,
+                    user=self.user,
+                    start_time=now - timedelta(days=index, hours=1),
+                    end_time=now - timedelta(days=index),
+                    description=f"Session {index + 1}",
+                )
+                for index in range(27)
+            ]
+        )
+
+        response = self.client.get(
+            reverse("clients:detail", args=(self.client_record.pk,))
+        )
+
+        self.assertEqual(response.context["time_entry_count"], 27)
+        self.assertEqual(len(response.context["time_entries"]), 25)
+        self.assertTrue(response.context["time_entries_truncated"])
+        self.assertContains(response, 'Time <span class="tab-count">27</span>')
+        self.assertContains(response, "Showing the latest 25 of 27 time entries")
+        self.assertContains(response, "27h")

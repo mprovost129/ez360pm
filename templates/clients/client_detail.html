@@ -50,7 +50,7 @@
             <li class="nav-item" role="presentation"><button class="nav-link active" id="tab-btn-projects" data-bs-toggle="tab" data-bs-target="#tab-projects" type="button" role="tab" aria-controls="tab-projects" aria-selected="true">Projects <span class="tab-count">{{ client.projects.all|length }}</span></button></li>
             <li class="nav-item" role="presentation"><button class="nav-link" id="tab-btn-invoices" data-bs-toggle="tab" data-bs-target="#tab-invoices" type="button" role="tab" aria-controls="tab-invoices" aria-selected="false">Invoices <span class="tab-count">{{ invoices|length }}</span></button></li>
             <li class="nav-item" role="presentation"><button class="nav-link" id="tab-btn-proposals" data-bs-toggle="tab" data-bs-target="#tab-proposals" type="button" role="tab" aria-controls="tab-proposals" aria-selected="false">Proposals <span class="tab-count">{{ proposals|length }}</span></button></li>
-            <li class="nav-item" role="presentation"><button class="nav-link" id="tab-btn-time" data-bs-toggle="tab" data-bs-target="#tab-time" type="button" role="tab" aria-controls="tab-time" aria-selected="false">Time <span class="tab-count">{{ time_entries|length }}</span></button></li>
+            <li class="nav-item" role="presentation"><button class="nav-link" id="tab-btn-time" data-bs-toggle="tab" data-bs-target="#tab-time" type="button" role="tab" aria-controls="tab-time" aria-selected="false">Time <span class="tab-count">{{ time_entry_count }}</span></button></li>
             <li class="nav-item" role="presentation"><button class="nav-link" id="tab-btn-payments" data-bs-toggle="tab" data-bs-target="#tab-payments" type="button" role="tab" aria-controls="tab-payments" aria-selected="false">Payments <span class="tab-count">{{ payments|length }}</span></button></li>
             <li class="nav-item" role="presentation"><button class="nav-link" id="tab-btn-credits" data-bs-toggle="tab" data-bs-target="#tab-credits" type="button" role="tab" aria-controls="tab-credits" aria-selected="false">Credits <span class="tab-count">{{ credits|length }}</span></button></li>
             <li class="nav-item" role="presentation"><button class="nav-link" id="tab-btn-notes" data-bs-toggle="tab" data-bs-target="#tab-notes" type="button" role="tab" aria-controls="tab-notes" aria-selected="false">Notes <span class="tab-count">{{ notes|length }}</span></button></li>
@@ -85,6 +85,7 @@
             </div>
 
             <div class="tab-pane fade" id="tab-time" role="tabpanel" aria-labelledby="tab-btn-time" tabindex="0">
+                {% if time_entries_truncated %}<p class="access-note">Showing the latest {{ recent_time_entry_limit }} of {{ time_entry_count }} time entries. Hours logged in Summary includes all completed entries.</p>{% endif %}
                 {% for entry in time_entries %}
                 <div class="detail-row">
                     <span><strong>{{ entry.project.number }} · {{ entry.project.name }}</strong><small>{{ entry.start_time|date:'M j, Y g:i a' }}{% if entry.description %} · {{ entry.description }}{% endif %}</small></span>

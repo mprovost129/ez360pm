@@ -81,11 +81,13 @@ class ClientDetailView(LoginRequiredMixin, CompanyScopedQuerysetMixin, DetailVie
             .select_related("project")
             .order_by("-issue_date", "-number")
         )
-        time_entries = (
+        client_time_entries = (
             TimeEntry.objects.filter(company=company, project__client=client)
             .select_related("project", "user")
-            .order_by("-start_time")[:RECENT_TIME_ENTRY_LIMIT]
+            .order_by("-start_time")
         )
+        time_entry_count = client_time_entries.count()
+        time_entries = list(client_time_entries[:RECENT_TIME_ENTRY_LIMIT])
         payments = (
             Payment.objects.filter(document__company=company, document__project__client=client)
             .select_related("document", "document__project")
@@ -134,6 +136,9 @@ class ClientDetailView(LoginRequiredMixin, CompanyScopedQuerysetMixin, DetailVie
             invoices=invoices,
             proposals=proposals,
             time_entries=time_entries,
+            time_entry_count=time_entry_count,
+            time_entries_truncated=time_entry_count > len(time_entries),
+            recent_time_entry_limit=RECENT_TIME_ENTRY_LIMIT,
             payments=payments,
             credits=credits,
             notes=notes,
