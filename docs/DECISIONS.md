@@ -13,7 +13,7 @@ locked decision requires an explicit update to the product specification.
 | One Document model for proposals and invoices | shared lines, totals, preview, PDF, email, and public mechanics |
 | Payment is the only representation of received money | no mark-paid shortcut; revenue sums Payment rows |
 | Running timer is a persisted TimeEntry | it survives browser/server lifecycle and only one may run per user |
-| All projects are timed | flat-fee time supports profitability but is not billed as hourly work |
+| All projects are timed | fixed-fee time supports profitability but is not billed as hourly work |
 | Retainers are linked credits, not negative line items | tax and accounting trail remain explicit |
 | Sent documents are preserved | withdraw proposals, void invoices, delete drafts only |
 | Overdue and balances are derived | they cannot drift from due dates, totals, or payments |

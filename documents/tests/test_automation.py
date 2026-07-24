@@ -163,6 +163,23 @@ class DeliveryAndStripeTests(TestCase):
         self.assertEqual(delivery.error_code, "runtimeerror")
         self.assertNotIn("credential", delivery.error_code)
 
+    def test_provider_timeout_is_recorded_as_a_safe_delivery_failure(self):
+        invoice = self.make_invoice()
+        with patch(
+            "documents.delivery_services.EmailMultiAlternatives.send",
+            side_effect=TimeoutError("SMTP connection timed out"),
+        ):
+            delivery = send_document_email(
+                document=invoice,
+                recipient_name="Alex Smith",
+                recipient_email="alex@example.com",
+                document_url="https://app.example.com/d/token/",
+            )
+
+        self.assertEqual(delivery.status, DocumentDelivery.Status.FAILED)
+        self.assertEqual(delivery.error_code, "timeouterror")
+        self.assertIn("could not be reached", delivery.failure_message)
+
     def test_send_view_prefills_contact_and_shows_delivery_history(self):
         proposal = self.make_proposal()
 

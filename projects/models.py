@@ -23,7 +23,7 @@ class Project(CompanyOwnedModel):
 
     class BillingType(models.TextChoices):
         HOURLY = "hourly", "Hourly"
-        FLAT_FEE = "flat_fee", "Flat fee"
+        FLAT_FEE = "flat_fee", "Fixed fee"
 
     client = models.ForeignKey(
         Client,
@@ -110,9 +110,9 @@ class Project(CompanyOwnedModel):
                 errors["fixed_fee"] = "Hourly projects cannot have a fixed fee."
         elif self.billing_type == self.BillingType.FLAT_FEE:
             if self.fixed_fee is None:
-                errors["fixed_fee"] = "Flat-fee projects require a fixed fee."
+                errors["fixed_fee"] = "Fixed-fee projects require a fixed fee."
             if self.hourly_rate is not None:
-                errors["hourly_rate"] = "Flat-fee projects cannot have an hourly rate."
+                errors["hourly_rate"] = "Fixed-fee projects cannot have an hourly rate."
         if errors:
             raise ValidationError(errors)
 

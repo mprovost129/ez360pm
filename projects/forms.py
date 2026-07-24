@@ -71,11 +71,12 @@ class ProjectForm(CompanyScopedModelForm):
                 self.fields["client"].help_text = "Selected from the client page."
         if not self.instance.pk and self.company.default_hourly_rate:
             self.fields["hourly_rate"].initial = self.company.default_hourly_rate
+        self.fields["fixed_fee"].label = "Fixed fee amount"
         self.fields["hourly_rate"].help_text = (
-            "Entering a fixed fee clears this rate automatically."
+            "Entering a fixed fee amount clears this rate automatically."
         )
         self.fields["fixed_fee"].help_text = (
-            "Entering a fixed fee switches billing to Flat fee."
+            "Entering an amount switches billing to Fixed fee."
         )
 
     def clean(self):
@@ -96,7 +97,7 @@ class ProjectForm(CompanyScopedModelForm):
         elif billing_type == Project.BillingType.FLAT_FEE:
             cleaned["hourly_rate"] = None
             if fixed_fee is None:
-                self.add_error("fixed_fee", "Flat-fee projects require a fee.")
+                self.add_error("fixed_fee", "Fixed-fee projects require a fee.")
         return cleaned
 
     @transaction.atomic

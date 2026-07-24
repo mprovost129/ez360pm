@@ -93,6 +93,13 @@ class ProjectViewTests(TestCase):
         self.client_record = create_client(self.company)
         self.client.force_login(self.user)
 
+    def test_project_form_uses_fixed_fee_wording_consistently(self):
+        response = self.client.get(reverse("projects:create"))
+
+        self.assertContains(response, ">Fixed fee<")
+        self.assertContains(response, "Fixed fee amount")
+        self.assertNotContains(response, ">Flat fee<")
+
     def test_project_create_flow_generates_editable_number(self):
         data = project_data()
         data["client"] = self.client_record.pk

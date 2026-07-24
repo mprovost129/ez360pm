@@ -79,10 +79,17 @@ Configure Django's email environment values:
 EMAIL_BACKEND=django.core.mail.backends.smtp.EmailBackend
 EMAIL_HOST=<provider SMTP host>
 EMAIL_PORT=587
+EMAIL_TIMEOUT=10
 EMAIL_HOST_USER=<provider username>
 EMAIL_HOST_PASSWORD=<provider credential>
 DEFAULT_FROM_EMAIL=Provost Home Design <verified-sender@example.com>
 ```
+
+Render Free web services block outbound connections to SMTP ports 25, 465, and
+587. SMTP delivery therefore requires a paid Render web service; on the Free
+plan, use an email backend/provider that sends through an HTTPS API instead.
+`EMAIL_TIMEOUT` limits an unreachable SMTP attempt so the request fails cleanly
+before Gunicorn terminates the worker.
 
 The Company email is used as Reply-To. Development may retain the console email
 backend. Every client-document or internal-acceptance attempt creates a

@@ -24,7 +24,7 @@ queries are company-scoped so multi-company SaaS features can be added later.
    `request.user.company`; bare primary-key lookups are prohibited.
 3. All received money is represented by a `Payment`. Invoice status is never a
    substitute for a payment record.
-4. All work is timed, including flat-fee projects.
+4. All work is timed, including fixed-fee projects.
 5. Sent financial documents are preserved. They are withdrawn or voided, not
    deleted.
 6. Totals, payment status, state transitions, number allocation, and Stripe
@@ -219,7 +219,7 @@ The architecture, relationships, and screen map are detailed in:
 | 3. Project is opened with billing data | Phase 1 | numbered lead project is usable from its detail page |
 | 4. Proposal is sent and publicly accepted | Phase 4 | immutable accepted proposal advances project to approved |
 | 5. Retainer invoice is paid | Phases 4-5 | manual and Stripe payments share one accounting path |
-| 6. Every work session is timed | Phase 2 | durable timer and manual entry cover hourly/flat-fee work |
+| 6. Every work session is timed | Phase 2 | durable timer and manual entry cover hourly/fixed-fee work |
 | 7. Final invoice applies retainer credit | Phase 4 | credit trail and totals reconcile on the final invoice |
 | 8. Payments become received revenue | Phases 3 and 6 | Payment rows drive status, balance, and revenue reports |
 
@@ -273,13 +273,13 @@ losing the original intake wording.
 - Add the conditional one-running-entry-per-user database constraint.
 - Build start/stop services and the persistent timer widget.
 - Add manual entry, filters, edit rules, billable flag, and project summaries.
-- Show estimated versus actual hours for both hourly and flat-fee projects.
+- Show estimated versus actual hours for both hourly and fixed-fee projects.
 - Verify timer recovery after reload, logout, browser close, and server restart.
 
 **Exit gate**
 
 The user can time real work for a week without duplicate running timers or lost
-sessions; the server timestamp remains authoritative and flat-fee time appears in
+sessions; the server timestamp remains authoritative and fixed-fee time appears in
 project performance data.
 
 ### Phase 3 - Invoices and manual payments (code complete)
@@ -289,7 +289,7 @@ project performance data.
 - Add `Document`, `LineItem`, totals calculation, numbering, invoice drafts, and
   a canonical preview/PDF rendering path.
 - Generate hourly invoice lines from uninvoiced time using all three grouping
-  options; generate the standard flat-fee line.
+  options; generate the standard fixed-fee line.
 - Implement draft line removal/deletion time-release rules.
 - Add public invoice rendering and sent/viewed/void lifecycle behavior.
 - Add `Payment`, manual check/cash/other entry, status recalculation, and
@@ -298,7 +298,7 @@ project performance data.
 
 **Exit gate**
 
-An hourly or flat-fee project can produce an accurate invoice, PDF, manual
+An hourly or fixed-fee project can produce an accurate invoice, PDF, manual
 payment, and audit-preserving paid history. Time cannot be accidentally billed
 twice through ordinary UI actions.
 
