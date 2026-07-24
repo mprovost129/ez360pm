@@ -63,23 +63,23 @@
         <h2>Description</h2>
         {% if project.description %}<p>{{ project.description|linebreaksbr }}</p>{% else %}<p class="muted">No description.</p>{% endif %}
     </section>
-    <section class="content-card detail-wide" id="project-proposals">
+    <section class="content-card detail-wide" id="project-notes">
         <h2>Notes</h2>
         {% for note in project.notes.all %}<div class="detail-row"><span>{{ note.body|linebreaksbr }}</span><small>{{ note.created_at|date:'M j, Y g:i a' }}</small></div>{% empty %}<p class="muted">No attached notes.</p>{% endfor %}
     </section>
-    <section class="content-card detail-wide" id="project-invoices">
+    <section class="content-card detail-wide" id="project-time">
         <div class="section-heading"><h2>Recent time</h2><a href="{% url 'projects:time-list' %}?project={{ project.pk }}">View all time</a></div>
         {% for entry in recent_time_entries %}
         <div class="detail-row"><span><strong>{{ entry.start_time|date:'M j, Y g:i a' }}</strong>{% if entry.description %}<small>{{ entry.description }}</small>{% endif %}</span><span>{% if entry.is_paused %}Paused{% elif entry.is_running %}Running{% else %}{{ entry.duration_hours|hours_minutes }}{% endif %}</span></div>
         {% empty %}<p class="muted">No time recorded.</p>{% endfor %}
     </section>
-    <section class="content-card detail-wide">
+    <section class="content-card detail-wide" id="project-proposals">
         <div class="section-heading"><h2>Proposals</h2><a href="{% url 'proposals:list' %}?project={{ project.pk }}">View all proposals</a></div>
-        {% for proposal in project.documents.all %}{% if proposal.doc_type == 'proposal' %}<a class="item-row" href="{% url 'proposals:detail' proposal.pk %}"><span><strong>{{ proposal.number }}</strong><small>{{ proposal.get_status_display }} · ${{ proposal.total }}</small></span><i class="bi bi-chevron-right" aria-hidden="true"></i></a>{% endif %}{% empty %}<p class="muted">No proposals.</p>{% endfor %}
+        {% for proposal in proposals %}<a class="item-row" href="{% url 'proposals:detail' proposal.pk %}"><span><strong>{{ proposal.number }}</strong><small>{{ proposal.get_status_display }} · ${{ proposal.total }}</small></span><i class="bi bi-chevron-right" aria-hidden="true"></i></a>{% empty %}<p class="muted">No proposals.</p>{% endfor %}
     </section>
-    <section class="content-card detail-wide">
+    <section class="content-card detail-wide" id="project-invoices">
         <div class="section-heading"><h2>Invoices</h2><a href="{% url 'documents:invoice-list' %}?project={{ project.pk }}">View all invoices</a></div>
-        {% for invoice in project.documents.all %}{% if invoice.doc_type == 'invoice' %}<a class="item-row" href="{% url 'documents:invoice-detail' invoice.pk %}"><span><strong>{{ invoice.number }}</strong><small>{{ invoice.get_status_display }} · ${{ invoice.total }}</small></span><i class="bi bi-chevron-right" aria-hidden="true"></i></a>{% endif %}{% empty %}<p class="muted">No invoices.</p>{% endfor %}
+        {% for invoice in invoices %}<a class="item-row" href="{% url 'documents:invoice-detail' invoice.pk %}"><span><strong>{{ invoice.number }}</strong><small>{{ invoice.get_status_display }} · ${{ invoice.total }}</small></span><i class="bi bi-chevron-right" aria-hidden="true"></i></a>{% empty %}<p class="muted">No invoices.</p>{% endfor %}
     </section>
 </div>
 {% endblock %}

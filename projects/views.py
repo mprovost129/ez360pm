@@ -75,6 +75,13 @@ class ProjectDetailView(LoginRequiredMixin, CompanyScopedQuerysetMixin, DetailVi
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+        documents = list(self.object.documents.all())
+        context["proposals"] = [
+            document for document in documents if document.doc_type == "proposal"
+        ]
+        context["invoices"] = [
+            document for document in documents if document.doc_type == "invoice"
+        ]
         context["recent_time_entries"] = self.object.time_entries.filter(
             user=self.request.user
         )[:10]

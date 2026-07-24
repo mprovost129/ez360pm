@@ -173,6 +173,11 @@ The architecture, relationships, and screen map are detailed in:
   draft without copying lifecycle or payment history.
 - [x] Group project-page actions by workflow stage so the most likely next
   action is prominent and secondary actions remain available.
+- [x] Correct the project workflow anchors so proposal and retainer actions land
+  on their actual document sections instead of Notes or Recent time.
+- [x] Render project proposals and invoices as independent collections so each
+  section retains an accurate empty state when only the other document type
+  exists.
 
 ### Workflow traceability
 

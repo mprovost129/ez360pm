@@ -7,6 +7,7 @@ from django.urls import reverse
 
 from accounts.models import Company, User
 from clients.tests.test_clients import create_client
+from documents.models import Document
 from projects.models import Project
 from projects.services import allocate_project_number, create_project
 from projects.time_services import start_timer
@@ -183,6 +184,53 @@ class ProjectViewTests(TestCase):
         self.assertContains(response, "Recommended next step")
         self.assertContains(response, "Prepare the customer proposal")
         self.assertContains(response, "More project actions")
+        self.assertContains(response, 'href="#project-proposals"')
+        self.assertContains(response, 'id="project-proposals"')
+
+    def test_project_document_sections_have_independent_empty_states(self):
+        project = create_project(
+            company=self.company,
+            client=self.client_record,
+            project_data=project_data(number="DOCUMENT-SECTIONS"),
+        )
+        proposal = Document.objects.create(
+            company=self.company,
+            project=project,
+            doc_type=Document.Type.PROPOSAL,
+            invoice_kind="",
+            number="P-SECTION",
+        )
+
+        response = self.client.get(reverse("projects:detail", args=(project.pk,)))
+
+        self.assertEqual(response.context["proposals"], [proposal])
+        self.assertEqual(response.context["invoices"], [])
+        self.assertContains(response, "P-SECTION")
+        self.assertContains(response, "No invoices.")
+        self.assertNotContains(response, "No proposals.")
+
+    def test_review_retainer_targets_the_invoice_section(self):
+        project = create_project(
+            company=self.company,
+            client=self.client_record,
+            project_data=project_data(number="RETAINER-ANCHOR"),
+        )
+        project.status = Project.Status.APPROVED
+        project.save(update_fields=["status", "updated_at"])
+        Document.objects.create(
+            company=self.company,
+            project=project,
+            doc_type=Document.Type.INVOICE,
+            invoice_kind=Document.InvoiceKind.RETAINER,
+            number="I-RETAINER",
+            due_date=date(2026, 8, 22),
+        )
+
+        response = self.client.get(reverse("projects:detail", args=(project.pk,)))
+
+        self.assertContains(response, "Review retainer")
+        self.assertContains(response, 'href="#project-invoices"')
+        self.assertContains(response, 'id="project-invoices"')
 
     def test_status_is_managed_on_edit_but_new_projects_still_start_as_leads(self):
         project = create_project(
