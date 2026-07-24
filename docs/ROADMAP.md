@@ -56,25 +56,32 @@ The architecture, relationships, and screen map are detailed in:
 
 ## Delivery map
 
-### Implementation status - 2026-07-21
+### V1 status - 2026-07-24
 
-- **Phases 0-6 code: complete and tested.** The account, isolation,
+- **Phases 0-7 code: complete and tested.** The account, isolation,
   intake, client/contact, project, timer/time-entry, invoice, proposal,
   acceptance, retainer, credit, manual/Stripe payment, email delivery, webhook,
   public rendering/PDF, dashboard, revenue, outstanding-balance, settings,
-  command, and health tests pass on PostgreSQL. Lint, dependency, Django system
-  checks, migration-drift checks, and the deployment check pass.
-- **Phase 0 operations: pending.** Bootstrap the real owner with an environment-
-  supplied password and deploy the authenticated shell.
-- **Phase 7: in progress.** The launch baseline now includes a read-only data
+  command, health, usability-hardening, and regression tests pass on PostgreSQL.
+  Lint, Django system checks, migration-drift checks, the deployment check, and
+  the read-only data audit pass.
+- **Initial Render deployment: complete and in real use.** The authenticated
+  application, owner access, database, static assets, media storage, email,
+  public documents, and Stripe workflow have been exercised from the deployed
+  environment. The release command applies migrations and blocks startup when
+  deployment or data-audit gates fail.
+- **Phase 7 operational validation: in progress.** The launch baseline includes
+  a read-only data
   audit, machine-readable monitoring output, backup/restore and webhook replay
   drills, secret-safe/non-root container builds, release security gates,
   proxy-aware HTTPS, PostgreSQL TLS/persistent-connection controls, stdout
   logging, private/no-store public-document responses, print styling, an
   accessibility skip link, and a privacy-safe real-use issue log.
-  Evidence-driven product hardening still requires production usage.
-- **Next milestone:** deploy, complete the first restore/replay drills, and log
-  recurring workflow friction during real use.
+  The remaining V1 evidence is provider-level rather than application code:
+  complete the first isolated backup restore and Stripe webhook replay drills,
+  then keep logging recurring friction during real use.
+- **Next milestone:** freeze speculative V1 feature work, complete the first
+  restore/replay drills, and prioritize only evidence from the real-use log.
 
 ### Current Phase 7 backlog - 2026-07-23
 
