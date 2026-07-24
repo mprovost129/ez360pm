@@ -15,6 +15,7 @@ from django.views.generic import (
     UpdateView,
 )
 
+from clients.models import Client
 from core.mixins import CompanyScopedQuerysetMixin
 
 from .forms import ProjectEditForm, ProjectForm
@@ -115,7 +116,18 @@ class ProjectCreateView(LoginRequiredMixin, CompanyFormMixin, CreateView):
         initial = super().get_initial()
         client_id = self.request.GET.get("client")
         if client_id:
-            initial["client"] = client_id
+            client = Client.objects.for_company(self.request.user.company).filter(
+                pk=client_id
+            ).first()
+            if client:
+                initial.update(
+                    client=client.pk,
+                    address_1=client.billing_address_1,
+                    address_2=client.billing_address_2,
+                    city=client.billing_city,
+                    state=client.billing_state,
+                    postal_code=client.billing_postal_code,
+                )
         return initial
 
     def form_valid(self, form):

@@ -144,6 +144,61 @@ class ProjectViewTests(TestCase):
         self.assertContains(response, "Select a valid choice")
         self.assertFalse(Project.objects.exists())
 
+    def test_project_creation_from_client_locks_context_and_prefills_address(self):
+        self.client_record.billing_address_1 = "20 Oak Street"
+        self.client_record.billing_address_2 = "Suite 2"
+        self.client_record.billing_city = "Richmond"
+        self.client_record.billing_state = "VA"
+        self.client_record.billing_postal_code = "23220"
+        self.client_record.save(
+            update_fields=[
+                "billing_address_1",
+                "billing_address_2",
+                "billing_city",
+                "billing_state",
+                "billing_postal_code",
+            ]
+        )
+        other_client = create_client(
+            self.company,
+            company_name="Different Client",
+            last_name="Different",
+        )
+        create_url = (
+            f"{reverse('projects:create')}?client={self.client_record.pk}"
+        )
+
+        get_response = self.client.get(create_url)
+        form = get_response.context["form"]
+
+        self.assertTrue(form.fields["client"].disabled)
+        self.assertEqual(form.fields["client"].initial, self.client_record)
+        self.assertEqual(form.initial["address_1"], "20 Oak Street")
+        self.assertEqual(form.initial["address_2"], "Suite 2")
+        self.assertEqual(form.initial["city"], "Richmond")
+        self.assertContains(get_response, "Selected from the client page")
+
+        data = project_data(number="LOCKED-CLIENT")
+        data.update(client=other_client.pk, fixed_fee="")
+        post_response = self.client.post(create_url, data)
+
+        project = Project.objects.get(number="LOCKED-CLIENT")
+        self.assertRedirects(
+            post_response,
+            reverse("projects:detail", args=(project.pk,)),
+        )
+        self.assertEqual(project.client, self.client_record)
+
+    def test_invalid_client_creation_context_does_not_lock_the_form(self):
+        hidden_client = create_client(self.other_company, company_name="Hidden Client")
+
+        response = self.client.get(
+            reverse("projects:create"),
+            {"client": hidden_client.pk},
+        )
+
+        self.assertFalse(response.context["form"].fields["client"].disabled)
+
     def test_other_company_project_is_not_retrievable(self):
         other_client = create_client(self.other_company)
         project = create_project(

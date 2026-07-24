@@ -199,6 +199,9 @@ The architecture, relationships, and screen map are detailed in:
 - [x] Normalize invalid or obsolete Project and Proposal status parameters to
   All so the visible active filter, search form, and unfiltered results cannot
   disagree or keep propagating a stale status value.
+- [x] Preserve Client context when New project is launched from a client: lock
+  the company-scoped client selection and prefill its billing address as an
+  editable project-site starting point.
 
 ### Workflow traceability
 

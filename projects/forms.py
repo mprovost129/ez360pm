@@ -62,6 +62,13 @@ class ProjectForm(CompanyScopedModelForm):
         self.fields["client"].queryset = Client.objects.for_company(
             self.company
         ).ordered_for_list()
+        client_id = getattr(self.initial.get("client"), "pk", self.initial.get("client"))
+        if not self.instance.pk and client_id:
+            locked_client = self.fields["client"].queryset.filter(pk=client_id).first()
+            if locked_client:
+                self.fields["client"].initial = locked_client
+                self.fields["client"].disabled = True
+                self.fields["client"].help_text = "Selected from the client page."
         if not self.instance.pk and self.company.default_hourly_rate:
             self.fields["hourly_rate"].initial = self.company.default_hourly_rate
         self.fields["hourly_rate"].help_text = (
