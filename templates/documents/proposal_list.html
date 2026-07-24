@@ -11,15 +11,15 @@
     {% if request.GET.status %}<input type="hidden" name="status" value="{{ request.GET.status }}">{% endif %}
     {% if request.GET.project %}<input type="hidden" name="project" value="{{ request.GET.project }}">{% endif %}
     <div class="form-field"><label for="proposal-search">Search</label><input id="proposal-search" name="q" type="search" value="{{ request.GET.q }}" placeholder="Proposal, project, or customer"></div>
-    <button class="btn btn-light" type="submit">Search</button>{% if request.GET.q %}<a class="btn btn-link" href="{% url 'proposals:list' %}">Clear</a>{% endif %}
+    <button class="btn btn-light" type="submit">Search</button>{% if request.GET.q %}<a class="btn btn-link" href="{% url 'proposals:list' %}{% querystring q=None page=None %}">Clear search</a>{% endif %}
 </form>
 <nav class="filter-links" aria-label="Proposal status">
-    <a href="{% url 'proposals:list' %}{% if request.GET.q %}?q={{ request.GET.q|urlencode }}{% endif %}">All</a>
-    <a href="?status=draft{% if request.GET.q %}&amp;q={{ request.GET.q|urlencode }}{% endif %}">Estimates / Drafts</a>
-    <a href="?status=sent{% if request.GET.q %}&amp;q={{ request.GET.q|urlencode }}{% endif %}">Sent</a>
-    <a href="?status=viewed{% if request.GET.q %}&amp;q={{ request.GET.q|urlencode }}{% endif %}">Link opened</a>
-    <a href="?status=accepted{% if request.GET.q %}&amp;q={{ request.GET.q|urlencode }}{% endif %}">Accepted</a>
-    <a href="?status=declined{% if request.GET.q %}&amp;q={{ request.GET.q|urlencode }}{% endif %}">Declined</a>
+    <a href="{% url 'proposals:list' %}{% querystring status=None page=None %}"{% if not request.GET.status %} class="is-active" aria-current="page"{% endif %}>All</a>
+    <a href="{% url 'proposals:list' %}{% querystring status='draft' page=None %}"{% if request.GET.status == 'draft' %} class="is-active" aria-current="page"{% endif %}>Estimates / Drafts</a>
+    <a href="{% url 'proposals:list' %}{% querystring status='sent' page=None %}"{% if request.GET.status == 'sent' %} class="is-active" aria-current="page"{% endif %}>Sent</a>
+    <a href="{% url 'proposals:list' %}{% querystring status='viewed' page=None %}"{% if request.GET.status == 'viewed' %} class="is-active" aria-current="page"{% endif %}>Link opened</a>
+    <a href="{% url 'proposals:list' %}{% querystring status='accepted' page=None %}"{% if request.GET.status == 'accepted' %} class="is-active" aria-current="page"{% endif %}>Accepted</a>
+    <a href="{% url 'proposals:list' %}{% querystring status='declined' page=None %}"{% if request.GET.status == 'declined' %} class="is-active" aria-current="page"{% endif %}>Declined</a>
 </nav>
 <section class="content-card item-list">
     {% for proposal in proposals %}

@@ -172,6 +172,34 @@ class ProjectViewTests(TestCase):
 
         self.assertEqual(list(response.context["projects"]), [visible])
 
+    def test_project_status_filters_preserve_search_and_mark_the_active_view(self):
+        visible = create_project(
+            company=self.company,
+            client=self.client_record,
+            project_data=project_data(number="FILTER-42", name="Porch addition"),
+        )
+        visible.status = Project.Status.ACTIVE
+        visible.save(update_fields=["status", "updated_at"])
+
+        response = self.client.get(
+            reverse("projects:list"),
+            {"q": "Porch", "status": Project.Status.ACTIVE},
+        )
+
+        self.assertEqual(list(response.context["projects"]), [visible])
+        self.assertContains(
+            response,
+            f'href="{reverse("projects:list")}?q=Porch&amp;status=lead"',
+        )
+        self.assertContains(
+            response,
+            f'href="{reverse("projects:list")}?status=active">Clear search</a>',
+        )
+        self.assertContains(
+            response,
+            'class="is-active" aria-current="page">Active</a>',
+        )
+
     def test_project_detail_prioritizes_the_next_workflow_action(self):
         project = create_project(
             company=self.company,

@@ -410,6 +410,23 @@ class InvoiceViewTests(TestCase):
 
         self.assertEqual(list(response.context["invoices"]), [invoice])
 
+    def test_outstanding_filter_marks_the_active_view(self):
+        invoice = self.make_invoice()
+        issue_document(document=invoice)
+        invoice.due_date = timezone.localdate() - timedelta(days=1)
+        invoice.save(update_fields=["due_date", "updated_at"])
+
+        response = self.client.get(
+            reverse("documents:outstanding-list"),
+            {"overdue": "1"},
+        )
+
+        self.assertEqual(list(response.context["invoices"]), [invoice])
+        self.assertContains(
+            response,
+            'class="is-active" aria-current="page">Overdue only</a>',
+        )
+
     def test_invoice_line_can_save_and_return_to_add_another(self):
         invoice = self.make_invoice()
 

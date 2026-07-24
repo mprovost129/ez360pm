@@ -178,6 +178,10 @@ The architecture, relationships, and screen map are detailed in:
 - [x] Render project proposals and invoices as independent collections so each
   section retains an accurate empty state when only the other document type
   exists.
+- [x] Preserve the originating project and search text while switching proposal
+  status filters or clearing a search, avoiding a jump back to all projects.
+- [x] Give Project, Proposal, and Outstanding Invoice filters a consistent,
+  accessible active state and reset pagination whenever the filter changes.
 
 ### Workflow traceability
 

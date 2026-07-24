@@ -335,6 +335,34 @@ class ProposalWorkflowTests(TestCase):
 
         self.assertEqual(list(response.context["proposals"]), [proposal])
 
+    def test_proposal_status_filters_preserve_project_and_search_context(self):
+        proposal = self.make_proposal()
+
+        response = self.client.get(
+            reverse("proposals:list"),
+            {
+                "project": self.project.pk,
+                "q": self.project.number,
+                "status": Document.Status.DRAFT,
+            },
+        )
+
+        self.assertEqual(list(response.context["proposals"]), [proposal])
+        self.assertContains(
+            response,
+            f'href="{reverse("proposals:list")}?project={self.project.pk}'
+            f'&amp;q={self.project.number}&amp;status=accepted"',
+        )
+        self.assertContains(
+            response,
+            f'href="{reverse("proposals:list")}?project={self.project.pk}'
+            '&amp;status=draft">Clear search</a>',
+        )
+        self.assertContains(
+            response,
+            'class="is-active" aria-current="page">Estimates / Drafts</a>',
+        )
+
     def test_draft_proposal_sections_can_be_reordered(self):
         proposal = self.make_proposal()
         save_proposal_section(proposal=proposal, heading="First", body="One")
