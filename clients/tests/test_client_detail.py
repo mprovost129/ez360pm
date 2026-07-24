@@ -109,6 +109,10 @@ class ClientDetailConnectedInfoTests(TestCase):
         self.assertContains(response, "Site visit")
         self.assertContains(response, "Called about timeline.")
         self.assertContains(response, "$100.00")
+        self.assertContains(response, "data-client-tabs")
+        self.assertContains(response, 'data-bs-target="#tab-invoices"')
+        self.assertContains(response, 'data-bs-target="#tab-time"')
+        self.assertContains(response, 'data-bs-target="#tab-summary"')
 
     def test_detail_page_does_not_leak_another_companys_data(self):
         make_final_invoice(company=self.company, project=self.project)

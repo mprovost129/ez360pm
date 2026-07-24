@@ -185,6 +185,9 @@ The architecture, relationships, and screen map are detailed in:
 - [x] Keep the Client Time tab fast with its latest-25 limit while showing the
   full time-entry count and clearly explaining when older entries are omitted;
   retain all completed time in the client summary total.
+- [x] Preserve the selected Client detail tab in the URL hash and restore it on
+  reload, allowing direct links to Projects, Invoices, Proposals, Time,
+  Payments, Credits, Notes, or Summary without resetting to Projects.
 
 ### Workflow traceability
 

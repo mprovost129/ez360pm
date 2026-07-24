@@ -232,3 +232,38 @@ initializeLineItemPreviews();
 initializeTimeSelection();
 initializeRetainerPreview();
 initializeMaximumRetainerCredit();
+
+function initializeClientTabs() {
+    const tabList = document.querySelector("[data-client-tabs]");
+    const Tab = window.bootstrap?.Tab;
+    if (!tabList || !Tab) return;
+
+    const triggers = Array.from(
+        tabList.querySelectorAll('[data-bs-toggle="tab"][data-bs-target^="#tab-"]'),
+    );
+    if (!triggers.length) return;
+
+    const showHashTab = () => {
+        const trigger = triggers.find(
+            (candidate) => candidate.getAttribute("data-bs-target") === window.location.hash,
+        );
+        if (trigger) Tab.getOrCreateInstance(trigger).show();
+    };
+
+    triggers.forEach((trigger) => {
+        trigger.addEventListener("shown.bs.tab", () => {
+            const target = trigger.getAttribute("data-bs-target");
+            if (!target || window.location.hash === target) return;
+            window.history.replaceState(
+                null,
+                "",
+                `${window.location.pathname}${window.location.search}${target}`,
+            );
+        });
+    });
+
+    window.addEventListener("hashchange", showHashTab);
+    showHashTab();
+}
+
+initializeClientTabs();

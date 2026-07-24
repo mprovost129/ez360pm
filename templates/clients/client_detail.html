@@ -46,7 +46,7 @@
     </section>
 
     <section class="content-card detail-wide client-tabs">
-        <ul class="nav nav-tabs" id="client-tabs" role="tablist">
+        <ul class="nav nav-tabs" id="client-tabs" role="tablist" data-client-tabs>
             <li class="nav-item" role="presentation"><button class="nav-link active" id="tab-btn-projects" data-bs-toggle="tab" data-bs-target="#tab-projects" type="button" role="tab" aria-controls="tab-projects" aria-selected="true">Projects <span class="tab-count">{{ client.projects.all|length }}</span></button></li>
             <li class="nav-item" role="presentation"><button class="nav-link" id="tab-btn-invoices" data-bs-toggle="tab" data-bs-target="#tab-invoices" type="button" role="tab" aria-controls="tab-invoices" aria-selected="false">Invoices <span class="tab-count">{{ invoices|length }}</span></button></li>
             <li class="nav-item" role="presentation"><button class="nav-link" id="tab-btn-proposals" data-bs-toggle="tab" data-bs-target="#tab-proposals" type="button" role="tab" aria-controls="tab-proposals" aria-selected="false">Proposals <span class="tab-count">{{ proposals|length }}</span></button></li>
