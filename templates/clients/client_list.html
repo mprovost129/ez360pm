@@ -10,7 +10,7 @@
 
 <form method="get" class="content-card filter-bar">
     <div class="form-field"><label for="client-search">Search</label><input id="client-search" name="q" type="search" value="{{ request.GET.q }}" placeholder="Company, contact, email, or phone"></div>
-    <button class="btn btn-light" type="submit">Search</button>{% if request.GET.q %}<a class="btn btn-link" href="{% url 'clients:list' %}">Clear</a>{% endif %}
+    <button class="btn btn-light" type="submit">Search</button>{% if request.GET.q %}<a class="btn btn-link" href="{% url 'clients:list' %}">Clear search</a>{% endif %}
 </form>
 
 <section class="content-card">
@@ -27,7 +27,11 @@
         {% endfor %}
     </div>
     {% else %}
+    {% if request.GET.q %}
+    <div class="empty-state">No clients match “{{ request.GET.q }}”. <a href="{% url 'clients:list' %}">Clear search</a></div>
+    {% else %}
     <div class="empty-state">No clients yet. Create the first client from an intake note or here.</div>
+    {% endif %}
     {% endif %}
 </section>
 {% include 'shared/_pagination.html' %}

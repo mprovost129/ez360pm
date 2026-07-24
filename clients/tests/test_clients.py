@@ -123,3 +123,12 @@ class ClientViewTests(TestCase):
         response = self.client.get(reverse("clients:list"), {"q": "Taylor"})
 
         self.assertEqual(list(response.context["clients"]), [visible])
+
+    def test_client_search_empty_state_does_not_claim_there_are_no_clients(self):
+        create_client(self.company, company_name="Taylor Household")
+
+        response = self.client.get(reverse("clients:list"), {"q": "No match"})
+
+        self.assertContains(response, "No clients match")
+        self.assertContains(response, "Clear search")
+        self.assertNotContains(response, "No clients yet")

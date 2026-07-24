@@ -194,6 +194,8 @@ The architecture, relationships, and screen map are detailed in:
 - [x] Make Show archived on Intake Notes display archived notes only, with a
   matching heading and no open-note or cross-company records mixed into the
   archive view.
+- [x] Distinguish empty Client and Project accounts from searches or status
+  filters with no matches, and provide a clear way back to the full list.
 
 ### Workflow traceability
 

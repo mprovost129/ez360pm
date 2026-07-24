@@ -172,6 +172,22 @@ class ProjectViewTests(TestCase):
 
         self.assertEqual(list(response.context["projects"]), [visible])
 
+    def test_project_filter_empty_state_does_not_claim_there_are_no_projects(self):
+        create_project(
+            company=self.company,
+            client=self.client_record,
+            project_data=project_data(number="EXISTS-42", name="Existing project"),
+        )
+
+        response = self.client.get(
+            reverse("projects:list"),
+            {"q": "No match", "status": Project.Status.ACTIVE},
+        )
+
+        self.assertContains(response, "No projects match this view")
+        self.assertContains(response, "Clear filters")
+        self.assertNotContains(response, "No projects yet")
+
     def test_project_status_filters_preserve_search_and_mark_the_active_view(self):
         visible = create_project(
             company=self.company,

@@ -19,7 +19,7 @@
         <span><strong>{{ project.number }} · {{ project.name }}</strong><small>{{ project.client.display_name }} · {{ project.get_status_display }} · {{ project.get_billing_type_display }}</small></span>
         <i class="bi bi-chevron-right" aria-hidden="true"></i>
     </a>
-    {% empty %}<div class="empty-state">No projects yet.</div>{% endfor %}
+    {% empty %}<div class="empty-state">{% if request.GET.q or selected_status %}No projects match this view. <a href="{% url 'projects:list' %}">Clear filters</a>{% else %}No projects yet. Create a project from a client or here.{% endif %}</div>{% endfor %}
 </section>
 {% include 'shared/_pagination.html' %}
 {% endblock %}
