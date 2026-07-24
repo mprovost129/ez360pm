@@ -81,6 +81,35 @@ class NoteWorkflowTests(TestCase):
 
         self.assertRedirects(response, reverse("intake:list"))
 
+    def test_open_and_archived_note_views_are_separate_and_company_scoped(self):
+        open_note = Note.objects.create(company=self.company, body="Open inquiry")
+        archived_note = Note.objects.create(
+            company=self.company,
+            body="Archived inquiry",
+            is_archived=True,
+        )
+        Note.objects.create(
+            company=self.other_company,
+            body="Other company archive",
+            is_archived=True,
+        )
+
+        open_response = self.client.get(reverse("intake:list"))
+        archived_response = self.client.get(
+            reverse("intake:list"),
+            {"archived": "1"},
+        )
+
+        self.assertEqual(list(open_response.context["notes"]), [open_note])
+        self.assertContains(open_response, "Intake notes")
+        self.assertContains(open_response, "Show archived")
+        self.assertNotContains(open_response, "Archived inquiry")
+        self.assertEqual(list(archived_response.context["notes"]), [archived_note])
+        self.assertContains(archived_response, "Archived notes")
+        self.assertContains(archived_response, "Show open")
+        self.assertNotContains(archived_response, "Open inquiry")
+        self.assertNotContains(archived_response, "Other company archive")
+
     def test_project_attachment_derives_client(self):
         client_record = create_client(self.company)
         project = create_project(

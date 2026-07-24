@@ -51,9 +51,8 @@ class NoteListView(LoginRequiredMixin, CompanyScopedQuerysetMixin, ListView):
 
     def get_queryset(self):
         queryset = super().get_queryset().select_related("client", "project")
-        if self.request.GET.get("archived") != "1":
-            queryset = queryset.filter(is_archived=False)
-        return queryset
+        show_archived = self.request.GET.get("archived") == "1"
+        return queryset.filter(is_archived=show_archived)
 
 
 class NoteUpdateView(

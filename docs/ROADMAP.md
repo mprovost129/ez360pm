@@ -191,6 +191,9 @@ The architecture, relationships, and screen map are detailed in:
 - [x] Align document filters with their real lifecycles: expose Withdrawn for
   proposals, reject invoice-only proposal filters, and remove proposal-only
   choices from the Invoice status field.
+- [x] Make Show archived on Intake Notes display archived notes only, with a
+  matching heading and no open-note or cross-company records mixed into the
+  archive view.
 
 ### Workflow traceability
 

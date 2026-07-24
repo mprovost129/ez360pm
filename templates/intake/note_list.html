@@ -4,7 +4,7 @@
 
 {% block content %}
 <div class="page-heading">
-    <h1>{% if request.GET.archived == '1' %}All notes{% else %}Intake notes{% endif %}</h1>
+    <h1>{% if request.GET.archived == '1' %}Archived notes{% else %}Intake notes{% endif %}</h1>
     {% if request.GET.archived == '1' %}<a class="btn btn-light" href="{% url 'intake:list' %}">Show open</a>{% else %}<a class="btn btn-light" href="{% url 'intake:list' %}?archived=1">Show archived</a>{% endif %}
 </div>
 <section class="content-card">
