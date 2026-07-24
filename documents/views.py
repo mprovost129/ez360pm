@@ -144,6 +144,11 @@ class InvoiceDetailView(LoginRequiredMixin, CompanyScopedQuerysetMixin, DetailVi
         context = super().get_context_data(**kwargs)
         context["show_internal_notes"] = True
         if self.object.status == Document.Status.DRAFT:
+            context["details_form"] = InvoiceEditForm(
+                company=self.request.user.company,
+                instance=self.object,
+                auto_id="id_invoice_details_%s",
+            )
             context["line_item_form"] = LineItemForm(document=self.object)
             for line in self.object.line_items.all():
                 line.edit_form = LineItemForm(
@@ -233,7 +238,10 @@ class InvoiceUpdateView(
         return kwargs
 
     def get_success_url(self):
-        return reverse("documents:invoice-detail", args=(self.object.pk,))
+        return (
+            f"{reverse('documents:invoice-detail', args=(self.object.pk,))}"
+            "#document-preview"
+        )
 
 
 class InvoiceDeleteView(LoginRequiredMixin, View):

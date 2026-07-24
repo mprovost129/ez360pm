@@ -96,11 +96,14 @@ The architecture, relationships, and screen map are detailed in:
 
 - [x] Treat a draft proposal as the internal estimate stage; clarify the UI as
   "Estimate / Draft Proposal" without introducing a duplicate Estimate model.
-- [ ] Consolidate document preparation into one proposal/invoice builder with
+- [x] Consolidate document preparation into one proposal/invoice builder with
   project/customer context, scope, pricing, terms, internal notes, totals, and
   preview visible in one workflow.
   - [x] First pass: add readiness, price/time entry, preview, and lifecycle
     actions to the existing draft detail screen.
+  - [x] Finish the workflow by embedding draft settings on both document pages,
+    embedding new scope-section entry on the proposal page, and returning each
+    save directly to the refreshed customer preview.
 - [x] Clarify customer-facing versus internal inputs. Rename ambiguous fields
   such as Notes, Rate, Quantity, Tax rate, Invoice kind, and Accept payments,
   with explicit help text where a mistake could reach a customer.

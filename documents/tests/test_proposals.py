@@ -258,7 +258,7 @@ class ProposalWorkflowTests(TestCase):
 
         self.assertRedirects(
             section_response,
-            reverse("proposals:detail", args=(proposal.pk,)),
+            f"{reverse('proposals:detail', args=(proposal.pk,))}#document-preview",
         )
         self.assertRedirects(
             line_response,
@@ -292,8 +292,38 @@ class ProposalWorkflowTests(TestCase):
         )
         self.assertContains(detail, "Estimate / Draft proposal")
         self.assertContains(detail, "Draft readiness")
+        self.assertContains(detail, "Estimate / proposal settings")
+        self.assertContains(detail, "Save details and review")
+        self.assertContains(detail, "Save scope section and review")
+        self.assertEqual(detail.context["details_form"].instance, proposal)
+        self.assertEqual(
+            detail.context["section_form"].initial["heading"],
+            "Scope of work",
+        )
         self.assertContains(detail, "Line amount")
         self.assertEqual(section.context["form"].initial["heading"], "Scope of work")
+
+    def test_draft_proposal_details_save_back_to_live_preview(self):
+        proposal = self.make_proposal()
+
+        response = self.client.post(
+            reverse("proposals:update", args=(proposal.pk,)),
+            {
+                "number": proposal.number,
+                "issue_date": proposal.issue_date.isoformat(),
+                "terms": "<p>Valid for 60 days.</p>",
+                "notes": "<p>Confirm structural allowance.</p>",
+            },
+        )
+
+        self.assertRedirects(
+            response,
+            f"{reverse('proposals:detail', args=(proposal.pk,))}"
+            "#document-preview",
+        )
+        proposal.refresh_from_db()
+        self.assertEqual(proposal.terms, "<p>Valid for 60 days.</p>")
+        self.assertEqual(proposal.notes, "<p>Confirm structural allowance.</p>")
 
     def test_proposal_list_searches_project_number(self):
         proposal = self.make_proposal()

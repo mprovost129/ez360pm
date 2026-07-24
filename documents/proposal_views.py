@@ -98,6 +98,15 @@ class ProposalDetailView(LoginRequiredMixin, CompanyScopedQuerysetMixin, DetailV
         context = super().get_context_data(**kwargs)
         context["show_internal_notes"] = True
         if self.object.status == Document.Status.DRAFT:
+            context["details_form"] = ProposalEditForm(
+                company=self.request.user.company,
+                instance=self.object,
+                auto_id="id_proposal_details_%s",
+            )
+            context["section_form"] = ProposalSectionForm(
+                initial={"heading": "Scope of work"},
+                auto_id="id_scope_%s",
+            )
             context["line_item_form"] = LineItemForm(document=self.object)
             for line in self.object.line_items.all():
                 line.edit_form = LineItemForm(
@@ -155,7 +164,10 @@ class ProposalUpdateView(LoginRequiredMixin, CompanyScopedQuerysetMixin, UpdateV
         return kwargs
 
     def get_success_url(self):
-        return reverse("proposals:detail", args=(self.object.pk,))
+        return (
+            f"{reverse('proposals:detail', args=(self.object.pk,))}"
+            "#document-preview"
+        )
 
 
 class ProposalDeleteView(LoginRequiredMixin, View):
@@ -218,7 +230,10 @@ class ProposalSectionView(LoginRequiredMixin, FormView):
             body=form.cleaned_data["body"],
             index=self.index,
         )
-        return redirect("proposals:detail", pk=self.proposal.pk)
+        return redirect(
+            f"{reverse('proposals:detail', args=(self.proposal.pk,))}"
+            "#document-preview"
+        )
 
 
 class ProposalSectionDeleteView(LoginRequiredMixin, View):

@@ -1,0 +1,22 @@
+<section class="content-card invoice-panel" id="document-details">
+    <div class="section-heading">
+        <div>
+            <p class="eyebrow">Draft details</p>
+            <h2>{{ editor_heading }}</h2>
+            <p class="muted">Update customer-facing terms and private notes here, then review the refreshed document below.</p>
+        </div>
+    </div>
+    <form method="post" action="{{ editor_action }}" class="structured-form" novalidate>
+        {% csrf_token %}
+        {% for hidden in details_form.hidden_fields %}{{ hidden }}{% endfor %}
+        {% for heading, fields in details_form.grouped_fields %}
+        <fieldset class="form-section form-grid">
+            <legend>{{ heading }}</legend>
+            {% for field in fields %}{% include 'shared/_form_field.html' with field=field %}{% endfor %}
+        </fieldset>
+        {% endfor %}
+        <div class="form-actions">
+            <button class="btn btn-primary" type="submit">Save details and review</button>
+        </div>
+    </form>
+</section>

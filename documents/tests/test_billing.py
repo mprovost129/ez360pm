@@ -453,7 +453,35 @@ class InvoiceViewTests(TestCase):
         self.assertContains(response, "Design development")
         self.assertContains(response, "$175.00/hr")
         self.assertContains(response, "Draft readiness")
+        self.assertContains(response, "Invoice settings")
+        self.assertContains(response, "Save details and review")
+        self.assertEqual(response.context["details_form"].instance, invoice)
         self.assertContains(response, "Save changes")
+
+    def test_draft_invoice_details_save_back_to_live_preview(self):
+        invoice = self.make_invoice()
+
+        response = self.client.post(
+            reverse("documents:invoice-update", args=(invoice.pk,)),
+            {
+                "number": invoice.number,
+                "issue_date": invoice.issue_date.isoformat(),
+                "due_date": invoice.due_date.isoformat(),
+                "terms": "Due after final delivery.",
+                "notes": "Confirm permit set before sending.",
+                "accept_payments": "on",
+            },
+        )
+
+        self.assertRedirects(
+            response,
+            f"{reverse('documents:invoice-detail', args=(invoice.pk,))}"
+            "#document-preview",
+        )
+        invoice.refresh_from_db()
+        self.assertEqual(invoice.terms, "Due after final delivery.")
+        self.assertEqual(invoice.notes, "Confirm permit set before sending.")
+        self.assertTrue(invoice.accept_payments)
 
     def test_invoice_line_can_be_edited_inside_draft_preview(self):
         invoice = self.make_invoice()
