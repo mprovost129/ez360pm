@@ -363,6 +363,32 @@ class ProposalWorkflowTests(TestCase):
             'class="is-active" aria-current="page">Estimates / Drafts</a>',
         )
 
+    def test_proposal_list_includes_withdrawn_and_ignores_invoice_only_statuses(self):
+        withdrawn = self.make_proposal()
+        issue_document(document=withdrawn)
+        withdrawn.refresh_from_db()
+        withdraw_proposal(proposal=withdrawn)
+        draft = self.make_proposal()
+
+        withdrawn_response = self.client.get(
+            reverse("proposals:list"),
+            {"status": Document.Status.WITHDRAWN},
+        )
+        invalid_response = self.client.get(
+            reverse("proposals:list"),
+            {"status": Document.Status.PAID},
+        )
+
+        self.assertEqual(list(withdrawn_response.context["proposals"]), [withdrawn])
+        self.assertContains(
+            withdrawn_response,
+            'class="is-active" aria-current="page">Withdrawn</a>',
+        )
+        self.assertCountEqual(
+            invalid_response.context["proposals"],
+            [withdrawn, draft],
+        )
+
     def test_draft_proposal_sections_can_be_reordered(self):
         proposal = self.make_proposal()
         save_proposal_section(proposal=proposal, heading="First", body="One")

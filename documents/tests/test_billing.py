@@ -410,6 +410,16 @@ class InvoiceViewTests(TestCase):
 
         self.assertEqual(list(response.context["invoices"]), [invoice])
 
+    def test_invoice_filter_only_offers_invoice_lifecycle_statuses(self):
+        response = self.client.get(reverse("documents:invoice-list"))
+
+        choices = dict(response.context["filter_form"].fields["status"].choices)
+        self.assertIn(Document.Status.PARTIALLY_PAID, choices)
+        self.assertIn(Document.Status.VOID, choices)
+        self.assertNotIn(Document.Status.ACCEPTED, choices)
+        self.assertNotIn(Document.Status.DECLINED, choices)
+        self.assertNotIn(Document.Status.WITHDRAWN, choices)
+
     def test_outstanding_filter_marks_the_active_view(self):
         invoice = self.make_invoice()
         issue_document(document=invoice)

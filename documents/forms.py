@@ -252,7 +252,8 @@ class InvoiceFilterForm(forms.Form):
     )
     status = forms.ChoiceField(
         required=False,
-        choices=[("", "All statuses")] + Document.Status.choices,
+        choices=[("", "All statuses")]
+        + Document.status_choices_for_type(Document.Type.INVOICE),
     )
     invoice_kind = forms.ChoiceField(
         required=False,

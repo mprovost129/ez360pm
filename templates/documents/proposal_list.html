@@ -15,11 +15,7 @@
 </form>
 <nav class="filter-links" aria-label="Proposal status">
     <a href="{% url 'proposals:list' %}{% querystring status=None page=None %}"{% if not request.GET.status %} class="is-active" aria-current="page"{% endif %}>All</a>
-    <a href="{% url 'proposals:list' %}{% querystring status='draft' page=None %}"{% if request.GET.status == 'draft' %} class="is-active" aria-current="page"{% endif %}>Estimates / Drafts</a>
-    <a href="{% url 'proposals:list' %}{% querystring status='sent' page=None %}"{% if request.GET.status == 'sent' %} class="is-active" aria-current="page"{% endif %}>Sent</a>
-    <a href="{% url 'proposals:list' %}{% querystring status='viewed' page=None %}"{% if request.GET.status == 'viewed' %} class="is-active" aria-current="page"{% endif %}>Link opened</a>
-    <a href="{% url 'proposals:list' %}{% querystring status='accepted' page=None %}"{% if request.GET.status == 'accepted' %} class="is-active" aria-current="page"{% endif %}>Accepted</a>
-    <a href="{% url 'proposals:list' %}{% querystring status='declined' page=None %}"{% if request.GET.status == 'declined' %} class="is-active" aria-current="page"{% endif %}>Declined</a>
+    {% for value, label in status_choices %}<a href="{% url 'proposals:list' %}{% querystring status=value page=None %}"{% if request.GET.status == value %} class="is-active" aria-current="page"{% endif %}>{{ label }}</a>{% endfor %}
 </nav>
 <section class="content-card item-list">
     {% for proposal in proposals %}

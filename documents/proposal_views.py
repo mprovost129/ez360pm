@@ -35,6 +35,15 @@ from .services import (
     move_line_item,
 )
 
+PROPOSAL_STATUS_CHOICES = [
+    (
+        value,
+        "Estimates / Drafts" if value == Document.Status.DRAFT else label,
+    )
+    for value, label in Document.status_choices_for_type(Document.Type.PROPOSAL)
+]
+PROPOSAL_STATUS_VALUES = {value for value, _label in PROPOSAL_STATUS_CHOICES}
+
 
 def scoped_proposal(request, pk, *, draft=False):
     queryset = Document.objects.for_company(request.user.company).filter(
@@ -55,7 +64,7 @@ class ProposalListView(LoginRequiredMixin, CompanyScopedQuerysetMixin, ListView)
         queryset = super().get_queryset().filter(doc_type=Document.Type.PROPOSAL)
         status = self.request.GET.get("status")
         project = self.request.GET.get("project")
-        if status in Document.Status.values:
+        if status in PROPOSAL_STATUS_VALUES:
             queryset = queryset.filter(status=status)
         if project:
             queryset = queryset.filter(project_id=project)
@@ -73,6 +82,11 @@ class ProposalListView(LoginRequiredMixin, CompanyScopedQuerysetMixin, ListView)
         return queryset.select_related("project", "project__client").prefetch_related(
             "project__client__contacts"
         )
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["status_choices"] = PROPOSAL_STATUS_CHOICES
+        return context
 
 
 class ProposalDetailView(LoginRequiredMixin, CompanyScopedQuerysetMixin, DetailView):

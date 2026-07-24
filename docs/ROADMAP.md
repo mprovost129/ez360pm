@@ -188,6 +188,9 @@ The architecture, relationships, and screen map are detailed in:
 - [x] Preserve the selected Client detail tab in the URL hash and restore it on
   reload, allowing direct links to Projects, Invoices, Proposals, Time,
   Payments, Credits, Notes, or Summary without resetting to Projects.
+- [x] Align document filters with their real lifecycles: expose Withdrawn for
+  proposals, reject invoice-only proposal filters, and remove proposal-only
+  choices from the Invoice status field.
 
 ### Workflow traceability
 

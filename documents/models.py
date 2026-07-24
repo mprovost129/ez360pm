@@ -111,6 +111,35 @@ class Document(CompanyOwnedModel):
             models.Index(fields=("company", "due_date")),
         ]
 
+    @classmethod
+    def allowed_statuses_for_type(cls, doc_type):
+        if doc_type == cls.Type.INVOICE:
+            return (
+                cls.Status.DRAFT,
+                cls.Status.SENT,
+                cls.Status.VIEWED,
+                cls.Status.PARTIALLY_PAID,
+                cls.Status.PAID,
+                cls.Status.VOID,
+            )
+        if doc_type == cls.Type.PROPOSAL:
+            return (
+                cls.Status.DRAFT,
+                cls.Status.SENT,
+                cls.Status.VIEWED,
+                cls.Status.ACCEPTED,
+                cls.Status.DECLINED,
+                cls.Status.WITHDRAWN,
+            )
+        return ()
+
+    @classmethod
+    def status_choices_for_type(cls, doc_type):
+        return [
+            (status.value, status.label)
+            for status in cls.allowed_statuses_for_type(doc_type)
+        ]
+
     def clean(self):
         super().clean()
         errors = {}
@@ -121,27 +150,12 @@ class Document(CompanyOwnedModel):
                 errors["invoice_kind"] = "Invoices require an invoice kind."
             if self.due_date is None:
                 errors["due_date"] = "Invoices require a due date."
-            allowed = {
-                self.Status.DRAFT,
-                self.Status.SENT,
-                self.Status.VIEWED,
-                self.Status.PARTIALLY_PAID,
-                self.Status.PAID,
-                self.Status.VOID,
-            }
         else:
             if self.invoice_kind:
                 errors["invoice_kind"] = "Proposals cannot have an invoice kind."
             if self.due_date is not None:
                 errors["due_date"] = "Proposals cannot have a due date."
-            allowed = {
-                self.Status.DRAFT,
-                self.Status.SENT,
-                self.Status.VIEWED,
-                self.Status.ACCEPTED,
-                self.Status.DECLINED,
-                self.Status.WITHDRAWN,
-            }
+        allowed = self.allowed_statuses_for_type(self.doc_type)
         if self.status not in allowed:
             errors["status"] = "Status is not valid for this document type."
         if self.source_proposal_id:
