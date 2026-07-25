@@ -44,10 +44,6 @@ def _safe_error_code(exc):
     return exc.__class__.__name__.lower()[:100]
 
 
-def is_adjustment_import_event(event):
-    return _event_details(event)[0] in ADJUSTMENT_IMPORT_EVENT_TYPES
-
-
 @transaction.atomic
 def record_stripe_webhook_failure(*, event, exception):
     event_type, event_id, object_id, payment_intent_id = _event_details(event)

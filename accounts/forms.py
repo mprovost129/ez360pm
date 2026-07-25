@@ -1,7 +1,13 @@
 from django import forms
+from django.contrib.auth.forms import AuthenticationForm
 from django.utils import timezone
 
 from .models import Company
+
+
+class EmailAuthenticationForm(AuthenticationForm):
+    def clean_username(self):
+        return self.cleaned_data["username"].strip().lower()
 
 
 class CompanySettingsForm(forms.ModelForm):

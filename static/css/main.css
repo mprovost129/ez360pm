@@ -286,6 +286,21 @@ button[type="submit"]:not(.btn):active {
     background: #fff;
 }
 
+.document-company-identity {
+    display: flex;
+    align-items: flex-start;
+    gap: 1rem;
+}
+
+.document-company-logo {
+    display: block;
+    width: auto;
+    max-width: 9rem;
+    height: auto;
+    max-height: 4.5rem;
+    object-fit: contain;
+}
+
 .app-layout {
     display: grid;
     grid-template-columns: 220px minmax(0, 1fr);

@@ -1,10 +1,14 @@
+import tempfile
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
+from io import BytesIO
 
 from django.core.exceptions import ValidationError
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
+from PIL import Image as PillowImage
 
 from accounts.models import Company, User
 from clients.tests.test_clients import create_client
@@ -555,6 +559,49 @@ class InvoiceViewTests(TestCase):
         invoice.refresh_from_db()
         self.assertEqual(invoice.total, Decimal("250.00"))
 
+    def test_flat_fee_pricing_check_uses_project_fee_and_cumulative_finals(self):
+        flat_project = create_project(
+            company=self.company,
+            client=self.project.client,
+            project_data=project_data(
+                number="VIEW-FLAT",
+                billing_type=Project.BillingType.FLAT_FEE,
+                hourly_rate=None,
+                fixed_fee=Decimal("2500.00"),
+            ),
+        )
+        first = create_invoice(
+            company=self.company,
+            project=flat_project,
+            invoice_data=invoice_data(),
+        )
+
+        first_response = self.client.get(
+            reverse("documents:invoice-detail", args=(first.pk,))
+        )
+
+        self.assertFalse(first_response.context["pricing_differs_from_reference"])
+        self.assertEqual(
+            first_response.context["pricing_reference_label"], "project fixed fee"
+        )
+
+        second = create_invoice(
+            company=self.company,
+            project=flat_project,
+            invoice_data=invoice_data(),
+        )
+        second_response = self.client.get(
+            reverse("documents:invoice-detail", args=(second.pk,))
+        )
+
+        self.assertTrue(second_response.context["pricing_differs_from_reference"])
+        self.assertEqual(
+            second_response.context["cumulative_final_invoice_total"],
+            Decimal("5000.00"),
+        )
+        self.assertContains(second_response, "other non-void final invoices total")
+        self.assertContains(second_response, "project fixed fee")
+
     def test_invoice_authoring_defaults_and_locks_project_context(self):
         self.company.default_invoice_due_days = 14
         self.company.default_invoice_terms = "Due after delivery."
@@ -815,6 +862,33 @@ class InvoiceViewTests(TestCase):
             )
         invoice.refresh_from_db()
         self.assertEqual(invoice.status, Document.Status.VIEWED)
+
+    def test_company_logo_appears_on_customer_invoice_and_pdf(self):
+        invoice = self.make_invoice()
+        issue_document(document=invoice)
+        image_buffer = BytesIO()
+        PillowImage.new("RGB", (120, 40), color="white").save(
+            image_buffer, format="PNG"
+        )
+
+        with tempfile.TemporaryDirectory() as media_root, self.settings(
+            MEDIA_ROOT=media_root
+        ):
+            self.company.logo = SimpleUploadedFile(
+                "company-logo.png",
+                image_buffer.getvalue(),
+                content_type="image/png",
+            )
+            self.company.save(update_fields=["logo"])
+            invoice.refresh_from_db()
+            response = self.client.get(
+                reverse("public-documents:view", args=(invoice.public_token,))
+            )
+            pdf = build_invoice_pdf(invoice)
+
+        self.assertContains(response, "company-logo.png")
+        self.assertContains(response, f'alt="{self.company.name} logo"')
+        self.assertTrue(pdf.startswith(b"%PDF"))
 
     def test_draft_public_token_returns_not_found(self):
         invoice = self.make_invoice()

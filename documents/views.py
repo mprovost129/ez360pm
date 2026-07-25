@@ -183,11 +183,52 @@ class InvoiceDetailView(LoginRequiredMixin, CompanyScopedQuerysetMixin, DetailVi
                 context["invoice_charge_total"] = (
                     self.object.subtotal + self.object.tax_total
                 )
-                context["pricing_differs_from_proposal"] = bool(
-                    accepted_proposal
-                    and accepted_proposal.accepted_total
-                    != context["invoice_charge_total"]
+                other_final_invoices = (
+                    Document.objects.for_company(self.request.user.company)
+                    .filter(
+                        project=self.object.project,
+                        doc_type=Document.Type.INVOICE,
+                        invoice_kind=Document.InvoiceKind.FINAL,
+                    )
+                    .exclude(pk=self.object.pk)
+                    .exclude(status=Document.Status.VOID)
                 )
+                context["other_final_invoice_total"] = sum(
+                    (
+                        invoice.subtotal + invoice.tax_total
+                        for invoice in other_final_invoices
+                    ),
+                    Decimal("0.00"),
+                )
+                context["cumulative_final_invoice_total"] = (
+                    context["invoice_charge_total"]
+                    + context["other_final_invoice_total"]
+                )
+                if accepted_proposal:
+                    context["pricing_reference_total"] = accepted_proposal.accepted_total
+                    context["pricing_reference_label"] = (
+                        f"accepted proposal {accepted_proposal.number}"
+                    )
+                elif (
+                    self.object.project.billing_type
+                    == self.object.project.BillingType.FLAT_FEE
+                    and self.object.project.fixed_fee is not None
+                ):
+                    context["pricing_reference_total"] = self.object.project.fixed_fee
+                    context["pricing_reference_label"] = "project fixed fee"
+                else:
+                    context["pricing_reference_total"] = None
+                    context["pricing_reference_label"] = ""
+                context["pricing_differs_from_reference"] = bool(
+                    context["pricing_reference_total"] is not None
+                    and context["pricing_reference_total"]
+                    != context["cumulative_final_invoice_total"]
+                )
+                # Retain the previous context key for saved template
+                # customizations while broadening the check beyond proposals.
+                context["pricing_differs_from_proposal"] = context[
+                    "pricing_differs_from_reference"
+                ]
         return context
 
 

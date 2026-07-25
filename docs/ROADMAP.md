@@ -68,7 +68,7 @@ The architecture, relationships, and screen map are detailed in:
 - **Initial Render deployment: complete and in real use.** The authenticated
   application, owner access, database, static assets, media storage, email,
   public documents, and Stripe workflow have been exercised from the deployed
-  environment. The release command applies migrations and blocks startup when
+  environment. The shared production startup gate applies migrations and blocks startup when
   deployment or data-audit gates fail.
 - **Phase 7 operational validation: in progress.** The launch baseline includes
   a read-only data
@@ -272,6 +272,67 @@ successful backup/restore test.
 - [x] Preserve Client context when New project is launched from a client: lock
   the company-scoped client selection and prefill its billing address as an
   editable project-site starting point.
+
+### Post-V1 code-review backlog - 2026-07-25
+
+These items came from the post-todo code, workflow, deployment, and recovery
+audit. They improve the reliability and operability of existing features; they
+do not add new product areas.
+
+#### Payment and accounting resilience
+
+- [x] Make Stripe Checkout creation idempotent for an invoice balance, reuse an
+  active session where practical, and avoid holding a database transaction open
+  during the provider request.
+- [x] Shorten the Stripe webhook acknowledgement path so provider lookups and
+  internal email delivery cannot cause otherwise-successful events to time out;
+  preserve idempotent replay and operator visibility for later work.
+- [x] Use provider event or balance-transaction dates consistently for imported
+  refunds, disputes, reversals, and fee adjustments so delayed webhook delivery
+  cannot move activity into the wrong accounting period.
+- [x] Strengthen fixed-fee final-invoice checks: fall back to the project fixed
+  fee when no accepted proposal exists and expose cumulative final-invoice
+  pricing before another invoice is issued.
+- [x] Add a recoverable retry path for failed acceptance, decline, and payment
+  notification emails while preserving the original delivery attempt.
+
+#### Deployment, access, and security resilience
+
+- [x] Use one production entrypoint for Docker and Render that runs migrations,
+  Django deployment checks, the custom deployment check, and the data audit
+  before Gunicorn starts.
+- [x] Include cache connectivity in readiness and convert public-action cache
+  failures into an explicit, logged `503` response instead of an unhandled
+  server error.
+- [x] Finish account recovery by exposing authenticated password change and the
+  email password-reset workflow, with tests and usable navigation from login and
+  settings.
+- [x] Normalize login email input so capitalization and surrounding whitespace
+  do not prevent an otherwise-valid owner login.
+- [x] Restrict Django Administration to superusers until reusable company-scoped
+  admin querysets and foreign-key choices are implemented.
+
+#### Maintenance and scale hygiene
+
+- [x] Add PostgreSQL-backed GitHub Actions for lint, tests, migration drift, and
+  deployment checks, plus automated dependency-update configuration.
+- [x] Split production and development dependencies and remove build-only tools
+  from the final production image where practical.
+- [x] Reduce `.env.example` to settings actually consumed by the application,
+  replace real-looking values with placeholders, and document `DB_SSLMODE`.
+- [x] Render the configured company logo in customer-facing proposal and invoice
+  HTML, PDFs, and delivery emails with a safe fallback when no logo exists.
+- [x] Keep internal invoice notes out of customer PDFs as well as public HTML;
+  the PDF builder no longer renders the internal-only `Document.notes` field.
+- [x] Harden CSV spreadsheet-formula neutralization for leading control
+  characters or whitespace and add regression coverage.
+- [x] Batch or bound synchronous Stripe fee reconciliation and move revenue
+  pagination/aggregation closer to the database when measured data volume makes
+  the current in-memory report expensive.
+- [x] Clarify client-level received-money summaries as gross versus net after
+  refunds and adjustments.
+- [x] Remove or connect dead recovery templates/helpers and distinguish provider
+  lookup outages from genuinely unmatched Stripe adjustment events.
 
 ### Workflow traceability
 

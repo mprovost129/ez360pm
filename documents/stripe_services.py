@@ -9,7 +9,7 @@ from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.utils import timezone
 
-from .delivery_services import send_payment_notification
+from .delivery_services import queue_payment_notification, send_payment_notification
 from .models import (
     Document,
     Payment,
@@ -46,15 +46,15 @@ def _value(source, key, default=None):
     return getattr(source, key, default)
 
 
-@transaction.atomic
 def create_checkout_session(*, invoice, success_url, cancel_url):
     invoice = (
-        Document.objects.select_for_update()
-        .select_related("company", "project", "project__client")
+        Document.objects.select_related("company", "project", "project__client")
         .get(pk=invoice.pk)
     )
     if not stripe_configuration_status()["configured"]:
         raise ValidationError("Online payments are not configured.")
+    amount_paid = invoice.amount_paid
+    outstanding_balance = max(invoice.total - amount_paid, Decimal("0.00"))
     if (
         invoice.doc_type != Document.Type.INVOICE
         or invoice.status
@@ -64,11 +64,12 @@ def create_checkout_session(*, invoice, success_url, cancel_url):
             Document.Status.PARTIALLY_PAID,
         }
         or not invoice.accept_payments
-        or invoice.outstanding_balance <= 0
+        or outstanding_balance <= 0
     ):
         raise ValidationError("This invoice is not available for online payment.")
 
-    amount_cents = int(money(invoice.outstanding_balance) * 100)
+    amount_cents = int(money(outstanding_balance) * 100)
+    paid_cents = int(money(amount_paid) * 100)
     metadata = {
         "document_id": str(invoice.pk),
         "company_id": str(invoice.company_id),
@@ -104,6 +105,12 @@ def create_checkout_session(*, invoice, success_url, cancel_url):
     return stripe.checkout.Session.create(
         **params,
         api_key=settings.STRIPE_SECRET_KEY,
+        # The same invoice balance can be submitted more than once by browser
+        # retries or multiple tabs. Stripe will return the original Session for
+        # this balance state instead of creating another payable Session.
+        idempotency_key=(
+            f"ez360pm-checkout-v1-{invoice.pk}-{amount_cents}-{paid_cents}"
+        ),
     )
 
 
@@ -236,9 +243,11 @@ def reconcile_pending_payment_fee(*, payment):
     return True
 
 
-def _fee_from_charge(charge):
+def _fee_from_charge(charge, *, allow_provider_lookup=True):
     balance_transaction = _value(charge, "balance_transaction")
     if isinstance(balance_transaction, str):
+        if not allow_provider_lookup:
+            return None
         try:
             balance_transaction = stripe.BalanceTransaction.retrieve(
                 balance_transaction,
@@ -284,9 +293,12 @@ def _payment_for_stripe_object(source):
                     charge,
                     api_key=settings.STRIPE_SECRET_KEY,
                 )
-            except stripe.StripeError:
+            except stripe.StripeError as exc:
                 logger.warning("Stripe charge lookup failed while importing adjustment")
-                return None
+                raise ValidationError(
+                    "Stripe could not resolve the adjustment's charge. Retry the event later.",
+                    code="provider_lookup_failed",
+                ) from exc
         payment_intent_id = _payment_intent_id(charge) if charge else None
     if not payment_intent_id:
         return None
@@ -327,7 +339,7 @@ def _record_refund(refund):
     )
 
 
-def _record_dispute(dispute, *, reversal=False):
+def _record_dispute(dispute, *, reversal=False, effective_source=None):
     payment = _payment_for_stripe_object(dispute)
     dispute_id = _value(dispute, "id")
     amount_cents = _value(dispute, "amount")
@@ -352,7 +364,9 @@ def _record_dispute(dispute, *, reversal=False):
                 else PaymentAdjustment.Type.DISPUTE
             ),
             "amount": amount if reversal else -amount,
-            "effective_at": (timezone.localdate() if reversal else _stripe_effective_date(dispute)),
+            "effective_at": _stripe_effective_date(
+                effective_source if effective_source is not None else dispute
+            ),
             "affects_invoice_balance": True,
             "affects_processing_fees": False,
             "provider_id": f"stripe-dispute:{dispute_id}:{suffix}",
@@ -364,7 +378,13 @@ def _record_dispute(dispute, *, reversal=False):
 
 
 @transaction.atomic
-def _reconcile_charge_fee(charge, *, event_id=""):
+def _reconcile_charge_fee(
+    charge,
+    *,
+    event_id="",
+    effective_source=None,
+    allow_provider_lookup=True,
+):
     payment_intent_id = _payment_intent_id(charge)
     if not payment_intent_id:
         return None
@@ -376,7 +396,10 @@ def _reconcile_charge_fee(charge, *, event_id=""):
     )
     if payment is None:
         return None
-    fee_amount = _fee_from_charge(charge)
+    fee_amount = _fee_from_charge(
+        charge,
+        allow_provider_lookup=allow_provider_lookup,
+    )
     if fee_amount is None:
         if payment.fee_pending:
             _record_fee_reconciliation_attempt(
@@ -413,7 +436,9 @@ def _reconcile_charge_fee(charge, *, event_id=""):
                     else PaymentAdjustment.Type.FEE_ADJUSTMENT
                 ),
                 "amount": difference,
-                "effective_at": timezone.localdate(),
+                "effective_at": _stripe_effective_date(
+                    effective_source if effective_source is not None else charge
+                ),
                 "affects_invoice_balance": False,
                 "affects_processing_fees": True,
                 "provider_id": (
@@ -430,21 +455,26 @@ def _reconcile_charge_fee(charge, *, event_id=""):
     return payment
 
 
-def process_stripe_event(*, event):
+def process_stripe_event(*, event, defer_slow_work=False):
     event_type = _value(event, "type")
     event_id = _value(event, "id", "") or ""
     event_object = _value(_value(event, "data", {}), "object", {})
     if event_type in {"charge.succeeded", "charge.updated"}:
-        return _reconcile_charge_fee(event_object, event_id=event_id)
+        return _reconcile_charge_fee(
+            event_object,
+            event_id=event_id,
+            effective_source=event,
+            allow_provider_lookup=not defer_slow_work,
+        )
     if event_type in {"refund.created", "refund.updated"}:
         return _record_refund(event_object)
     if event_type == "charge.refunded":
         refunds = _value(_value(event_object, "refunds", {}), "data", []) or []
         return [_record_refund(refund) for refund in refunds]
     if event_type == "charge.dispute.created":
-        return _record_dispute(event_object)
+        return _record_dispute(event_object, effective_source=event)
     if event_type == "charge.dispute.closed" and _value(event_object, "status") == "won":
-        return _record_dispute(event_object, reversal=True)
+        return _record_dispute(event_object, reversal=True, effective_source=event)
     if event_type not in {
         "checkout.session.completed",
         "checkout.session.async_payment_succeeded",
@@ -476,7 +506,16 @@ def process_stripe_event(*, event):
     except (Document.DoesNotExist, TypeError, ValueError):
         raise ValidationError("Stripe event does not match an invoice.") from None
     amount = money(Decimal(amount_total) / Decimal("100"))
-    fee_lookup = _retrieve_stripe_fee(payment_intent_id)
+    fee_lookup = (
+        StripeFeeLookupResult(
+            Decimal("0.00"),
+            True,
+            error_code="fee_unavailable",
+            error_message="Stripe fee reconciliation is queued after acknowledgement.",
+        )
+        if defer_slow_work
+        else _retrieve_stripe_fee(payment_intent_id)
+    )
     payment = record_payment(
         invoice=invoice,
         payment_data={
@@ -495,7 +534,21 @@ def process_stripe_event(*, event):
         allow_overpayment=True,
         allow_closed_period=True,
     )
-    if fee_lookup.pending:
+    if not fee_lookup.pending and payment.fee_pending:
+        _apply_resolved_pending_fee(
+            payment=payment,
+            fee_amount=fee_lookup.fee_amount,
+            provider_reference=_value(session, "id", "") or payment_intent_id,
+        )
+        _record_fee_reconciliation_attempt(
+            payment=payment,
+            lookup=fee_lookup,
+            status=PaymentFeeReconciliationAttempt.Status.RESOLVED,
+        )
+    elif fee_lookup.pending:
         _record_fee_reconciliation_attempt(payment=payment, lookup=fee_lookup)
-    send_payment_notification(payment=payment)
+    if defer_slow_work:
+        queue_payment_notification(payment=payment)
+    else:
+        send_payment_notification(payment=payment)
     return payment

@@ -1,4 +1,5 @@
 <p>Hello {{ recipient_name }},</p>
+{% if document.company.logo %}<p><img src="{{ document.company.logo.url }}" alt="{{ document.company.name }} logo" width="180" style="display:block;max-width:180px;height:auto"></p>{% endif %}
 <p>{{ document.company.name }} has shared {{ document.get_doc_type_display|lower }} <strong>{{ document.number }}</strong> for {{ document.project.name }}.</p>
 <p><a href="{{ document_url }}">Review {{ document.get_doc_type_display|lower }}</a></p>
 {% if document.company.email %}<p>Questions? Reply to {{ document.company.email }}.</p>{% endif %}

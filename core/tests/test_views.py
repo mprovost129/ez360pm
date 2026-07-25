@@ -1,3 +1,5 @@
+from unittest.mock import patch
+
 from django.core.management import call_command
 from django.test import TestCase
 from django.urls import reverse
@@ -11,6 +13,13 @@ class HealthViewTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), {"status": "ok"})
+
+    def test_health_check_fails_when_cache_is_unavailable(self):
+        with patch("core.views.cache.set", side_effect=ConnectionError):
+            response = self.client.get(reverse("core:health"))
+
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(response.json(), {"status": "unavailable"})
 
 
 class DashboardViewTests(TestCase):

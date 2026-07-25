@@ -91,6 +91,7 @@ class ClientDetailView(LoginRequiredMixin, CompanyScopedQuerysetMixin, DetailVie
         payments = (
             Payment.objects.filter(document__company=company, document__project__client=client)
             .select_related("document", "document__project")
+            .prefetch_related("adjustments")
             .order_by("-received_at", "-created_at")
         )
         credits = (
@@ -112,6 +113,10 @@ class ClientDetailView(LoginRequiredMixin, CompanyScopedQuerysetMixin, DetailVie
             status__in=(Document.Status.DRAFT, Document.Status.VOID)
         ).aggregate(value=Sum("total"))["value"] or Decimal("0.00")
         total_received = payments.aggregate(value=Sum("amount"))["value"] or Decimal("0.00")
+        total_net_received = sum(
+            (payment.net_amount for payment in payments),
+            Decimal("0.00"),
+        )
         outstanding_total = (
             outstanding_invoices(company)
             .filter(project__client=client)
@@ -144,6 +149,7 @@ class ClientDetailView(LoginRequiredMixin, CompanyScopedQuerysetMixin, DetailVie
             notes=notes,
             total_invoiced=total_invoiced,
             total_received=total_received,
+            total_net_received=total_net_received,
             outstanding_total=outstanding_total,
             actual_hours=actual_hours,
         )

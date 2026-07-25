@@ -548,7 +548,7 @@ class RevenueReportingV11Tests(TestCase):
             amount="70.00",
             method=Payment.Method.CASH,
             received_at=date(2026, 7, 1),
-            reference="=SUM(A1:A2)",
+            reference=" \t=SUM(A1:A2)",
         )
 
         response = self.client.get(
@@ -559,7 +559,7 @@ class RevenueReportingV11Tests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertIn("Gross received,70.00", content)
-        self.assertIn("'=SUM(A1:A2)", content)
+        self.assertIn("' \t=SUM(A1:A2)", content)
         self.assertIn("ez360pm-payments-2026-01-01-to-2026-12-31-cash.csv", response["Content-Disposition"])
 
     def test_invalid_filters_fall_back_without_widening_company_scope(self):

@@ -1,10 +1,13 @@
 <article class="invoice-document" id="document-preview">
     <header class="invoice-document__header">
-        <div>
+        <div class="document-company-identity">
+            {% if invoice.company.logo %}<img class="document-company-logo" src="{{ invoice.company.logo.url }}" alt="{{ invoice.company.name }} logo">{% endif %}
+            <div>
             <h2>{{ invoice.company.name }}</h2>
             {% if invoice.company.address_1 %}<address>{{ invoice.company.address_1 }}<br>{% if invoice.company.address_2 %}{{ invoice.company.address_2 }}<br>{% endif %}{{ invoice.company.city }}{% if invoice.company.state %}, {{ invoice.company.state }}{% endif %} {{ invoice.company.postal_code }}</address>{% endif %}
             {% if invoice.company.phone %}<div>{{ invoice.company.phone }}</div>{% endif %}
             {% if invoice.company.email %}<div>{{ invoice.company.email }}</div>{% endif %}
+            </div>
         </div>
         <div class="invoice-identity"><span>Invoice</span><strong>{{ invoice.number }}</strong><small>{{ invoice.get_status_display }}</small></div>
     </header>

@@ -12,7 +12,7 @@ from django.urls import reverse
 
 from accounts.models import Company, User
 from clients.tests.test_clients import create_client
-from documents.delivery_services import send_document_email
+from documents.delivery_services import send_document_email, send_payment_notification
 from documents.models import (
     Document,
     DocumentDelivery,
@@ -258,6 +258,37 @@ class DeliveryAndStripeTests(TestCase):
         )
         self.assertEqual(len(mail.outbox), 1)
 
+    def test_failed_payment_notification_can_be_retried_from_invoice_history(self):
+        invoice = self.make_invoice()
+        with patch(
+            "documents.delivery_services.EmailMultiAlternatives.send",
+            side_effect=TimeoutError("temporary provider timeout"),
+        ):
+            process_stripe_event(event=self.stripe_event(invoice))
+        failed = DocumentDelivery.objects.get(
+            document=invoice,
+            purpose=DocumentDelivery.Purpose.PAYMENT_NOTIFICATION,
+        )
+        self.assertEqual(failed.status, DocumentDelivery.Status.FAILED)
+
+        response = self.client.post(
+            reverse("documents:delivery-resend", args=(invoice.pk, failed.pk))
+        )
+
+        self.assertRedirects(
+            response,
+            reverse("documents:invoice-detail", args=(invoice.pk,)),
+        )
+        failed.refresh_from_db()
+        self.assertEqual(failed.status, DocumentDelivery.Status.FAILED)
+        attempts = DocumentDelivery.objects.filter(
+            document=invoice,
+            purpose=DocumentDelivery.Purpose.PAYMENT_NOTIFICATION,
+        )
+        self.assertEqual(attempts.count(), 2)
+        self.assertEqual(attempts.filter(status=DocumentDelivery.Status.SENT).count(), 1)
+        self.assertEqual(len(mail.outbox), 1)
+
     def test_send_view_cannot_retrieve_another_company_document(self):
         other_company = Company.objects.create(name="Other Studio")
         other_project = create_project(
@@ -347,6 +378,21 @@ class DeliveryAndStripeTests(TestCase):
             1,
         )
 
+    def test_public_mutation_returns_503_when_rate_limiter_is_unavailable(self):
+        proposal = self.make_proposal()
+
+        with patch(
+            "documents.public_security.cache.add",
+            side_effect=ConnectionError("Redis unavailable"),
+        ):
+            response = self.client.post(
+                reverse("public-documents:decline", args=(proposal.public_token,))
+            )
+
+        self.assertEqual(response.status_code, 503)
+        proposal.refresh_from_db()
+        self.assertIn(proposal.status, {Document.Status.SENT, Document.Status.VIEWED})
+
     def test_checkout_amount_comes_from_current_server_balance(self):
         invoice = self.make_invoice()
         record_payment(
@@ -374,6 +420,10 @@ class DeliveryAndStripeTests(TestCase):
         params = create.call_args.kwargs
         self.assertEqual(params["line_items"][0]["price_data"]["unit_amount"], 7500)
         self.assertEqual(params["metadata"]["document_id"], str(invoice.pk))
+        self.assertEqual(
+            params["idempotency_key"],
+            f"ez360pm-checkout-v1-{invoice.pk}-7500-2500",
+        )
         self.assertEqual(
             params["payment_intent_data"]["metadata"]["company_id"],
             str(self.company.pk),
@@ -499,6 +549,31 @@ class DeliveryAndStripeTests(TestCase):
         invoice.refresh_from_db()
         self.assertEqual(invoice.status, Document.Status.PAID)
         self.assertEqual(invoice.outstanding_balance, Decimal("0.00"))
+
+    def test_webhook_can_queue_slow_fee_and_email_work_after_acknowledgement(self):
+        invoice = self.make_invoice()
+        self.mock_stripe_fee.reset_mock()
+
+        payment = process_stripe_event(
+            event=self.stripe_event(invoice),
+            defer_slow_work=True,
+        )
+
+        self.mock_stripe_fee.assert_not_called()
+        payment.refresh_from_db()
+        self.assertTrue(payment.fee_pending)
+        delivery = DocumentDelivery.objects.get(
+            document=invoice,
+            purpose=DocumentDelivery.Purpose.PAYMENT_NOTIFICATION,
+        )
+        self.assertEqual(delivery.status, DocumentDelivery.Status.PENDING)
+        self.assertEqual(len(mail.outbox), 0)
+
+        send_payment_notification(payment=payment)
+
+        delivery.refresh_from_db()
+        self.assertEqual(delivery.status, DocumentDelivery.Status.SENT)
+        self.assertEqual(len(mail.outbox), 1)
 
     def test_async_checkout_success_records_payment(self):
         invoice = self.make_invoice()
@@ -677,6 +752,7 @@ class DeliveryAndStripeTests(TestCase):
         event = {
             "id": "evt_fee_replay",
             "type": "charge.updated",
+            "created": 1788152400,
             "data": {
                 "object": {
                     "id": "ch_fee_replay",
@@ -693,6 +769,7 @@ class DeliveryAndStripeTests(TestCase):
         self.assertEqual(adjustments.count(), 1)
         adjustment = adjustments.get()
         self.assertEqual(adjustment.amount, Decimal("-0.30"))
+        self.assertEqual(adjustment.effective_at, date(2026, 8, 31))
         self.assertTrue(adjustment.affects_processing_fees)
 
     def test_manual_payment_carries_no_provider_fee(self):
@@ -749,18 +826,33 @@ class DeliveryAndStripeTests(TestCase):
         }
 
         process_stripe_event(
-            event={"type": "charge.dispute.created", "data": {"object": dispute}}
+            event={
+                "type": "charge.dispute.created",
+                "created": 1788152400,
+                "data": {"object": dispute},
+            }
         )
         invoice.refresh_from_db()
         self.assertEqual(invoice.outstanding_balance, Decimal("100.00"))
 
         won = dict(dispute, status="won", created=1788238800)
         process_stripe_event(
-            event={"type": "charge.dispute.closed", "data": {"object": won}}
+            event={
+                "type": "charge.dispute.closed",
+                "created": 1788238800,
+                "data": {"object": won},
+            }
         )
         invoice.refresh_from_db()
 
-        self.assertEqual(PaymentAdjustment.objects.filter(payment=payment).count(), 2)
+        adjustments = PaymentAdjustment.objects.filter(payment=payment).order_by(
+            "effective_at"
+        )
+        self.assertEqual(adjustments.count(), 2)
+        self.assertEqual(
+            list(adjustments.values_list("effective_at", flat=True)),
+            [date(2026, 8, 31), date(2026, 9, 1)],
+        )
         self.assertEqual(invoice.status, Document.Status.PAID)
         self.assertEqual(invoice.outstanding_balance, Decimal("0.00"))
 
@@ -910,6 +1002,41 @@ class DeliveryAndStripeTests(TestCase):
         self.assertEqual(failure.error_code, "payment_not_found")
         self.assertIsNone(failure.company)
         self.assertFalse(PaymentAdjustment.objects.exists())
+
+    def test_provider_lookup_outage_is_not_mislabeled_as_unmatched_payment(self):
+        event = {
+            "id": "evt_refund_provider_outage",
+            "type": "refund.created",
+            "data": {
+                "object": {
+                    "id": "re_provider_outage",
+                    "charge": "ch_provider_outage",
+                    "amount": 2500,
+                    "status": "succeeded",
+                }
+            },
+        }
+        with (
+            patch(
+                "documents.stripe_views.stripe.Webhook.construct_event",
+                return_value=event,
+            ),
+            patch(
+                "documents.stripe_services.stripe.Charge.retrieve",
+                side_effect=stripe.APIConnectionError("temporary outage"),
+            ),
+        ):
+            response = self.client.post(
+                reverse("webhooks:stripe"),
+                data=b"{}",
+                content_type="application/json",
+            )
+
+        failure = StripeWebhookFailure.objects.get(
+            event_id="evt_refund_provider_outage"
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(failure.error_code, "provider_lookup_failed")
 
     def test_webhook_failure_queue_is_available_in_administration(self):
         StripeWebhookFailure.objects.create(

@@ -35,7 +35,7 @@
 {% include 'documents/_draft_details_editor.html' with editor_action=details_action editor_heading='Invoice settings' %}
 {% endif %}
 
-{% if pricing_differs_from_proposal %}<div class="workflow-warning" role="status"><strong>Pricing check:</strong> This invoice has ${{ invoice_charge_total }} in charges including tax; accepted proposal {{ accepted_proposal.number }} was ${{ accepted_proposal.accepted_total }}. Review the difference before issuing.</div>{% endif %}
+{% if pricing_differs_from_reference %}<div class="workflow-warning" role="status"><strong>Pricing check:</strong> {% if other_final_invoice_total %}This invoice and other non-void final invoices total ${{ cumulative_final_invoice_total }} including tax{% else %}This invoice has ${{ invoice_charge_total }} in charges including tax{% endif %}; {{ pricing_reference_label }} is ${{ pricing_reference_total }}. Review the difference before issuing.</div>{% endif %}
 
 {% include 'documents/_invoice_document.html' %}
 
@@ -54,7 +54,7 @@
 </section>
 {% endif %}
 
-{% if invoice.deliveries.all %}<section class="content-card invoice-panel"><h2>Delivery history</h2>{% for delivery in invoice.deliveries.all %}<div class="detail-row"><span><strong>{{ delivery.recipient_email }}</strong><small>{{ delivery.get_purpose_display }} · {{ delivery.created_at|date:'M j, Y g:i a' }}</small></span><span>{{ delivery.get_status_display }}{% if delivery.error_code %}<small>{{ delivery.failure_message }}</small>{% endif %}{% if delivery.purpose == 'client_document' %}<form class="inline-form" method="post" action="{% url 'documents:delivery-resend' invoice.pk delivery.pk %}" data-confirm="{% if delivery.status == 'failed' %}Retry{% else %}Resend{% endif %} this invoice email to {{ delivery.recipient_email }}?">{% csrf_token %}<button class="link-button" type="submit">{% if delivery.status == 'failed' %}Retry{% else %}Resend{% endif %}</button></form>{% endif %}</span></div>{% endfor %}</section>{% endif %}
+{% if invoice.deliveries.all %}<section class="content-card invoice-panel"><h2>Delivery history</h2>{% for delivery in invoice.deliveries.all %}<div class="detail-row"><span><strong>{{ delivery.recipient_email }}</strong><small>{{ delivery.get_purpose_display }} · {{ delivery.created_at|date:'M j, Y g:i a' }}</small></span><span>{{ delivery.get_status_display }}{% if delivery.error_code %}<small>{{ delivery.failure_message }}</small>{% endif %}{% if delivery.purpose == 'client_document' or delivery.status == 'failed' or delivery.status == 'pending' %}<form class="inline-form" method="post" action="{% url 'documents:delivery-resend' invoice.pk delivery.pk %}" data-confirm="{% if delivery.status == 'failed' %}Retry{% elif delivery.status == 'pending' %}Send{% else %}Resend{% endif %} this email to {{ delivery.recipient_email }}?">{% csrf_token %}<button class="link-button" type="submit">{% if delivery.status == 'failed' %}Retry{% elif delivery.status == 'pending' %}Send{% else %}Resend{% endif %}</button></form>{% endif %}</span></div>{% endfor %}</section>{% endif %}
 
 {% if invoice.credits_received.all or credit_form %}
 <section class="content-card invoice-panel">

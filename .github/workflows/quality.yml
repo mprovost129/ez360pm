@@ -1,0 +1,50 @@
+name: Quality
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: ez360pm
+          POSTGRES_USER: ez360pm
+          POSTGRES_PASSWORD: ez360pm
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ez360pm"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      SECRET_KEY: ci-only-secret-key
+      DB_HOST: 127.0.0.1
+      DB_PORT: 5432
+      DB_NAME: ez360pm
+      DB_USER: ez360pm
+      DB_PASSWORD: ez360pm
+      ALLOWED_HOSTS: localhost
+      CSRF_TRUSTED_ORIGINS: https://localhost
+      PUBLIC_BASE_URL: https://localhost
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - run: sh -n bin/start.sh
+      - run: ruff check accounts clients config core documents intake projects
+      - run: python manage.py makemigrations --check --dry-run
+      - run: python manage.py test -v 1
+      - run: python manage.py deployment_check --skip-cache
+      - run: python manage.py check --deploy --fail-level WARNING
+        env:
+          DJANGO_SETTINGS_MODULE: config.Settings.prod
+          REDIS_URL: redis://127.0.0.1:6379/1

@@ -177,7 +177,7 @@ def send_decline_notification(*, proposal, document_url):
     )
 
 
-def send_payment_notification(*, payment):
+def queue_payment_notification(*, payment):
     payment = Payment.objects.select_related(
         "document",
         "document__company",
@@ -206,8 +206,20 @@ def send_payment_notification(*, payment):
             "recipient_email": recipient_email,
         },
     )
-    if not created:
+    return delivery
+
+
+def send_payment_notification(*, payment):
+    delivery = queue_payment_notification(payment=payment)
+    if delivery is None or delivery.status != DocumentDelivery.Status.PENDING:
         return delivery
+    payment = Payment.objects.select_related(
+        "document",
+        "document__company",
+        "document__project",
+        "document__project__client",
+    ).get(pk=payment.pk)
+    invoice = payment.document
     return _send_delivery(
         delivery=delivery,
         subject=f"Payment received for invoice {invoice.number}",
@@ -215,3 +227,70 @@ def send_payment_notification(*, payment):
         template_base="payment_notification",
         context={"invoice": invoice, "payment": payment},
     )
+
+
+def resend_delivery_attempt(*, delivery):
+    """Create a new auditable attempt for a client email or failed notification."""
+
+    delivery = DocumentDelivery.objects.select_related(
+        "document",
+        "document__company",
+        "document__project",
+        "document__project__client",
+    ).get(pk=delivery.pk)
+    document = delivery.document
+    if delivery.purpose == DocumentDelivery.Purpose.CLIENT_DOCUMENT:
+        return send_document_email(
+            document=document,
+            recipient_name=delivery.recipient_name,
+            recipient_email=delivery.recipient_email,
+            document_url=public_document_url(document),
+        )
+    if delivery.status not in {
+        DocumentDelivery.Status.PENDING,
+        DocumentDelivery.Status.FAILED,
+    }:
+        raise ValueError("Only pending or failed internal notifications can be retried.")
+
+    repeated = delivery
+    if delivery.status == DocumentDelivery.Status.FAILED:
+        repeated = DocumentDelivery.objects.create(
+            document=document,
+            purpose=delivery.purpose,
+            recipient_name=delivery.recipient_name,
+            recipient_email=delivery.recipient_email,
+        )
+    document_url = public_document_url(document)
+    if delivery.purpose == DocumentDelivery.Purpose.ACCEPTANCE_NOTIFICATION:
+        return _send_delivery(
+            delivery=repeated,
+            subject=f"Proposal {document.number} accepted",
+            document_url=document_url,
+            template_base="acceptance_notification",
+            context={"proposal": document},
+        )
+    if delivery.purpose == DocumentDelivery.Purpose.DECLINE_NOTIFICATION:
+        return _send_delivery(
+            delivery=repeated,
+            subject=f"Proposal {document.number} declined",
+            document_url=document_url,
+            template_base="decline_notification",
+            context={"proposal": document},
+        )
+    if delivery.purpose == DocumentDelivery.Purpose.PAYMENT_NOTIFICATION:
+        payment_intent_id = delivery.dedupe_key.removeprefix("stripe-payment:")
+        payment = document.payments.filter(
+            stripe_payment_intent_id=payment_intent_id
+        ).first()
+        if payment is None:
+            repeated.delete()
+            raise ValueError("The payment for this notification no longer exists.")
+        return _send_delivery(
+            delivery=repeated,
+            subject=f"Payment received for invoice {document.number}",
+            document_url=document_url,
+            template_base="payment_notification",
+            context={"invoice": document, "payment": payment},
+        )
+    repeated.delete()
+    raise ValueError("This delivery type cannot be retried.")

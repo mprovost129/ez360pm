@@ -29,10 +29,10 @@ Run these after installing dependencies and before serving traffic:
 .\.venv\Scripts\python.exe manage.py data_audit --fail-on-warning
 ```
 
-For production, set `DJANGO_SETTINGS_MODULE=config.Settings.prod`. The release
-process in `Procfile` runs migrations, Django's deployment security checks, the
-database/cache check, and the read-only data audit before the new web process is
-promoted.
+For production, set `DJANGO_SETTINGS_MODULE=config.Settings.prod`. Both the
+Docker command and the Render `Procfile` call `bin/start.sh`. That single startup
+gate runs migrations, Django's deployment security checks, the database/cache
+check, and the read-only data audit before Gunicorn can receive traffic.
 
 Set `PUBLIC_BASE_URL` to the public HTTPS origin with no trailing slash. Public
 document links in email and Stripe redirects are built from this value.
@@ -94,7 +94,22 @@ before Gunicorn terminates the worker.
 The Company email is used as Reply-To. Development may retain the console email
 backend. Every client-document or internal-acceptance attempt creates a
 `DocumentDelivery` row before contacting the backend; success or a safe failure
-category is then recorded without storing credentials or message bodies.
+category is then recorded without storing credentials or message bodies. Failed
+client, proposal-response, and payment notifications can be retried from the
+document's delivery history without rewriting the original attempt.
+
+For Stripe Checkout completion, the verified payment and a pending notification
+are committed before the webhook acknowledgement. Fee lookup and notification
+delivery run as best-effort post-response work so provider latency does not delay
+Stripe's `2xx`; if the process is interrupted, the pending fee remains available
+to Revenue reconciliation and the pending notification remains sendable from
+the invoice delivery history. A separate task worker remains optional for a
+future paid deployment rather than a requirement for the current free instance.
+
+The login page exposes Django's email-based password reset flow, and an
+authenticated owner can change their password from Company settings. Keep the
+company/owner email deliverable so shell access is not required for routine
+account recovery. Django Administration is intentionally limited to superusers.
 
 ## Stripe Checkout
 

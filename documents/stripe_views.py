@@ -1,4 +1,5 @@
 import logging
+from functools import partial
 
 import stripe
 from django.conf import settings
@@ -10,8 +11,11 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
 from .delivery_services import public_document_url
-from .models import Document
-from .public_security import public_action_rate_limited
+from .models import Document, Payment
+from .public_security import (
+    PublicActionRateLimitUnavailable,
+    public_action_rate_limited,
+)
 from .public_views import public_document
 from .stripe_services import (
     create_checkout_session,
@@ -26,13 +30,46 @@ from .webhook_failures import (
 logger = logging.getLogger(__name__)
 
 
+class DeferredWorkJsonResponse(JsonResponse):
+    """Run best-effort work after WSGI has finished sending the acknowledgement."""
+
+    def __init__(self, *args, deferred_work=None, **kwargs):
+        self.deferred_work = deferred_work
+        super().__init__(*args, **kwargs)
+
+    def close(self):
+        super().close()
+        deferred_work = self.deferred_work
+        self.deferred_work = None
+        if deferred_work is not None:
+            deferred_work()
+
+
+def _finish_stripe_webhook(event):
+    try:
+        process_stripe_event(event=event)
+    except Exception as exc:
+        logger.exception(
+            "Deferred Stripe webhook work failed event_id=%s error=%s",
+            getattr(event, "id", "") or (event.get("id", "") if isinstance(event, dict) else ""),
+            exc.__class__.__name__,
+        )
+
+
 class PublicCheckoutView(View):
     def post(self, request, token):
-        if public_action_rate_limited(
-            request=request,
-            token=token,
-            action="checkout",
-        ):
+        try:
+            limited = public_action_rate_limited(
+                request=request,
+                token=token,
+                action="checkout",
+            )
+        except PublicActionRateLimitUnavailable:
+            return HttpResponse(
+                "Online payment is temporarily unavailable. Please try again shortly.",
+                status=503,
+            )
+        if limited:
             return HttpResponse("Too many payment attempts. Please wait and try again.", status=429)
         invoice = public_document(token)
         if invoice.doc_type != Document.Type.INVOICE:
@@ -69,7 +106,7 @@ def stripe_webhook(request):
     except (ValueError, stripe.SignatureVerificationError):
         return HttpResponse(status=400)
     try:
-        result = process_stripe_event(event=event)
+        result = process_stripe_event(event=event, defer_slow_work=True)
     except ValidationError as exc:
         record_stripe_webhook_failure(event=event, exception=exc)
         logger.warning("Stripe reconciliation rejected error=%s", exc.__class__.__name__)
@@ -80,4 +117,10 @@ def stripe_webhook(request):
         return HttpResponse(status=500)
     if result is not None:
         resolve_stripe_webhook_failure(event=event)
-    return JsonResponse({"received": True})
+    deferred_work = None
+    if isinstance(result, Payment):
+        deferred_work = partial(_finish_stripe_webhook, event)
+    return DeferredWorkJsonResponse(
+        {"received": True},
+        deferred_work=deferred_work,
+    )

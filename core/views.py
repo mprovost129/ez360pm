@@ -1,7 +1,9 @@
 import csv
 
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.core.cache import cache
 from django.db import connection
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import redirect
@@ -32,7 +34,10 @@ class HomeView(LoginRequiredMixin, TemplateView):
 
 def _spreadsheet_safe(value):
     text = str(value or "")
-    if text.startswith(("=", "+", "-", "@")):
+    stripped = text.lstrip(" \t\r\n")
+    if text.startswith(("\t", "\r", "\n")) or stripped.startswith(
+        ("=", "+", "-", "@")
+    ):
         return f"'{text}"
     return text
 
@@ -181,6 +186,12 @@ class RevenueFeeReconcileView(LoginRequiredMixin, View):
         )
         if filters.method and filters.method != Payment.Method.STRIPE:
             pending = pending.none()
+        pending_count = pending.count()
+        pending = list(
+            pending.order_by("received_at", "pk")[
+                : settings.STRIPE_FEE_RECONCILIATION_BATCH_SIZE
+            ]
+        )
         reconciled = 0
         still_pending = 0
         for payment in pending:
@@ -198,6 +209,14 @@ class RevenueFeeReconcileView(LoginRequiredMixin, View):
                 request,
                 f"{still_pending} Stripe fee{'' if still_pending == 1 else 's'} "
                 "are still unavailable from Stripe.",
+            )
+        not_attempted = pending_count - len(pending)
+        if not_attempted:
+            messages.info(
+                request,
+                f"{not_attempted} additional pending Stripe fee"
+                f"{'' if not_attempted == 1 else 's'} remain. Run reconciliation "
+                "again to process the next batch.",
             )
         return redirect(f"{reverse('core:revenue')}?{filters.query_string}")
 
@@ -222,6 +241,9 @@ class HealthView(View):
             with connection.cursor() as cursor:
                 cursor.execute("SELECT 1")
                 cursor.fetchone()
+            cache.set("ez360pm:readiness", "ok", timeout=10)
+            if cache.get("ez360pm:readiness") != "ok":
+                raise RuntimeError("Cache readiness value could not be read back.")
         except Exception:
             return JsonResponse({"status": "unavailable"}, status=503)
         return JsonResponse({"status": "ok"})

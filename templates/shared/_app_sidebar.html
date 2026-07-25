@@ -24,7 +24,7 @@
         <a class="nav-link" href="{% url 'documents:invoice-list' %}"><i class="bi bi-receipt" aria-hidden="true"></i>Invoices</a>
         <a class="nav-link" href="{% url 'core:revenue' %}"><i class="bi bi-cash-coin" aria-hidden="true"></i>Revenue &amp; Fees</a>
         <a class="nav-link" href="{% url 'accounts:settings' %}"><i class="bi bi-gear" aria-hidden="true"></i>Settings</a>
-        {% if user.is_staff %}
+        {% if user.is_superuser %}
         <a class="nav-link" href="{% url 'admin:index' %}">
             <i class="bi bi-gear" aria-hidden="true"></i>
             Administration
