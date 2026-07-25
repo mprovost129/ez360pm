@@ -316,6 +316,9 @@ do not add new product areas.
 
 - [x] Add PostgreSQL-backed GitHub Actions for lint, tests, migration drift, and
   deployment checks, plus automated dependency-update configuration.
+  - [x] Exercise the migrated production settings against PostgreSQL and Redis,
+    run the data audit and dependency check, and build the production Docker
+    image so CI verifies the same startup artifacts used by Render.
 - [x] Split production and development dependencies and remove build-only tools
   from the final production image where practical.
 - [x] Reduce `.env.example` to settings actually consumed by the application,
