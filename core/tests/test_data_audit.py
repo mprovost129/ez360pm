@@ -1,15 +1,16 @@
 import json
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 from io import StringIO
 
 from django.core.management import call_command
 from django.core.management.base import CommandError
 from django.test import TestCase
+from django.utils import timezone
 
 from accounts.models import Company
 from clients.tests.test_clients import create_client
-from documents.models import Document
+from documents.models import Document, DocumentDelivery
 from documents.services import create_invoice
 from projects.models import Project
 from projects.services import create_project
@@ -70,6 +71,24 @@ class DataAuditCommandTests(TestCase):
         self.assertIn("document_total", output.getvalue())
         self.invoice.refresh_from_db()
         self.assertEqual(self.invoice.total, Decimal("2499.00"))
+
+    def test_stale_delivery_warns_without_failing_unless_strict(self):
+        delivery = DocumentDelivery.objects.create(
+            document=self.invoice,
+            recipient_name="Client",
+            recipient_email="client@example.com",
+        )
+        DocumentDelivery.objects.filter(pk=delivery.pk).update(
+            created_at=timezone.now() - timedelta(minutes=16)
+        )
+        output = StringIO()
+
+        call_command("data_audit", stdout=output)
+
+        self.assertIn("[WARNING] stale_delivery", output.getvalue())
+        self.assertIn("Data audit passed.", output.getvalue())
+        with self.assertRaisesMessage(CommandError, "Data audit failed"):
+            call_command("data_audit", fail_on_warning=True, stdout=StringIO())
 
     def test_unknown_company_is_rejected(self):
         with self.assertRaisesMessage(CommandError, "Company 999999 does not exist"):

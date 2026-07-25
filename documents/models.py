@@ -642,6 +642,8 @@ class DocumentDelivery(models.Model):
             return "The email provider could not be reached. Check the SMTP host and try again."
         if code == "provider_did_not_confirm_send":
             return "The email provider did not confirm the send. Try again before sending it manually."
+        if code == "interrupted_before_provider_confirmation":
+            return "The send was interrupted before delivery was confirmed. Try again."
         return "The email provider rejected the message. Review the email settings and try again."
 
 

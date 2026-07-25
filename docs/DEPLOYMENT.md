@@ -39,7 +39,7 @@ Run these after installing dependencies and before serving traffic:
 .\.venv\Scripts\python.exe manage.py migrate
 .\.venv\Scripts\python.exe manage.py collectstatic --noinput
 .\.venv\Scripts\python.exe manage.py deployment_check
-.\.venv\Scripts\python.exe manage.py data_audit --fail-on-warning
+.\.venv\Scripts\python.exe manage.py data_audit
 ```
 
 For production, set `DJANGO_SETTINGS_MODULE=config.Settings.prod`. Both the
@@ -57,7 +57,9 @@ runs as the unprivileged `ez360pm` user, applies pending migrations before each
 container start, writes Gunicorn logs to stdout/stderr, honors the platform's
 `PORT` and `WEB_CONCURRENCY` values, and exposes a Docker health check against
 `/health/`. If migration fails, Gunicorn does not start and the deployment is
-not promoted to receive traffic. `EZ360PM_OWNER_PASSWORD` is strictly a one-time
+not promoted to receive traffic. Data-audit integrity errors also block startup;
+operational warnings remain in the deploy log for recovery and are failures in
+the scheduled strict audit. `EZ360PM_OWNER_PASSWORD` is strictly a one-time
 bootstrap value and must not remain in the deployment environment afterward.
 
 `.dockerignore` excludes `.env`, repository metadata, local virtualenvs, logs,

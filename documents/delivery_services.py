@@ -240,6 +240,8 @@ def resend_delivery_attempt(*, delivery):
     ).get(pk=delivery.pk)
     document = delivery.document
     if delivery.purpose == DocumentDelivery.Purpose.CLIENT_DOCUMENT:
+        if delivery.status == DocumentDelivery.Status.PENDING:
+            _mark_failed(delivery, "interrupted_before_provider_confirmation")
         return send_document_email(
             document=document,
             recipient_name=delivery.recipient_name,

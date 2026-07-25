@@ -258,6 +258,37 @@ class DeliveryAndStripeTests(TestCase):
         )
         self.assertEqual(len(mail.outbox), 1)
 
+    def test_pending_client_delivery_retry_closes_interrupted_attempt(self):
+        invoice = self.make_invoice()
+        interrupted = DocumentDelivery.objects.create(
+            document=invoice,
+            purpose=DocumentDelivery.Purpose.CLIENT_DOCUMENT,
+            recipient_name="Alex Smith",
+            recipient_email="alex@example.com",
+        )
+
+        response = self.client.post(
+            reverse("documents:delivery-resend", args=(invoice.pk, interrupted.pk))
+        )
+
+        self.assertRedirects(
+            response,
+            reverse("documents:invoice-detail", args=(invoice.pk,)),
+        )
+        interrupted.refresh_from_db()
+        self.assertEqual(interrupted.status, DocumentDelivery.Status.FAILED)
+        self.assertEqual(
+            interrupted.error_code,
+            "interrupted_before_provider_confirmation",
+        )
+        attempts = DocumentDelivery.objects.filter(
+            document=invoice,
+            purpose=DocumentDelivery.Purpose.CLIENT_DOCUMENT,
+        )
+        self.assertEqual(attempts.count(), 2)
+        self.assertEqual(attempts.filter(status=DocumentDelivery.Status.SENT).count(), 1)
+        self.assertEqual(len(mail.outbox), 1)
+
     def test_failed_payment_notification_can_be_retried_from_invoice_history(self):
         invoice = self.make_invoice()
         with patch(
