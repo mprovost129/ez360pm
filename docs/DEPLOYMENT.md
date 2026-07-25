@@ -3,6 +3,19 @@
 This is the operational handoff for the personal MVP. Secrets belong in the
 deployment environment, never in source control or Django admin fields.
 
+## Production secret key
+
+Generate a unique Django secret key locally, then save only the generated value
+as `SECRET_KEY` in the Render service's Environment settings:
+
+```powershell
+python -c "import secrets; print(secrets.token_urlsafe(64))"
+```
+
+Do not copy the blank `SECRET_KEY` entry from `.env.example` as-is, reuse a CI
+value, or commit the generated value. Django's production startup gate rejects
+short, predictable, and `django-insecure-` keys before the service starts.
+
 ## Create the first owner
 
 For a new installation, create the Company and owner together with the
