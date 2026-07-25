@@ -18,6 +18,8 @@ Fees report that can be used for calendar-year review.
 - Append-only refunds, disputes, dispute reversals, fee refunds, additional
   processing fees, and corrections.
 - Append-only Stripe fee reconciliation history with safe status/error details.
+- Operator queue for failed Stripe refund, dispute, and fee-adjustment imports;
+  retries are grouped by event ID and successful replay resolves the entry.
 - Closed-period protection through `Company.books_closed_through`.
 
 ## Database changes
@@ -27,6 +29,7 @@ Apply these migrations before using the updated report:
 - `accounts.0003_company_books_closed_through`
 - `documents.0007_paymentadjustment`
 - `documents.0008_paymentfeereconciliationattempt`
+- `documents.0010_stripewebhookfailure`
 
 ## Local verification commands
 
