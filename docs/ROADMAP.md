@@ -319,6 +319,8 @@ do not add new product areas.
   - [x] Exercise the migrated production settings against PostgreSQL and Redis,
     run the data audit and dependency check, and build the production Docker
     image so CI verifies the same startup artifacts used by Render.
+  - [x] Keep CI credentials disposable, grant the workflow read-only repository
+    access, cancel superseded runs, and bound each run to 30 minutes.
 - [x] Split production and development dependencies and remove build-only tools
   from the final production image where practical.
 - [x] Reduce `.env.example` to settings actually consumed by the application,

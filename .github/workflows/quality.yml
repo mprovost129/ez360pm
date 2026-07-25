@@ -5,9 +5,17 @@ on:
   push:
     branches: [main]
 
+permissions:
+  contents: read
+
+concurrency:
+  group: quality-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     services:
       postgres:
         image: postgres:16
@@ -32,6 +40,8 @@ jobs:
           --health-timeout 5s
           --health-retries 5
     env:
+      # Disposable CI-only values. Production secrets stay in Render and must
+      # never be copied into this workflow.
       SECRET_KEY: ci-only-long-random-looking-secret-key-1234567890-abcdefghij
       DB_HOST: 127.0.0.1
       DB_PORT: 5432
