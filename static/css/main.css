@@ -849,3 +849,37 @@ button[type="submit"]:not(.btn) {
         transition: none;
     }
 }
+
+/* Revenue & fees reporting */
+.report-filters { margin-bottom: 1rem; }
+.report-filters .filter-bar { margin-bottom: 0.35rem; }
+.report-filters select,
+.report-filters input[type="date"] { width: 100%; }
+.report-metrics { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.metric-card small { display: block; margin-top: 0.25rem; color: #6c7d8d; font-size: 0.75rem; }
+.report-section { margin-bottom: 1rem; }
+.report-ledger-wrap { overflow-x: auto; }
+.report-ledger { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.report-ledger th { padding: 0.65rem; color: #fff; background: var(--ez-navy); font-size: 0.78rem; text-align: left; white-space: nowrap; }
+.report-ledger td { padding: 0.7rem 0.65rem; border-bottom: 1px solid #e1e7eb; vertical-align: top; }
+.report-ledger tbody tr:last-child td { border-bottom: 0; }
+.report-ledger td:nth-last-child(-n+4),
+.report-ledger th:nth-last-child(-n+4) { text-align: right; }
+.report-ledger small { display: block; margin-top: 0.15rem; color: #6c7d8d; }
+.report-ledger--transactions { min-width: 1050px; }
+.report-adjustment-row { background: #fff9e9; }
+.fee-pending { color: #8a5a00; font-weight: 700; }
+
+@media (max-width: 991.98px) {
+    .report-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 575.98px) {
+    .report-metrics { grid-template-columns: 1fr; }
+    .report-heading { align-items: flex-start; flex-direction: column; }
+}
+.payment-history { border-bottom: 1px solid #e8edf1; }
+.payment-history:last-child { border-bottom: 0; }
+.payment-history > .detail-row { border-bottom: 0; }
+.payment-adjustment { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; padding: 0.6rem 0.75rem; margin: 0 0.25rem 0.65rem 1.25rem; background: #fff9e9; border-left: 3px solid #e4bb62; }
+.payment-adjustment small { display: block; color: #6c7d8d; }

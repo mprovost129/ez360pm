@@ -4,20 +4,37 @@ from datetime import timedelta
 from decimal import ROUND_HALF_UP, Decimal
 
 from django.core.exceptions import ValidationError
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.db.models import Max, Sum
 from django.utils import timezone
 
 from accounts.models import Company
 from projects.models import Project, TimeEntry
 
-from .models import Document, DocumentNumberSequence, LineItem, Payment
+from .models import (
+    Document,
+    DocumentNumberSequence,
+    LineItem,
+    Payment,
+    PaymentAdjustment,
+)
 
 CENT = Decimal("0.01")
 
 
 def money(value):
     return Decimal(value).quantize(CENT, rounding=ROUND_HALF_UP)
+
+
+def validate_open_financial_date(*, company, effective_date, allow_closed=False):
+    if (
+        not allow_closed
+        and company.books_closed_through
+        and effective_date <= company.books_closed_through
+    ):
+        raise ValidationError(
+            f"Financial records are locked through {company.books_closed_through:%B %d, %Y}."
+        )
 
 
 def allocate_document_number(*, company, doc_type, on_date=None):
@@ -336,7 +353,11 @@ def record_public_view(*, document, at=None):
 
 @transaction.atomic
 def void_invoice(*, invoice, reason, at=None):
-    invoice = Document.objects.select_for_update().get(pk=invoice.pk)
+    invoice = (
+        Document.objects.select_for_update()
+        .select_related("company")
+        .get(pk=invoice.pk)
+    )
     if invoice.doc_type != Document.Type.INVOICE:
         raise ValidationError("Only invoices can be voided.")
     if invoice.status in {Document.Status.DRAFT, Document.Status.PAID, Document.Status.VOID}:
@@ -356,12 +377,21 @@ def _status_without_payment(invoice):
     return Document.Status.DRAFT
 
 
+def invoice_amount_paid(invoice):
+    payment_total = invoice.payments.aggregate(value=Sum("amount"))["value"] or Decimal("0")
+    adjustment_total = PaymentAdjustment.objects.filter(
+        payment__document=invoice,
+        affects_invoice_balance=True,
+    ).aggregate(value=Sum("amount"))["value"] or Decimal("0")
+    return max(payment_total + adjustment_total, Decimal("0"))
+
+
 @transaction.atomic
 def recalculate_payment_status(*, invoice):
     invoice = Document.objects.select_for_update().get(pk=invoice.pk)
     if invoice.status == Document.Status.VOID:
         return invoice
-    amount_paid = invoice.payments.aggregate(value=Sum("amount"))["value"] or Decimal("0")
+    amount_paid = invoice_amount_paid(invoice)
     if amount_paid > 0 and amount_paid >= invoice.total:
         status = Document.Status.PAID
     elif amount_paid > 0:
@@ -375,13 +405,24 @@ def recalculate_payment_status(*, invoice):
 
 
 @transaction.atomic
-def record_payment(*, invoice, payment_data, allow_overpayment=False):
-    invoice = Document.objects.select_for_update().get(pk=invoice.pk)
+def record_payment(
+    *, invoice, payment_data, allow_overpayment=False, allow_closed_period=False
+):
+    invoice = (
+        Document.objects.select_for_update()
+        .select_related("company")
+        .get(pk=invoice.pk)
+    )
     if invoice.doc_type != Document.Type.INVOICE or invoice.status in {
         Document.Status.DRAFT,
         Document.Status.VOID,
     }:
         raise ValidationError("Payments require an issued, non-void invoice.")
+    payment_data = dict(payment_data)
+    payment_data.setdefault(
+        "fee_current_amount",
+        payment_data.get("fee_amount", Decimal("0.00")),
+    )
     intent_id = payment_data.get("stripe_payment_intent_id")
     if intent_id:
         existing = Payment.objects.filter(stripe_payment_intent_id=intent_id).first()
@@ -389,6 +430,11 @@ def record_payment(*, invoice, payment_data, allow_overpayment=False):
             if existing.document_id != invoice.pk:
                 raise ValidationError("Payment intent is already linked to another invoice.")
             return existing
+    validate_open_financial_date(
+        company=invoice.company,
+        effective_date=payment_data["received_at"],
+        allow_closed=allow_closed_period,
+    )
     amount = money(payment_data["amount"])
     # Manual entry rejects overpayment to catch data-entry mistakes. A verified
     # external capture (Stripe) passes allow_overpayment=True: the money is real
@@ -398,6 +444,8 @@ def record_payment(*, invoice, payment_data, allow_overpayment=False):
         raise ValidationError("Payment cannot exceed the outstanding balance.")
     payment = Payment(document=invoice, **payment_data)
     payment.amount = amount
+    if "fee_current_amount" not in payment_data:
+        payment.fee_current_amount = payment.fee_amount
     payment.full_clean()
     payment.save()
     invoice = recalculate_payment_status(invoice=invoice)
@@ -408,10 +456,106 @@ def record_payment(*, invoice, payment_data, allow_overpayment=False):
 
 
 @transaction.atomic
+def record_payment_adjustment(
+    *,
+    payment,
+    adjustment_data,
+    allow_closed_period=False,
+    allow_balance_exception=False,
+):
+    payment = (
+        Payment.objects.select_for_update()
+        .select_related("document", "document__company")
+        .get(pk=payment.pk)
+    )
+    provider_id = adjustment_data.get("provider_id", "")
+    if provider_id:
+        existing = PaymentAdjustment.objects.filter(
+            company=payment.document.company,
+            provider_id=provider_id,
+        ).first()
+        if existing:
+            if existing.payment_id != payment.pk:
+                raise ValidationError(
+                    "Provider adjustment is already linked to another payment."
+                )
+            return existing
+    adjustment_data = dict(adjustment_data)
+    fee_types = {
+        PaymentAdjustment.Type.FEE_REFUND,
+        PaymentAdjustment.Type.FEE_ADJUSTMENT,
+    }
+    is_fee_adjustment = adjustment_data.get("adjustment_type") in fee_types
+    adjustment_data["affects_processing_fees"] = is_fee_adjustment
+    if is_fee_adjustment:
+        adjustment_data["affects_invoice_balance"] = False
+    validate_open_financial_date(
+        company=payment.document.company,
+        effective_date=adjustment_data["effective_at"],
+        allow_closed=allow_closed_period,
+    )
+    adjustment = PaymentAdjustment(
+        company=payment.document.company,
+        payment=payment,
+        **adjustment_data,
+    )
+    adjustment.amount = money(adjustment.amount)
+    projected_current_fee = None
+    if is_fee_adjustment:
+        projected_current_fee = money(payment.fee_current_amount - adjustment.amount)
+        if projected_current_fee < 0:
+            raise ValidationError(
+                "A processing-fee refund cannot exceed the currently recorded fee."
+            )
+    adjustment.full_clean()
+    if adjustment.affects_invoice_balance and not allow_balance_exception:
+        projected_paid = invoice_amount_paid(payment.document) + adjustment.amount
+        if projected_paid < 0:
+            raise ValidationError(
+                "A manual adjustment cannot refund more than the invoice has received."
+            )
+        if projected_paid > payment.document.total:
+            raise ValidationError(
+                "A manual adjustment cannot increase payments above the invoice total."
+            )
+    try:
+        with transaction.atomic():
+            adjustment.save()
+    except IntegrityError:
+        if not provider_id:
+            raise
+        existing = PaymentAdjustment.objects.filter(
+            company=payment.document.company,
+            provider_id=provider_id,
+        ).first()
+        if existing and existing.payment_id == payment.pk:
+            return existing
+        raise
+    if projected_current_fee is not None:
+        payment.fee_current_amount = projected_current_fee
+        payment.save(update_fields=["fee_current_amount"])
+    invoice = recalculate_payment_status(invoice=payment.document)
+    from projects.workflow import activate_project_if_funded
+
+    activate_project_if_funded(invoice=invoice)
+    return adjustment
+
+
+@transaction.atomic
 def update_payment(*, payment, payment_data):
     payment = Payment.objects.select_for_update().select_related("document").get(pk=payment.pk)
-    invoice = Document.objects.select_for_update().get(pk=payment.document_id)
-    other_paid = invoice.payments.exclude(pk=payment.pk).aggregate(value=Sum("amount"))["value"] or Decimal("0")
+    invoice = Document.objects.select_for_update().select_related("company").get(
+        pk=payment.document_id
+    )
+    validate_open_financial_date(
+        company=invoice.company,
+        effective_date=payment.received_at,
+    )
+    validate_open_financial_date(
+        company=invoice.company,
+        effective_date=payment_data["received_at"],
+    )
+    other_paid = invoice_amount_paid(invoice) - payment.amount
     amount = money(payment_data["amount"])
     if other_paid + amount > invoice.total:
         raise ValidationError("Payments cannot exceed the invoice total.")
@@ -429,7 +573,15 @@ def update_payment(*, payment, payment_data):
 
 @transaction.atomic
 def delete_payment(*, payment):
-    payment = Payment.objects.select_for_update().select_related("document").get(pk=payment.pk)
+    payment = (
+        Payment.objects.select_for_update()
+        .select_related("document", "document__company")
+        .get(pk=payment.pk)
+    )
     invoice = payment.document
+    validate_open_financial_date(
+        company=invoice.company,
+        effective_date=payment.received_at,
+    )
     payment.delete()
     recalculate_payment_status(invoice=invoice)

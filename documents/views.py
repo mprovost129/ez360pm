@@ -20,6 +20,7 @@ from .forms import (
     InvoiceEditForm,
     InvoiceFilterForm,
     LineItemForm,
+    PaymentAdjustmentForm,
     PaymentForm,
     TimeAttachmentForm,
     VoidInvoiceForm,
@@ -134,7 +135,7 @@ class InvoiceDetailView(LoginRequiredMixin, CompanyScopedQuerysetMixin, DetailVi
             .prefetch_related(
                 "project__client__contacts",
                 "line_items__time_entries",
-                "payments",
+                "payments__adjustments",
                 "credits_received__source_invoice",
                 "deliveries",
             )
@@ -449,19 +450,60 @@ class PaymentUpdateView(PaymentViewMixin, UpdateView):
     extra_context = {"page_title": "Edit payment", "submit_label": "Save payment"}
 
     def get_queryset(self):
-        return self.invoice.payments.exclude(method=Payment.Method.STRIPE)
+        return self.invoice.payments.exclude(method=Payment.Method.STRIPE).filter(adjustments__isnull=True)
 
 
 class PaymentDeleteView(LoginRequiredMixin, View):
     def post(self, request, invoice_pk, payment_pk):
         invoice = scoped_invoice(request, invoice_pk)
         payment = get_object_or_404(
-            invoice.payments.exclude(method=Payment.Method.STRIPE),
+            invoice.payments.exclude(method=Payment.Method.STRIPE).filter(adjustments__isnull=True),
             pk=payment_pk,
         )
-        delete_payment(payment=payment)
-        messages.success(request, "Payment removed and invoice status recalculated.")
+        try:
+            delete_payment(payment=payment)
+        except ValidationError as exc:
+            messages.error(request, "; ".join(exc.messages))
+        else:
+            messages.success(request, "Payment removed and invoice status recalculated.")
         return redirect("documents:invoice-detail", pk=invoice.pk)
+
+
+class PaymentAdjustmentCreateView(LoginRequiredMixin, CreateView):
+    form_class = PaymentAdjustmentForm
+    template_name = "shared/form.html"
+    payment = None
+    invoice = None
+    extra_context = {
+        "page_title": "Record refund or adjustment",
+        "submit_label": "Record adjustment",
+    }
+
+    def dispatch(self, request, *args, **kwargs):
+        self.invoice = scoped_invoice(request, kwargs["invoice_pk"])
+        self.payment = get_object_or_404(
+            self.invoice.payments.select_related("document"),
+            pk=kwargs["payment_pk"],
+        )
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["payment"] = self.payment
+        return kwargs
+
+    def form_valid(self, form):
+        try:
+            form.save()
+        except ValidationError as exc:
+            form.add_error(None, "; ".join(exc.messages))
+            return self.form_invalid(form)
+        messages.success(
+            self.request,
+            "Adjustment recorded. The original payment remains unchanged.",
+        )
+        return redirect("documents:invoice-detail", pk=self.invoice.pk)
+
 
 
 class InvoiceCreditCreateView(LoginRequiredMixin, FormView):

@@ -13,7 +13,13 @@ from django.urls import reverse
 from accounts.models import Company, User
 from clients.tests.test_clients import create_client
 from documents.delivery_services import send_document_email
-from documents.models import Document, DocumentDelivery, Payment
+from documents.models import (
+    Document,
+    DocumentDelivery,
+    Payment,
+    PaymentAdjustment,
+    PaymentFeeReconciliationAttempt,
+)
 from documents.proposal_services import create_proposal
 from documents.services import (
     create_invoice,
@@ -569,6 +575,9 @@ class DeliveryAndStripeTests(TestCase):
         self.assertEqual(payment.amount, Decimal("100.00"))
         self.assertEqual(payment.fee_amount, Decimal("0.00"))
         self.assertTrue(payment.fee_pending)
+        attempt = PaymentFeeReconciliationAttempt.objects.get(payment=payment)
+        self.assertEqual(attempt.status, PaymentFeeReconciliationAttempt.Status.ERROR)
+        self.assertTrue(attempt.error_code)
         invoice.refresh_from_db()
         self.assertEqual(invoice.status, Document.Status.PAID)
 
@@ -594,6 +603,96 @@ class DeliveryAndStripeTests(TestCase):
         self.assertEqual(reconciled.pk, payment.pk)
         self.assertEqual(reconciled.fee_amount, Decimal("3.20"))
         self.assertFalse(reconciled.fee_pending)
+        self.assertTrue(
+            PaymentFeeReconciliationAttempt.objects.filter(
+                payment=reconciled,
+                status=PaymentFeeReconciliationAttempt.Status.RESOLVED,
+                observed_fee=Decimal("3.20"),
+            ).exists()
+        )
+        attempts = PaymentFeeReconciliationAttempt.objects.filter(payment=payment)
+        self.assertEqual(attempts.count(), 2)
+        self.assertTrue(
+            attempts.filter(status=PaymentFeeReconciliationAttempt.Status.RESOLVED).exists()
+        )
+
+    def test_late_fee_resolution_posts_adjustment_when_receipt_period_is_closed(self):
+        invoice = self.make_invoice()
+        payment = record_payment(
+            invoice=invoice,
+            payment_data={
+                "amount": Decimal("100.00"),
+                "fee_amount": Decimal("0.00"),
+                "fee_current_amount": Decimal("0.00"),
+                "fee_pending": True,
+                "method": Payment.Method.STRIPE,
+                "received_at": date(2026, 1, 15),
+                "reference": "Stripe pending fee",
+                "stripe_payment_intent_id": "pi_closed_fee",
+            },
+            allow_overpayment=True,
+        )
+        self.company.books_closed_through = date(2026, 12, 31)
+        self.company.save(update_fields=["books_closed_through"])
+
+        process_stripe_event(
+            event={
+                "type": "charge.updated",
+                "data": {
+                    "object": {
+                        "id": "ch_closed_fee",
+                        "payment_intent": "pi_closed_fee",
+                        "balance_transaction": {"fee": 320},
+                    }
+                },
+            }
+        )
+
+        payment.refresh_from_db()
+        adjustment = PaymentAdjustment.objects.get(payment=payment)
+        self.assertEqual(payment.fee_amount, Decimal("0.00"))
+        self.assertEqual(payment.fee_current_amount, Decimal("3.20"))
+        self.assertFalse(payment.fee_pending)
+        self.assertEqual(adjustment.amount, Decimal("-3.20"))
+        self.assertFalse(adjustment.affects_invoice_balance)
+        self.assertTrue(adjustment.affects_processing_fees)
+
+    def test_charge_fee_adjustment_replay_is_idempotent_by_stripe_event(self):
+        invoice = self.make_invoice()
+        payment = record_payment(
+            invoice=invoice,
+            payment_data={
+                "amount": Decimal("100.00"),
+                "fee_amount": Decimal("3.20"),
+                "fee_current_amount": Decimal("3.20"),
+                "fee_pending": False,
+                "method": Payment.Method.STRIPE,
+                "received_at": date(2026, 7, 22),
+                "reference": "Stripe payment",
+                "stripe_payment_intent_id": "pi_fee_replay",
+            },
+            allow_overpayment=True,
+        )
+        event = {
+            "id": "evt_fee_replay",
+            "type": "charge.updated",
+            "data": {
+                "object": {
+                    "id": "ch_fee_replay",
+                    "payment_intent": payment.stripe_payment_intent_id,
+                    "balance_transaction": {"fee": 350},
+                }
+            },
+        }
+
+        process_stripe_event(event=event)
+        process_stripe_event(event=event)
+
+        adjustments = PaymentAdjustment.objects.filter(payment=payment)
+        self.assertEqual(adjustments.count(), 1)
+        adjustment = adjustments.get()
+        self.assertEqual(adjustment.amount, Decimal("-0.30"))
+        self.assertTrue(adjustment.affects_processing_fees)
 
     def test_manual_payment_carries_no_provider_fee(self):
         invoice = self.make_invoice()
@@ -610,6 +709,59 @@ class DeliveryAndStripeTests(TestCase):
         payment = invoice.payments.get()
         self.assertEqual(payment.fee_amount, Decimal("0.00"))
         self.assertEqual(payment.net_amount, Decimal("100.00"))
+
+
+    def test_stripe_refund_webhook_is_idempotent_and_reopens_invoice(self):
+        invoice = self.make_invoice()
+        payment = process_stripe_event(event=self.stripe_event(invoice))
+        refund_event = {
+            "type": "refund.created",
+            "data": {
+                "object": {
+                    "id": "re_test_123",
+                    "payment_intent": payment.stripe_payment_intent_id,
+                    "amount": 2500,
+                    "status": "succeeded",
+                    "created": 1788152400,
+                }
+            },
+        }
+
+        first = process_stripe_event(event=refund_event)
+        replay = process_stripe_event(event=refund_event)
+
+        self.assertEqual(first.pk, replay.pk)
+        self.assertEqual(PaymentAdjustment.objects.filter(payment=payment).count(), 1)
+        self.assertEqual(first.amount, Decimal("-25.00"))
+        invoice.refresh_from_db()
+        self.assertEqual(invoice.status, Document.Status.PARTIALLY_PAID)
+        self.assertEqual(invoice.outstanding_balance, Decimal("25.00"))
+
+    def test_stripe_dispute_and_won_reversal_are_append_only(self):
+        invoice = self.make_invoice()
+        payment = process_stripe_event(event=self.stripe_event(invoice))
+        dispute = {
+            "id": "dp_test_123",
+            "payment_intent": payment.stripe_payment_intent_id,
+            "amount": 10000,
+            "created": 1788152400,
+        }
+
+        process_stripe_event(
+            event={"type": "charge.dispute.created", "data": {"object": dispute}}
+        )
+        invoice.refresh_from_db()
+        self.assertEqual(invoice.outstanding_balance, Decimal("100.00"))
+
+        won = dict(dispute, status="won", created=1788238800)
+        process_stripe_event(
+            event={"type": "charge.dispute.closed", "data": {"object": won}}
+        )
+        invoice.refresh_from_db()
+
+        self.assertEqual(PaymentAdjustment.objects.filter(payment=payment).count(), 2)
+        self.assertEqual(invoice.status, Document.Status.PAID)
+        self.assertEqual(invoice.outstanding_balance, Decimal("0.00"))
 
     def test_webhook_rejects_untrusted_company_metadata_and_currency(self):
         invoice = self.make_invoice()

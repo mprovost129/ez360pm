@@ -1,6 +1,13 @@
 from django.contrib import admin
 
-from .models import Document, DocumentDelivery, DocumentNumberSequence
+from .models import (
+    Document,
+    DocumentDelivery,
+    DocumentNumberSequence,
+    Payment,
+    PaymentAdjustment,
+    PaymentFeeReconciliationAttempt,
+)
 
 
 @admin.register(Document)
@@ -52,6 +59,122 @@ class DocumentDeliveryAdmin(admin.ModelAdmin):
         "error_code",
         "created_at",
         "sent_at",
+    )
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(Payment)
+class PaymentAdmin(admin.ModelAdmin):
+    list_display = (
+        "document",
+        "received_at",
+        "method",
+        "amount",
+        "fee_amount",
+        "fee_current_amount",
+        "fee_pending",
+    )
+    list_filter = ("method", "fee_pending", "received_at")
+    search_fields = (
+        "document__number",
+        "document__project__name",
+        "reference",
+        "stripe_payment_intent_id",
+    )
+    readonly_fields = (
+        "document",
+        "amount",
+        "fee_amount",
+        "fee_current_amount",
+        "fee_pending",
+        "method",
+        "received_at",
+        "reference",
+        "stripe_payment_intent_id",
+        "created_at",
+    )
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(PaymentAdjustment)
+class PaymentAdjustmentAdmin(admin.ModelAdmin):
+    list_display = (
+        "payment",
+        "adjustment_type",
+        "amount",
+        "effective_at",
+        "affects_invoice_balance",
+        "affects_processing_fees",
+        "provider_id",
+    )
+    list_filter = ("company", "adjustment_type", "effective_at")
+    search_fields = (
+        "payment__document__number",
+        "provider_id",
+        "reference",
+    )
+    readonly_fields = (
+        "company",
+        "payment",
+        "adjustment_type",
+        "amount",
+        "effective_at",
+        "affects_invoice_balance",
+        "affects_processing_fees",
+        "provider_id",
+        "reference",
+        "created_at",
+    )
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(PaymentFeeReconciliationAttempt)
+class PaymentFeeReconciliationAttemptAdmin(admin.ModelAdmin):
+    list_display = (
+        "payment",
+        "status",
+        "observed_fee",
+        "error_code",
+        "attempted_at",
+    )
+    list_filter = ("company", "status", "attempted_at")
+    search_fields = (
+        "payment__document__number",
+        "payment__stripe_payment_intent_id",
+        "error_code",
+    )
+    readonly_fields = (
+        "company",
+        "payment",
+        "status",
+        "observed_fee",
+        "error_code",
+        "error_message",
+        "attempted_at",
     )
 
     def has_add_permission(self, request):

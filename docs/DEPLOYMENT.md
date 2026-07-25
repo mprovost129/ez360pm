@@ -115,6 +115,13 @@ Subscribe it to:
 
 - `checkout.session.completed`
 - `checkout.session.async_payment_succeeded`
+- `charge.succeeded`
+- `charge.updated`
+- `refund.created`
+- `refund.updated`
+- `charge.refunded`
+- `charge.dispute.created`
+- `charge.dispute.closed`
 
 The installed Stripe Python SDK is `14.4.0`, pinned to API version
 `2026-02-25.clover`. Configure the webhook endpoint to the same API version.
@@ -125,12 +132,33 @@ The server reloads and locks the invoice, calculates the current outstanding
 balance, and creates the hosted Session. The webhook verifies Stripe's signature
 against the raw request body and passes the resulting payment through the same
 transactional service as manual payments. The unique Payment Intent ID makes
-webhook replay idempotent.
+payment replay idempotent. Refunds, disputes, reversals, and later fee changes
+are imported as append-only adjustments using unique Stripe provider IDs.
 
 After configuration, confirm the Integrations screen reports Email and Stripe as
 configured. Use a Stripe test-mode invoice first, replay its successful webhook,
 and verify that only one Stripe Payment row exists and the invoice balance is
 zero.
+
+
+## Revenue & Fees release migration
+
+Before serving the V1.1 code, apply the new account and document migrations:
+
+```powershell
+.\.venv\Scripts\python.exe manage.py migrate
+.\.venv\Scripts\python.exe manage.py collectstatic --noinput
+.\.venv\Scripts\python.exe manage.py check
+.\.venv\Scripts\python.exe manage.py test
+```
+
+The migrations add `Company.books_closed_through`, the append-only
+`PaymentAdjustment` ledger, current Stripe fee tracking, and append-only fee
+reconciliation attempt history. Review the Revenue & Fees report and resolve
+all pending fees before setting a year-end lock; the settings form also enforces
+that prerequisite.
+The report is payment-level net reporting; it does not reconcile Stripe payout
+batches to individual bank deposits.
 
 ## Monitoring and data audit
 
@@ -145,8 +173,9 @@ Run the read-only integrity audit after each release and on a daily schedule:
 ```
 
 The command checks stored line/document totals, payment-derived invoice status,
-retainer-credit relationships, invoiced-time relationships, company boundaries,
-and document deliveries left pending for more than 15 minutes. Use
+retainer-credit relationships, invoiced-time relationships, payment/adjustment
+and fee-attempt company boundaries, and document deliveries left pending for
+more than 15 minutes. Use
 `--company-id <id>` to isolate one company or `--pending-minutes <minutes>` to
 change the delivery threshold. A nonzero result should alert the operator. The
 audit never modifies records; investigate against a backup before making a

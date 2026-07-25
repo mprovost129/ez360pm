@@ -38,6 +38,14 @@ class Company(models.Model):
         default=Decimal("0.000"),
         validators=[MinValueValidator(Decimal("0"))],
     )
+    books_closed_through = models.DateField(
+        blank=True,
+        null=True,
+        help_text=(
+            "Payments and manual adjustments dated on or before this date cannot "
+            "be edited or deleted through the application."
+        ),
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

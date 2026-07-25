@@ -24,6 +24,8 @@ erDiagram
     Project ||--o{ Document : has
     Document ||--o{ LineItem : contains
     Document ||--o{ Payment : receives
+    Payment ||--o{ PaymentAdjustment : adjusts
+    Payment ||--o{ PaymentFeeReconciliationAttempt : audits_fee_lookup
     Document ||--o{ DocumentDelivery : delivers
     LineItem ||--o{ TimeEntry : bills
 
@@ -43,6 +45,8 @@ duplicated company columns that could disagree:
 | `Contact` | `client.company` |
 | `LineItem` | `document.company` |
 | `Payment` | `document.company` |
+| `PaymentAdjustment` | direct `company`; must match `payment.document.company` |
+| `PaymentFeeReconciliationAttempt` | direct `company`; must match `payment.document.company` |
 | `InvoiceCredit` | `source_invoice.company` and `destination_invoice.company` must match |
 | `DocumentDelivery` | `document.company` |
 
@@ -77,7 +81,9 @@ Blank text fields store `""`; optional relationships/dates use `NULL`.
 | TimeEntry | conditional unique running entry per user; end after start | user/project/company match; invoiced entries locked |
 | Document | unique `(company, doc_type, number)`; unique public token | type-specific fields/status; project/company match |
 | LineItem | nonnegative quantity/rate/tax; unique `(document, order)` | document must be editable draft |
-| Payment | positive amount; unique nonblank Stripe Payment Intent ID | document is invoice; amount does not unintentionally overpay |
+| Payment | positive amount; nonnegative fee fields; unique nonblank Stripe Payment Intent ID | document is invoice; amount does not unintentionally overpay; normal users cannot rewrite a closed period |
+| PaymentAdjustment | nonzero signed amount; unique nonblank provider ID per company | append-only; payment/company match; refund/dispute signs, fee classification, and invoice-balance behavior validated |
+| PaymentFeeReconciliationAttempt | provider observation fields; company ownership | append-only; payment/company match; latest attempt is surfaced for unresolved fees |
 | InvoiceCredit | positive amount; source/destination pair rules | paid retainer -> final invoice, same project/company, within availability |
 | Note | none beyond ownership FKs | optional prospect identity; selected project determines client; unrelated client rejected |
 
@@ -90,6 +96,9 @@ Useful query indexes:
 - Document: `(company, doc_type, status)`, `(company, project, doc_type)`, and
   `(company, due_date)`
 - Payment: `(document, received_at)`
+- PaymentAdjustment: `(company, effective_at)` and `(payment, effective_at)`
+- PaymentFeeReconciliationAttempt: `(company, status, attempted_at)` and
+  `(payment, attempted_at)`
 
 PostgreSQL constraints should be named explicitly so migrations and integrity
 errors remain diagnosable.
@@ -156,10 +165,29 @@ PDFs, and dashboards use the same definitions.
 | Tax total | sum of rounded per-line tax |
 | Credit total | sum of valid destination InvoiceCredits |
 | Document total | subtotal + tax total - credit total, never below zero |
-| Amount paid | sum of Payment amounts for the invoice |
+| Amount paid | sum of Payment amounts plus balance-affecting PaymentAdjustments for the invoice, never below zero |
 | Outstanding balance | max(document total - amount paid, 0) |
 | Overdue | non-void invoice with balance > 0 and due date before local today |
-| Received revenue | sum of Payment amounts in the selected received-date period |
+| Gross received revenue | sum of Payment amounts in the selected received-date period |
+| Processing fees | sum of confirmed `Payment.fee_amount` in the selected received-date period |
+| Processing-fee adjustments | signed fee refunds/additional fees in the selected adjustment-effective-date period; they also keep `Payment.fee_current_amount` aligned with Stripe |
+| Net processing fees | original processing fees - signed processing-fee adjustments |
+| Refunds/other adjustments | signed non-fee PaymentAdjustments in the selected effective-date period |
+| Net received | gross received - net processing fees + refunds/other adjustments |
+
+
+
+### Closed financial periods
+
+`Company.books_closed_through` protects accepted year-end history. Manual
+payments and adjustments dated on or before the lock cannot be created, edited,
+or deleted through the application. The settings form refuses to close a period
+that still contains a pending Stripe fee. Stripe remains authoritative for provider
+events: a late refund or dispute is imported on its provider-effective date, and
+a newly resolved fee for a closed receipt is posted as an open-period adjustment
+instead of modifying the original fee. Every Stripe fee lookup or retry is
+recorded in an append-only `PaymentFeeReconciliationAttempt` history so an
+unresolved fee has a visible last-attempt result instead of an unexplained blank.
 
 ## Implementation staging
 

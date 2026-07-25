@@ -8,8 +8,15 @@ from clients.models import Client
 from core.forms import CompanyScopedModelForm
 from projects.models import Project, TimeEntry
 
-from .models import Document, LineItem, Payment
-from .services import create_invoice, record_payment, save_line_item, update_payment
+from .models import Document, LineItem, Payment, PaymentAdjustment
+from .services import (
+    create_invoice,
+    record_payment,
+    record_payment_adjustment,
+    save_line_item,
+    update_payment,
+    validate_open_financial_date,
+)
 
 
 class InvoiceCreateForm(CompanyScopedModelForm):
@@ -229,6 +236,24 @@ class PaymentForm(forms.ModelForm):
             raise forms.ValidationError("Payments cannot exceed the invoice total.")
         return amount
 
+    def clean(self):
+        cleaned = super().clean()
+        received_at = cleaned.get("received_at")
+        if received_at:
+            try:
+                if self.instance.pk:
+                    validate_open_financial_date(
+                        company=self.invoice.company,
+                        effective_date=self.instance.received_at,
+                    )
+                validate_open_financial_date(
+                    company=self.invoice.company,
+                    effective_date=received_at,
+                )
+            except forms.ValidationError as exc:
+                self.add_error("received_at", exc)
+        return cleaned
+
     def save(self, commit=True):
         if not commit:
             raise ValueError("PaymentForm must be saved with commit=True.")
@@ -237,6 +262,89 @@ class PaymentForm(forms.ModelForm):
             self.instance = update_payment(payment=self.instance, payment_data=data)
         else:
             self.instance = record_payment(invoice=self.invoice, payment_data=data)
+        return self.instance
+
+
+class PaymentAdjustmentForm(forms.ModelForm):
+    class Meta:
+        model = PaymentAdjustment
+        fields = (
+            "adjustment_type",
+            "amount",
+            "effective_at",
+            "affects_invoice_balance",
+            "affects_processing_fees",
+            "reference",
+        )
+        widgets = {
+            "effective_at": forms.DateInput(attrs={"type": "date"}),
+            "affects_processing_fees": forms.HiddenInput(),
+        }
+        help_texts = {
+            "amount": (
+                "Use a negative amount for a refund, chargeback, or additional "
+                "processing fee. Use a positive amount for a reversal, processing "
+                "fee refund, or upward correction."
+            ),
+            "reference": "Reason, refund ID, dispute note, or correction explanation.",
+        }
+
+    def __init__(self, *args, payment, **kwargs):
+        self.payment = payment
+        super().__init__(*args, **kwargs)
+        self.fields["effective_at"].initial = timezone.localdate()
+        self.fields["affects_invoice_balance"].initial = True
+        if payment.method != Payment.Method.STRIPE or payment.fee_pending:
+            fee_types = {
+                PaymentAdjustment.Type.FEE_REFUND,
+                PaymentAdjustment.Type.FEE_ADJUSTMENT,
+            }
+            self.fields["adjustment_type"].choices = [
+                choice
+                for choice in self.fields["adjustment_type"].choices
+                if choice[0] not in fee_types
+            ]
+
+    def clean(self):
+        cleaned = super().clean()
+        adjustment_type = cleaned.get("adjustment_type")
+        if adjustment_type in {
+            PaymentAdjustment.Type.FEE_REFUND,
+            PaymentAdjustment.Type.FEE_ADJUSTMENT,
+        }:
+            cleaned["affects_invoice_balance"] = False
+            cleaned["affects_processing_fees"] = True
+        elif adjustment_type in {
+            PaymentAdjustment.Type.REFUND,
+            PaymentAdjustment.Type.DISPUTE,
+            PaymentAdjustment.Type.DISPUTE_REVERSAL,
+        }:
+            cleaned["affects_invoice_balance"] = True
+            cleaned["affects_processing_fees"] = False
+        else:
+            cleaned["affects_processing_fees"] = False
+        effective_at = cleaned.get("effective_at")
+        if effective_at:
+            try:
+                validate_open_financial_date(
+                    company=self.payment.document.company,
+                    effective_date=effective_at,
+                )
+            except forms.ValidationError as exc:
+                self.add_error("effective_at", exc)
+        return cleaned
+
+    def save(self, commit=True):
+        if not commit:
+            raise ValueError("PaymentAdjustmentForm must be saved with commit=True.")
+        data = {field: self.cleaned_data[field] for field in self.Meta.fields}
+        data["affects_processing_fees"] = self.cleaned_data.get(
+            "affects_processing_fees", False
+        )
+        self.instance = record_payment_adjustment(
+            payment=self.payment,
+            adjustment_data=data,
+        )
         return self.instance
 
 

@@ -8,7 +8,7 @@ from django.utils import timezone
 
 from accounts.models import Company, User
 from clients.tests.test_clients import create_client
-from documents.models import Document, Payment
+from documents.models import Document, Payment, PaymentAdjustment
 from documents.pdf import build_invoice_pdf
 from documents.services import (
     attach_time_to_invoice,
@@ -19,6 +19,7 @@ from documents.services import (
     issue_document,
     move_line_item,
     record_payment,
+    record_payment_adjustment,
     record_public_view,
     release_void_invoice_time,
     save_line_item,
@@ -210,6 +211,190 @@ class BillingServiceTests(TestCase):
         invoice.refresh_from_db()
         self.assertEqual(invoice.status, Document.Status.PARTIALLY_PAID)
         self.assertEqual(invoice.amount_paid, first.amount)
+
+
+    def test_payment_adjustments_are_append_only_and_recalculate_balance(self):
+        invoice = self.make_hourly_invoice()
+        self.add_line(invoice)
+        issue_document(document=invoice)
+        payment = record_payment(
+            invoice=invoice,
+            payment_data={
+                "amount": Decimal("100.00"),
+                "method": Payment.Method.CHECK,
+                "received_at": date(2026, 7, 22),
+                "reference": "1001",
+            },
+        )
+
+        adjustment = record_payment_adjustment(
+            payment=payment,
+            adjustment_data={
+                "adjustment_type": PaymentAdjustment.Type.REFUND,
+                "amount": Decimal("-20.00"),
+                "effective_at": date(2026, 8, 1),
+                "affects_invoice_balance": True,
+                "reference": "Partial refund",
+            },
+        )
+        invoice.refresh_from_db()
+
+        self.assertEqual(invoice.amount_paid, Decimal("80.00"))
+        self.assertEqual(invoice.outstanding_balance, Decimal("20.00"))
+        self.assertEqual(invoice.status, Document.Status.PARTIALLY_PAID)
+        adjustment.reference = "Changed"
+        with self.assertRaises(ValidationError):
+            adjustment.save()
+        with self.assertRaises(ValidationError):
+            adjustment.delete()
+
+    def test_manual_adjustment_cannot_refund_more_than_received(self):
+        invoice = self.make_hourly_invoice()
+        self.add_line(invoice)
+        issue_document(document=invoice)
+        payment = record_payment(
+            invoice=invoice,
+            payment_data={
+                "amount": Decimal("40.00"),
+                "method": Payment.Method.CHECK,
+                "received_at": date(2026, 7, 22),
+                "reference": "1001",
+            },
+        )
+
+        with self.assertRaises(ValidationError):
+            record_payment_adjustment(
+                payment=payment,
+                adjustment_data={
+                    "adjustment_type": PaymentAdjustment.Type.REFUND,
+                    "amount": Decimal("-50.00"),
+                    "effective_at": date(2026, 8, 1),
+                    "affects_invoice_balance": True,
+                    "reference": "Entry error",
+                },
+            )
+
+    def test_processing_fee_refund_changes_revenue_not_invoice_balance(self):
+        invoice = self.make_hourly_invoice()
+        self.add_line(invoice)
+        issue_document(document=invoice)
+        payment = record_payment(
+            invoice=invoice,
+            payment_data={
+                "amount": Decimal("100.00"),
+                "fee_amount": Decimal("3.20"),
+                "fee_current_amount": Decimal("3.20"),
+                "method": Payment.Method.STRIPE,
+                "received_at": date(2026, 7, 22),
+                "reference": "Stripe",
+                "stripe_payment_intent_id": "pi_fee_refund",
+            },
+        )
+        adjustment = record_payment_adjustment(
+            payment=payment,
+            adjustment_data={
+                "adjustment_type": PaymentAdjustment.Type.FEE_REFUND,
+                "amount": Decimal("0.30"),
+                "effective_at": date(2026, 8, 1),
+                "affects_invoice_balance": False,
+                "reference": "Fee correction",
+            },
+        )
+        invoice.refresh_from_db()
+        payment.refresh_from_db()
+
+        self.assertEqual(invoice.amount_paid, Decimal("100.00"))
+        self.assertEqual(invoice.outstanding_balance, Decimal("0.00"))
+        self.assertEqual(invoice.status, Document.Status.PAID)
+        self.assertEqual(payment.net_amount, Decimal("97.10"))
+        self.assertEqual(payment.fee_current_amount, Decimal("2.90"))
+        self.assertTrue(adjustment.affects_processing_fees)
+
+    def test_processing_fee_refund_cannot_exceed_current_stripe_fee(self):
+        invoice = self.make_hourly_invoice()
+        self.add_line(invoice)
+        issue_document(document=invoice)
+        payment = record_payment(
+            invoice=invoice,
+            payment_data={
+                "amount": Decimal("100.00"),
+                "fee_amount": Decimal("3.20"),
+                "fee_current_amount": Decimal("3.20"),
+                "method": Payment.Method.STRIPE,
+                "received_at": date(2026, 7, 22),
+                "reference": "Stripe",
+                "stripe_payment_intent_id": "pi_fee_refund_limit",
+            },
+        )
+
+        with self.assertRaises(ValidationError):
+            record_payment_adjustment(
+                payment=payment,
+                adjustment_data={
+                    "adjustment_type": PaymentAdjustment.Type.FEE_REFUND,
+                    "amount": Decimal("3.21"),
+                    "effective_at": date(2026, 8, 1),
+                    "affects_invoice_balance": False,
+                    "reference": "Impossible fee refund",
+                },
+            )
+
+    def test_closed_financial_period_blocks_manual_changes_but_not_provider_imports(self):
+        invoice = self.make_hourly_invoice()
+        self.add_line(invoice)
+        issue_document(document=invoice)
+        self.company.books_closed_through = date(2026, 12, 31)
+        self.company.save(update_fields=["books_closed_through"])
+
+        with self.assertRaises(ValidationError):
+            record_payment(
+                invoice=invoice,
+                payment_data={
+                    "amount": Decimal("100.00"),
+                    "method": Payment.Method.CHECK,
+                    "received_at": date(2026, 12, 31),
+                    "reference": "Locked year",
+                },
+            )
+
+        payment = record_payment(
+            invoice=invoice,
+            payment_data={
+                "amount": Decimal("100.00"),
+                "method": Payment.Method.STRIPE,
+                "received_at": date(2026, 12, 31),
+                "reference": "Provider import",
+                "stripe_payment_intent_id": "pi_closed_period",
+            },
+            allow_closed_period=True,
+        )
+        with self.assertRaises(ValidationError):
+            delete_payment(payment=payment)
+        with self.assertRaises(ValidationError):
+            record_payment_adjustment(
+                payment=payment,
+                adjustment_data={
+                    "adjustment_type": PaymentAdjustment.Type.REFUND,
+                    "amount": Decimal("-10.00"),
+                    "effective_at": date(2026, 12, 31),
+                    "affects_invoice_balance": True,
+                    "reference": "Locked refund",
+                },
+            )
+
+        adjustment = record_payment_adjustment(
+            payment=payment,
+            adjustment_data={
+                "adjustment_type": PaymentAdjustment.Type.REFUND,
+                "amount": Decimal("-10.00"),
+                "effective_at": date(2026, 12, 31),
+                "affects_invoice_balance": True,
+                "reference": "Provider refund",
+            },
+            allow_closed_period=True,
+            allow_balance_exception=True,
+        )
+        self.assertEqual(adjustment.amount, Decimal("-10.00"))
 
     def test_overpayment_is_rejected(self):
         invoice = self.make_hourly_invoice()

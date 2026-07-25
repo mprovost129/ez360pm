@@ -83,6 +83,66 @@ The architecture, relationships, and screen map are detailed in:
 - **Next milestone:** freeze speculative V1 feature work, complete the first
   restore/replay drills, and prioritize only evidence from the real-use log.
 
+### V1.1 FreshBooks replacement: annual revenue and fee reporting
+
+**Priority:** complete before FreshBooks is retired and before speculative PM or
+SaaS feature expansion. The existing `Payment` records remain the accounting
+source of truth; this milestone upgrades reporting, auditability, and export.
+Detailed implementation notes and acceptance tests are in
+[Revenue and fee reporting TODOs](REVENUE_REPORTING_TODOS.md).
+
+#### Required reporting experience
+
+- [x] Replace the month-only Revenue filter with reusable date presets: This
+  month, Last month, This year, Last year, a specific calendar year, and a
+  custom inclusive start/end date. Preserve the selected range in pagination
+  and exports.
+- [x] Add a payment-method filter for All, Stripe, Check, Cash, and Other; allow
+  it to combine with every date range.
+- [x] Show report-level Gross received, Processing fees, Refunds/adjustments,
+  and Net received. Keep cash-basis recognition tied to `Payment.received_at`.
+- [x] Show a method summary table with payment count, gross, fees,
+  refunds/adjustments, and net for each method, including zero rows so the
+  report is predictable.
+- [x] Replace the gross-only payment list with an auditable ledger: received
+  date, client, project, invoice number, method, reference/check number, gross,
+  fee, refund/adjustment, net, and fee status.
+- [x] Make `fee_pending=True` visibly distinct from a confirmed $0.00 fee and
+  exclude unresolved transactions from any label that claims a final net bank
+  amount.
+- [x] Add filtered CSV export using the same scoped queryset and selected
+  filters as the on-screen report. Include a generated-at timestamp, company,
+  filter range, and all ledger columns.
+- [x] Add a print-friendly annual summary suitable for year-end review. PDF
+  export is optional if browser print produces a complete, legible report.
+
+#### Accounting completeness
+
+- [x] Decide and document the refund/chargeback model before the first real
+  refund occurs. Prefer append-only `PaymentAdjustment` records rather than
+  editing or deleting original receipts.
+- [x] Import Stripe refund, dispute, and fee-reversal events idempotently and
+  reflect them in gross, fees, refunds/adjustments, and net totals.
+- [x] Add an explicit reconciliation action and attempt history for unresolved
+  Stripe fees. Do not silently treat missing provider data as zero.
+- [ ] Add a dedicated operator-facing queue for Stripe adjustment-import failures
+  if deployment monitoring and Stripe's webhook retry dashboard prove insufficient.
+- [x] Define V1.1 as payment-level net reporting and explicitly defer Stripe
+  payout-to-bank reconciliation as a separate optional milestone.
+- [x] Prevent edits/deletes that would rewrite closed-period financial history;
+  corrections should be represented by dated adjustment records and an audit
+  trail.
+
+#### Exit gate
+
+In January, selecting the prior calendar year must show every company-scoped
+manual and Stripe receipt, filter correctly by payment method, expose each
+Stripe fee and unresolved fee, account for refunds/adjustments, reconcile gross minus net fees plus refunds/other adjustments to net, and export the same rows and totals to CSV.
+Manual comparison against Stripe and bank/check records must produce no
+unexplained difference. The application work for this milestone is complete;
+retiring FreshBooks still requires the manual year-end acceptance drill and a
+successful backup/restore test.
+
 ### Current Phase 7 backlog - 2026-07-23
 
 #### Correctness

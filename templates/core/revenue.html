@@ -1,14 +1,148 @@
 {% extends 'base.html' %}
+{% load core_extras %}
 
-{% block title %}Revenue | EZ360PM{% endblock %}
+{% block title %}Revenue &amp; Fees | EZ360PM{% endblock %}
+
+{% block extra_css %}
+<style>
+@media print {
+    .app-header, .app-sidebar, .report-actions, .report-filters, .pagination-nav { display: none !important; }
+    .app-layout { display: block; }
+    .app-main { padding: 0; }
+    .content-card, .metric-card { break-inside: avoid; box-shadow: none; }
+    .report-ledger-wrap { overflow: visible; }
+    .report-ledger { font-size: 9pt; }
+    .report-ledger th, .report-ledger td { padding: 0.3rem; }
+}
+</style>
+{% endblock %}
 
 {% block content %}
-<div class="page-heading"><div><p class="eyebrow">Payments received</p><h1>Revenue · {{ selected_month|date:'F Y' }}</h1></div><strong class="page-total">${{ revenue_total }}</strong></div>
-{% if fee_total or pending_fee_count %}<p class="revenue-breakdown muted">Stripe fees −${{ fee_total }} · Net deposited so far ${{ net_total }}{% if pending_fee_count %} · {{ pending_fee_count }} fee{{ pending_fee_count|pluralize }} awaiting Stripe{% endif %}</p>{% endif %}
-<nav class="month-nav" aria-label="Revenue month"><a href="?month={{ previous_month|date:'Y-m' }}">← {{ previous_month|date:'M Y' }}</a><form method="get"><label for="month">Month</label><input id="month" type="month" name="month" value="{{ selected_month|date:'Y-m' }}"><button class="btn btn-light" type="submit">View</button></form><a href="?month={{ next_month|date:'Y-m' }}">{{ next_month|date:'M Y' }} →</a></nav>
-<div class="metric-grid metric-grid--compact">{% for row in method_totals %}<div class="metric-card"><span>{{ row.label }}</span><strong>${{ row.total }}</strong></div>{% empty %}<div class="metric-card"><span>No payments</span><strong>$0.00</strong></div>{% endfor %}</div>
-<section class="content-card">
-    {% for payment in payments %}<a class="item-row" href="{% url 'documents:invoice-detail' payment.document.pk %}"><span><strong>{{ payment.received_at|date:'M j' }} · {{ payment.document.number }}</strong><small>{{ payment.document.project.client.display_name }} · {{ payment.get_method_display }}{% if payment.reference %} · {{ payment.reference }}{% endif %}</small></span><strong>${{ payment.amount }}</strong></a>{% empty %}<p class="muted">No payments were received in this month.</p>{% endfor %}
+<div class="page-heading report-heading">
+    <div>
+        <p class="eyebrow">Payments, fees, refunds, and corrections</p>
+        <h1>Revenue &amp; Fees · {{ filters.period_label }}</h1>
+    </div>
+    <div class="button-group report-actions">
+        <a class="btn btn-light" href="{% url 'core:revenue-csv' %}?{{ export_query }}">Export CSV</a>
+        <a class="btn btn-light" href="{% url 'core:revenue' %}?{{ print_query }}" target="_blank">Print full report</a>
+        {% if report.pending_fee_count %}<form method="post" action="{% url 'core:revenue-reconcile-fees' %}">{% csrf_token %}<input type="hidden" name="preset" value="{{ filters.preset }}"><input type="hidden" name="year" value="{{ filters.calendar_year|default:'' }}"><input type="hidden" name="start_date" value="{{ filters.start_date|date:'Y-m-d' }}"><input type="hidden" name="end_date" value="{{ filters.end_date|date:'Y-m-d' }}"><input type="hidden" name="method" value="{{ filters.method }}"><input type="hidden" name="fee_status" value="{% if filters.pending_fees_only %}pending{% endif %}"><button class="btn btn-warning" type="submit">Retry pending fees</button></form>{% endif %}
+    </div>
+</div>
+
+<form class="content-card report-filters" method="get">
+    <div class="filter-bar">
+        <div class="form-field">
+            <label for="preset">Period</label>
+            <select id="preset" name="preset">
+                <option value="this_month"{% if filters.preset == 'this_month' %} selected{% endif %}>This month</option>
+                <option value="last_month"{% if filters.preset == 'last_month' %} selected{% endif %}>Last month</option>
+                <option value="this_year"{% if filters.preset == 'this_year' %} selected{% endif %}>This year</option>
+                <option value="last_year"{% if filters.preset == 'last_year' %} selected{% endif %}>Last year</option>
+                <option value="year"{% if filters.preset == 'year' %} selected{% endif %}>Calendar year</option>
+                <option value="custom"{% if filters.preset == 'custom' %} selected{% endif %}>Custom dates</option>
+            </select>
+        </div>
+        <div class="form-field">
+            <label for="year">Calendar year</label>
+            <select id="year" name="year">
+                {% for year in available_years %}<option value="{{ year }}"{% if filters.calendar_year == year %} selected{% endif %}>{{ year }}</option>{% endfor %}
+            </select>
+        </div>
+        <div class="form-field">
+            <label for="start_date">Start date</label>
+            <input id="start_date" type="date" name="start_date" value="{{ filters.start_date|date:'Y-m-d' }}">
+        </div>
+        <div class="form-field">
+            <label for="end_date">End date</label>
+            <input id="end_date" type="date" name="end_date" value="{{ filters.end_date|date:'Y-m-d' }}">
+        </div>
+        <div class="form-field">
+            <label for="method">Payment method</label>
+            <select id="method" name="method">
+                <option value="">All methods</option>
+                {% for value, label in method_choices %}<option value="{{ value }}"{% if filters.method == value %} selected{% endif %}>{{ label }}</option>{% endfor %}
+            </select>
+        </div>
+        <div class="form-field">
+            <label for="fee_status">Stripe fee status</label>
+            <select id="fee_status" name="fee_status">
+                <option value="">All fee statuses</option>
+                <option value="pending"{% if filters.pending_fees_only %} selected{% endif %}>Pending fees only</option>
+            </select>
+        </div>
+        <div class="button-group">
+            <button class="btn btn-primary" type="submit">Run report</button>
+            <a class="btn btn-light" href="{% url 'core:revenue' %}">Clear</a>
+        </div>
+    </div>
+    <p class="help-text">Calendar-year revenue is based on the date money was received. Refunds, fee changes, and other adjustments are reported on their own effective date. This is payment-level net reporting, not Stripe payout-to-bank matching.</p>
+    {% if books_closed_through %}<p class="help-text"><strong>Financial records are locked through {{ books_closed_through|date:'F j, Y' }}.</strong> Corrections to a closed period are preserved as dated adjustments rather than rewriting accepted history.</p>{% endif %}
+</form>
+
+<div class="metric-grid report-metrics">
+    <div class="metric-card"><span>Gross received</span><strong>${{ report.gross|floatformat:2 }}</strong></div>
+    <div class="metric-card"><span>Net processing fees</span><strong>{{ report.fees|fee_effect_money }}</strong>{% if report.fee_adjustments %}<small>Original ${{ report.original_fees|floatformat:2 }} · fee changes {{ report.fee_adjustments|signed_money }}</small>{% endif %}{% if report.pending_fee_count %}<small>{{ report.pending_fee_count }} Stripe fee{{ report.pending_fee_count|pluralize }} pending</small>{% endif %}</div>
+    <div class="metric-card"><span>Refunds / other adjustments</span><strong>{{ report.adjustments|signed_money }}</strong></div>
+    <div class="metric-card"><span>{% if report.is_final %}Net received{% else %}Net after known fees{% endif %}</span><strong>{{ report.net|signed_money }}</strong>{% if not report.is_final %}<small>Not final until pending Stripe fees reconcile</small>{% endif %}</div>
+    <div class="metric-card"><span>Transactions</span><strong>{{ report.transaction_count }}</strong><small>{{ report.payment_count }} payment{{ report.payment_count|pluralize }}, {{ report.adjustment_count }} adjustment{{ report.adjustment_count|pluralize }}</small></div>
+</div>
+
+<section class="content-card report-section">
+    <div class="section-heading"><h2>Payment-method summary</h2></div>
+    <div class="report-ledger-wrap">
+        <table class="report-ledger">
+            <thead><tr><th>Method</th><th>Transactions</th><th>Gross</th><th>Net fees</th><th>Fee changes</th><th>Refunds / other</th><th>Net</th></tr></thead>
+            <tbody>
+                {% for row in report.method_rows %}
+                <tr>
+                    <td>{{ row.label }}{% if row.pending_fee_count %}<small class="fee-pending">{{ row.pending_fee_count }} fee{{ row.pending_fee_count|pluralize }} pending</small>{% endif %}</td>
+                    <td>{{ row.count }}</td>
+                    <td>${{ row.gross|floatformat:2 }}</td>
+                    <td>{{ row.fees|fee_effect_money }}</td>
+                    <td>{{ row.fee_adjustments|signed_money }}</td>
+                    <td>{{ row.adjustments|signed_money }}</td>
+                    <td><strong>{{ row.net|signed_money }}</strong>{% if row.pending_fee_count %}<small>Known fees only</small>{% endif %}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
 </section>
-{% include 'shared/_pagination.html' %}
+
+<section class="content-card report-section">
+    <div class="section-heading"><h2>Transaction ledger</h2><span class="muted">{{ report.transaction_count }} total</span></div>
+    {% if entries %}
+    <div class="report-ledger-wrap">
+        <table class="report-ledger report-ledger--transactions">
+            <thead>
+                <tr><th>Date</th><th>Client / project</th><th>Invoice</th><th>Method</th><th>Reference</th><th>Gross</th><th>Fee / fee change</th><th>Refund / other</th><th>Net</th></tr>
+            </thead>
+            <tbody>
+                {% for entry in entries %}
+                <tr class="{% if entry.entry_type == 'adjustment' %}report-adjustment-row{% endif %}">
+                    <td>{{ entry.effective_date|date:'M j, Y' }}<small>{{ entry.entry_type|title }}</small></td>
+                    <td>{{ entry.client.display_name }}<small>{{ entry.project.number }} · {{ entry.project.name }}</small></td>
+                    <td><a href="{% url 'documents:invoice-detail' entry.invoice.pk %}">{{ entry.invoice.number }}</a><small>{{ entry.invoice_kind_label }}</small></td>
+                    <td>{{ entry.method_label }}</td>
+                    <td>{{ entry.reference|default:'—' }}</td>
+                    <td>{% if entry.gross %}${{ entry.gross|floatformat:2 }}{% else %}—{% endif %}</td>
+                    <td>{% if entry.fee_pending %}<span class="fee-pending">Pending</span>{% if entry.fee_attempt_status %}<small>{{ entry.fee_attempt_status }}{% if entry.fee_attempted_at %} · {{ entry.fee_attempted_at|date:'M j, Y g:i A' }}{% endif %}</small>{% endif %}{% if entry.fee_attempt_message %}<small>{{ entry.fee_attempt_message }}</small>{% endif %}{% elif entry.fee %}{{ entry.fee|fee_effect_money }}{% elif entry.fee_adjustment %}{{ entry.fee_adjustment|signed_money }}{% else %}$0.00{% endif %}</td>
+                    <td>{% if entry.adjustment %}{{ entry.adjustment|signed_money }}{% else %}—{% endif %}</td>
+                    <td>{% if entry.fee_pending %}<span class="fee-pending">Pending</span>{% else %}<strong>{{ entry.net|signed_money }}</strong>{% endif %}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+        <div class="empty-state">
+            <h3>No matching transactions</h3>
+            <p>No payments or adjustments were found for {{ filters.period_label }} with the selected filters.</p>
+        </div>
+    {% endif %}
+</section>
+
+{% if not is_print %}{% include 'shared/_pagination.html' %}{% endif %}
+{% if is_print %}<script>window.addEventListener("load", () => window.print());</script>{% endif %}
 {% endblock %}

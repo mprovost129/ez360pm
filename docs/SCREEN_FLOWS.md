@@ -6,7 +6,7 @@ The authenticated application uses one persistent shell:
 
 - **Top bar:** company identity, current timer, user menu
 - **Sidebar:** Quick note, Dashboard, Clients, Projects, Proposals, Invoices,
-  Time, Revenue, Settings
+  Time, Revenue & Fees, Settings
 - **Main region:** page title, primary action, filters/attention summary, content
 - **Narrow screens:** sidebar collapses; quick note and timer remain one-tap
   actions
@@ -61,7 +61,7 @@ UUID token.
 | Proposal detail | prepare and manage agreement | preview/send | edit draft, accept history, withdraw |
 | Invoice detail | issue and reconcile a bill | preview/send or record payment | apply credit, void, release time |
 | Public document | let client review/respond/pay | accept or pay | decline proposal, download PDF |
-| Revenue | verify received cash | choose period | open payment/invoice source |
+| Revenue & Fees | reconcile annual cash receipts, Stripe fees, and adjustments | choose period/method/fee status or export CSV | filter to pending fees, inspect latest retry result, retry fees, print, open invoice source |
 | Settings | maintain document identity/defaults | save company settings | verify integrations |
 
 ## Core workflow map

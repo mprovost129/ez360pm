@@ -168,7 +168,12 @@ class Document(CompanyOwnedModel):
 
     @property
     def amount_paid(self):
-        return self.payments.aggregate(value=Sum("amount"))["value"] or Decimal("0.00")
+        payment_total = self.payments.aggregate(value=Sum("amount"))["value"] or Decimal("0.00")
+        adjustment_total = PaymentAdjustment.objects.filter(
+            payment__document=self,
+            affects_invoice_balance=True,
+        ).aggregate(value=Sum("amount"))["value"] or Decimal("0.00")
+        return max(payment_total + adjustment_total, Decimal("0.00"))
 
     @property
     def outstanding_balance(self):
@@ -268,6 +273,13 @@ class Payment(models.Model):
         default=False,
         help_text="Stripe has not yet supplied the final processing fee.",
     )
+    fee_current_amount = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=Decimal("0.00"),
+        validators=[MinValueValidator(Decimal("0"))],
+        help_text="Most recent provider fee used to calculate later fee adjustments.",
+    )
     method = models.CharField(max_length=20, choices=Method.choices)
     received_at = models.DateField(default=timezone.localdate)
     reference = models.CharField(max_length=255, blank=True)
@@ -290,6 +302,10 @@ class Payment(models.Model):
                 condition=Q(fee_amount__gte=0),
                 name="documents_payment_fee_nonnegative",
             ),
+            models.CheckConstraint(
+                condition=Q(fee_current_amount__gte=0),
+                name="documents_payment_current_fee_nonnegative",
+            ),
         ]
         indexes = [models.Index(fields=("document", "received_at"))]
 
@@ -302,8 +318,205 @@ class Payment(models.Model):
         return f"{self.get_method_display()} payment of {self.amount}"
 
     @property
+    def adjustment_total(self):
+        return self.adjustments.aggregate(value=Sum("amount"))["value"] or Decimal("0.00")
+
+    @property
     def net_amount(self):
-        return self.amount - self.fee_amount
+        return self.amount - self.fee_amount + self.adjustment_total
+
+    @property
+    def has_adjustments(self):
+        return self.adjustments.exists()
+
+
+class PaymentAdjustment(CompanyOwnedModel):
+    """Append-only cash adjustments attached to an original receipt.
+
+    ``amount`` is signed: negative values reduce net received revenue and
+    positive values increase it. The original Payment is never edited to hide a
+    refund, dispute, fee refund, or correction.
+    """
+
+    class Type(models.TextChoices):
+        REFUND = "refund", "Refund"
+        FEE_REFUND = "fee_refund", "Processing fee refund"
+        FEE_ADJUSTMENT = "fee_adjustment", "Additional processing fee"
+        DISPUTE = "dispute", "Dispute / chargeback"
+        DISPUTE_REVERSAL = "dispute_reversal", "Dispute reversal"
+        CORRECTION = "correction", "Correction"
+        OTHER = "other", "Other adjustment"
+
+    payment = models.ForeignKey(
+        Payment,
+        on_delete=models.PROTECT,
+        related_name="adjustments",
+    )
+    adjustment_type = models.CharField(max_length=30, choices=Type.choices)
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    effective_at = models.DateField(default=timezone.localdate)
+    affects_invoice_balance = models.BooleanField(
+        default=True,
+        help_text="Include this adjustment when calculating the invoice balance.",
+    )
+    affects_processing_fees = models.BooleanField(
+        default=False,
+        help_text=(
+            "Treat this signed adjustment as a change to provider processing fees "
+            "instead of a customer refund or revenue correction."
+        ),
+    )
+    provider_id = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text="Stripe refund/dispute identifier used for idempotency.",
+    )
+    reference = models.CharField(max_length=255, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("-effective_at", "-created_at", "-pk")
+        constraints = [
+            models.CheckConstraint(
+                condition=~Q(amount=0),
+                name="documents_adjustment_amount_nonzero",
+            ),
+            models.UniqueConstraint(
+                fields=("company", "provider_id"),
+                condition=~Q(provider_id=""),
+                name="documents_adjustment_provider_company_unique",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=("company", "effective_at")),
+            models.Index(fields=("payment", "effective_at")),
+        ]
+
+    def clean(self):
+        super().clean()
+        errors = {}
+        if self.payment_id and self.payment.document.company_id != self.company_id:
+            errors["payment"] = "Payment must belong to the same company."
+        if self.amount is not None:
+            if self.amount == 0:
+                errors["amount"] = "Adjustment amount cannot be zero."
+            if (
+                self.adjustment_type in {self.Type.REFUND, self.Type.DISPUTE}
+                and self.amount > 0
+            ):
+                errors["amount"] = "Refunds and disputes must use a negative amount."
+            if (
+                self.adjustment_type
+                in {self.Type.FEE_REFUND, self.Type.DISPUTE_REVERSAL}
+                and self.amount < 0
+            ):
+                errors["amount"] = (
+                    "Fee refunds and dispute reversals must use a positive amount."
+                )
+            if self.adjustment_type == self.Type.FEE_ADJUSTMENT and self.amount > 0:
+                errors["amount"] = (
+                    "An additional processing fee must use a negative amount."
+                )
+        fee_types = {self.Type.FEE_REFUND, self.Type.FEE_ADJUSTMENT}
+        if self.adjustment_type in fee_types:
+            if self.payment_id and self.payment.method != Payment.Method.STRIPE:
+                errors["adjustment_type"] = (
+                    "Processing-fee adjustments require a Stripe payment."
+                )
+            if self.affects_invoice_balance:
+                errors["affects_invoice_balance"] = (
+                    "Processing-fee changes do not change what the customer paid."
+                )
+            if not self.affects_processing_fees:
+                errors["affects_processing_fees"] = (
+                    "Processing-fee changes must be included in fee reporting."
+                )
+        elif self.affects_processing_fees:
+            errors["affects_processing_fees"] = (
+                "Only processing-fee adjustment types may change reported fees."
+            )
+        if (
+            self.adjustment_type
+            in {self.Type.REFUND, self.Type.DISPUTE, self.Type.DISPUTE_REVERSAL}
+            and not self.affects_invoice_balance
+        ):
+            errors["affects_invoice_balance"] = (
+                "Refunds and disputes must update the invoice balance."
+            )
+        if errors:
+            raise ValidationError(errors)
+
+    def save(self, *args, **kwargs):
+        if self.pk:
+            raise ValidationError(
+                "Payment adjustments are append-only. Add a correction instead of editing."
+            )
+        return super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        raise ValidationError(
+            "Payment adjustments are append-only. Add a correction instead of deleting."
+        )
+
+    def __str__(self):
+        return f"{self.get_adjustment_type_display()} {self.amount}"
+
+
+class PaymentFeeReconciliationAttempt(CompanyOwnedModel):
+    """Append-only record of a Stripe fee reconciliation attempt."""
+
+    class Status(models.TextChoices):
+        RESOLVED = "resolved", "Resolved"
+        PENDING = "pending", "Still pending"
+        ERROR = "error", "Provider error"
+
+    payment = models.ForeignKey(
+        Payment,
+        on_delete=models.PROTECT,
+        related_name="fee_reconciliation_attempts",
+    )
+    status = models.CharField(max_length=20, choices=Status.choices)
+    observed_fee = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        blank=True,
+        null=True,
+        validators=[MinValueValidator(Decimal("0"))],
+    )
+    error_code = models.CharField(max_length=100, blank=True)
+    error_message = models.CharField(max_length=255, blank=True)
+    attempted_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("-attempted_at", "-pk")
+        indexes = [
+            models.Index(
+                fields=("company", "status", "attempted_at"),
+                name="doc_fee_company_status_idx",
+            ),
+            models.Index(
+                fields=("payment", "attempted_at"),
+                name="doc_fee_payment_attempt_idx",
+            ),
+        ]
+
+    def clean(self):
+        super().clean()
+        if self.payment_id and self.payment.document.company_id != self.company_id:
+            raise ValidationError(
+                {"payment": "Payment must belong to the same company."}
+            )
+
+    def save(self, *args, **kwargs):
+        if self.pk:
+            raise ValidationError("Fee reconciliation attempts are append-only.")
+        return super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        raise ValidationError("Fee reconciliation attempts are append-only.")
+
+    def __str__(self):
+        return f"{self.payment} · {self.get_status_display()}"
 
 
 class DocumentDelivery(models.Model):
