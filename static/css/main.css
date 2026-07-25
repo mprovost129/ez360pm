@@ -279,8 +279,8 @@ button[type="submit"]:not(.btn):active {
 }
 
 .company-logo {
-    width: 34px;
-    height: 34px;
+    width: 75%;
+    height: 75px;
     border-radius: 6px;
     object-fit: contain;
     background: #fff;
