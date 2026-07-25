@@ -18,6 +18,10 @@ from .stripe_services import (
     process_stripe_event,
     stripe_configuration_status,
 )
+from .webhook_failures import (
+    record_stripe_webhook_failure,
+    resolve_stripe_webhook_failure,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -65,8 +69,15 @@ def stripe_webhook(request):
     except (ValueError, stripe.SignatureVerificationError):
         return HttpResponse(status=400)
     try:
-        process_stripe_event(event=event)
+        result = process_stripe_event(event=event)
     except ValidationError as exc:
+        record_stripe_webhook_failure(event=event, exception=exc)
         logger.warning("Stripe reconciliation rejected error=%s", exc.__class__.__name__)
         return HttpResponse(status=400)
+    except Exception as exc:  # verified provider events must remain visible for retry
+        record_stripe_webhook_failure(event=event, exception=exc)
+        logger.exception("Stripe reconciliation failed error=%s", exc.__class__.__name__)
+        return HttpResponse(status=500)
+    if result is not None:
+        resolve_stripe_webhook_failure(event=event)
     return JsonResponse({"received": True})

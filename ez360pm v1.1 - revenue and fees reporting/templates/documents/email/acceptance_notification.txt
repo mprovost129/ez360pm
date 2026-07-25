@@ -1,0 +1,8 @@
+Proposal {{ proposal.number }} was accepted.
+
+Project: {{ proposal.project.number }} - {{ proposal.project.name }}
+Client: {{ proposal.project.client.display_name }}
+Accepted by: {{ proposal.accepted_by_name }} ({{ proposal.accepted_by_email }})
+Accepted total: ${{ proposal.accepted_total }}
+
+View the accepted proposal: {{ document_url }}

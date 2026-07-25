@@ -27,6 +27,9 @@
         {% include 'shared/_form_field.html' with field=form.default_invoice_due_days %}
         {% include 'shared/_form_field.html' with field=form.accept_payments_default %}
     </fieldset>
+    <fieldset class="form-section form-grid"><legend>Financial controls</legend>
+        {% include 'shared/_form_field.html' with field=form.books_closed_through %}
+    </fieldset>
     <fieldset class="form-section form-grid"><legend>Document terms</legend>
         {% include 'shared/_form_field.html' with field=form.default_proposal_terms %}
         {% include 'shared/_form_field.html' with field=form.default_invoice_terms %}

@@ -1,0 +1,8 @@
+Proposal {{ proposal.number }} was declined.
+
+Project: {{ proposal.project.number }} - {{ proposal.project.name }}
+Client: {{ proposal.project.client.display_name }}
+Proposal total: ${{ proposal.total }}
+Declined at: {{ proposal.responded_at }}
+
+View the proposal: {{ document_url }}

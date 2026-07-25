@@ -115,6 +115,14 @@ Subscribe it to:
 
 - `checkout.session.completed`
 - `checkout.session.async_payment_succeeded`
+
+Also subscribe to `refund.created`, `refund.updated`, `charge.refunded`,
+`charge.succeeded`, `charge.updated`, `charge.dispute.created`, and
+`charge.dispute.closed` for fee, refund, and dispute reporting. Failed financial
+adjustment imports appear under **Administration → Stripe webhook failures**.
+The queue stores safe identifiers and error categories, never raw webhook
+payloads. Stripe retries increase the attempt count; a successful replay marks
+the item resolved automatically.
 - `charge.succeeded`
 - `charge.updated`
 - `refund.created`

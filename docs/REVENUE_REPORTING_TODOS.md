@@ -63,6 +63,9 @@ total containing a pending fee is labeled provisional.
 - [x] Persist an append-only history of every reconciliation attempt, including
   resolved, still-pending, and provider-error outcomes; show the latest attempt
   beside an unresolved fee in the ledger.
+- [x] Record failed Stripe refund, dispute, and fee-adjustment imports in an
+  operator queue without storing raw webhook payloads. Group provider retries by
+  event ID and automatically resolve a failure after successful replay.
 
 ## Deliberately separate milestone
 

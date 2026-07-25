@@ -188,6 +188,10 @@ a newly resolved fee for a closed receipt is posted as an open-period adjustment
 instead of modifying the original fee. Every Stripe fee lookup or retry is
 recorded in an append-only `PaymentFeeReconciliationAttempt` history so an
 unresolved fee has a visible last-attempt result instead of an unexplained blank.
+Verified Stripe refund, dispute, and fee-related webhook failures are summarized
+in `StripeWebhookFailure`. The queue stores provider identifiers and safe error
+categories rather than raw payloads. Repeated delivery of one event increments
+its attempt count, and a successful replay resolves the existing entry.
 
 ## Implementation staging
 

@@ -1,0 +1,3 @@
+<p>Proposal <strong>{{ proposal.number }}</strong> was accepted.</p>
+<p>Project: {{ proposal.project.number }} · {{ proposal.project.name }}<br>Client: {{ proposal.project.client.display_name }}<br>Accepted by: {{ proposal.accepted_by_name }} ({{ proposal.accepted_by_email }})<br>Accepted total: ${{ proposal.accepted_total }}</p>
+<p><a href="{{ document_url }}">View accepted proposal</a></p>

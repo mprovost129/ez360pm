@@ -19,6 +19,7 @@ from documents.models import (
     Payment,
     PaymentAdjustment,
     PaymentFeeReconciliationAttempt,
+    StripeWebhookFailure,
 )
 from documents.proposal_services import create_proposal
 from documents.services import (
@@ -814,6 +815,122 @@ class DeliveryAndStripeTests(TestCase):
         )
 
         self.assertEqual(response.status_code, 400)
+
+    def test_adjustment_webhook_failure_queue_tracks_retries_and_success(self):
+        invoice = self.make_invoice()
+        payment = process_stripe_event(event=self.stripe_event(invoice))
+        event = {
+            "id": "evt_refund_retry",
+            "type": "refund.created",
+            "data": {
+                "object": {
+                    "id": "re_retry",
+                    "payment_intent": payment.stripe_payment_intent_id,
+                    "amount": 2500,
+                    "status": "succeeded",
+                }
+            },
+        }
+        webhook_url = reverse("webhooks:stripe")
+        rejected = ValidationError(
+            "Sensitive provider detail must not be stored.",
+            code="payment_not_found",
+        )
+
+        with (
+            patch(
+                "documents.stripe_views.stripe.Webhook.construct_event",
+                return_value=event,
+            ),
+            patch(
+                "documents.stripe_views.process_stripe_event",
+                side_effect=rejected,
+            ),
+        ):
+            first = self.client.post(
+                webhook_url, data=b"{}", content_type="application/json"
+            )
+            second = self.client.post(
+                webhook_url, data=b"{}", content_type="application/json"
+            )
+
+        failure = StripeWebhookFailure.objects.get(event_id="evt_refund_retry")
+        self.assertEqual(first.status_code, 400)
+        self.assertEqual(second.status_code, 400)
+        self.assertEqual(failure.company, self.company)
+        self.assertEqual(failure.error_code, "payment_not_found")
+        self.assertEqual(failure.attempt_count, 2)
+        self.assertEqual(failure.status, StripeWebhookFailure.Status.OPEN)
+        self.assertFalse(hasattr(failure, "payload"))
+
+        with (
+            patch(
+                "documents.stripe_views.stripe.Webhook.construct_event",
+                return_value=event,
+            ),
+            patch(
+                "documents.stripe_views.process_stripe_event",
+                return_value=object(),
+            ),
+        ):
+            replay = self.client.post(
+                webhook_url, data=b"{}", content_type="application/json"
+            )
+
+        failure.refresh_from_db()
+        self.assertEqual(replay.status_code, 200)
+        self.assertEqual(failure.status, StripeWebhookFailure.Status.RESOLVED)
+        self.assertIsNotNone(failure.resolved_at)
+
+    def test_unmatched_refund_is_rejected_into_operator_queue(self):
+        event = {
+            "id": "evt_unmatched_refund",
+            "type": "refund.created",
+            "data": {
+                "object": {
+                    "id": "re_unmatched",
+                    "payment_intent": "pi_not_recorded",
+                    "amount": 2500,
+                    "status": "succeeded",
+                }
+            },
+        }
+        with patch(
+            "documents.stripe_views.stripe.Webhook.construct_event",
+            return_value=event,
+        ):
+            response = self.client.post(
+                reverse("webhooks:stripe"),
+                data=b"{}",
+                content_type="application/json",
+            )
+
+        failure = StripeWebhookFailure.objects.get(event_id="evt_unmatched_refund")
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(failure.error_code, "payment_not_found")
+        self.assertIsNone(failure.company)
+        self.assertFalse(PaymentAdjustment.objects.exists())
+
+    def test_webhook_failure_queue_is_available_in_administration(self):
+        StripeWebhookFailure.objects.create(
+            company=self.company,
+            event_id="evt_admin_queue",
+            event_type="charge.dispute.created",
+            object_id="dp_admin_queue",
+            error_code="payment_not_found",
+        )
+        self.user.is_staff = True
+        self.user.is_superuser = True
+        self.user.save(update_fields=("is_staff", "is_superuser"))
+        self.client.force_login(self.user)
+
+        response = self.client.get(
+            reverse("admin:documents_stripewebhookfailure_changelist")
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "evt_admin_queue")
+        self.assertContains(response, "payment_not_found")
 
     def test_integration_status_reports_presence_without_exposing_secrets(self):
         response = self.client.get(reverse("accounts:integrations"))

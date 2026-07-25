@@ -519,6 +519,65 @@ class PaymentFeeReconciliationAttempt(CompanyOwnedModel):
         return f"{self.payment} · {self.get_status_display()}"
 
 
+class StripeWebhookFailure(models.Model):
+    """Safe operator queue entry for a failed Stripe adjustment import."""
+
+    class Status(models.TextChoices):
+        OPEN = "open", "Needs attention"
+        RESOLVED = "resolved", "Resolved"
+
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.PROTECT,
+        related_name="stripe_webhook_failures",
+        blank=True,
+        null=True,
+    )
+    event_id = models.CharField(max_length=255, blank=True)
+    event_type = models.CharField(max_length=100)
+    object_id = models.CharField(max_length=255, blank=True)
+    error_code = models.CharField(max_length=100)
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.OPEN,
+    )
+    attempt_count = models.PositiveIntegerField(default=1)
+    first_failed_at = models.DateTimeField(auto_now_add=True)
+    last_failed_at = models.DateTimeField(default=timezone.now)
+    resolved_at = models.DateTimeField(blank=True, null=True)
+    resolved_by = models.ForeignKey(
+        "accounts.User",
+        on_delete=models.SET_NULL,
+        related_name="resolved_stripe_webhook_failures",
+        blank=True,
+        null=True,
+    )
+
+    class Meta:
+        ordering = ("status", "-last_failed_at", "-pk")
+        constraints = [
+            models.UniqueConstraint(
+                fields=("event_id",),
+                condition=~Q(event_id=""),
+                name="documents_stripe_failure_event_unique",
+            )
+        ]
+        indexes = [
+            models.Index(
+                fields=("status", "last_failed_at"),
+                name="doc_stripe_failure_queue_idx",
+            ),
+            models.Index(
+                fields=("company", "status"),
+                name="doc_stripe_failure_company_idx",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.event_type} {self.event_id or self.object_id} · {self.get_status_display()}"
+
+
 class DocumentDelivery(models.Model):
     class Purpose(models.TextChoices):
         CLIENT_DOCUMENT = "client_document", "Client document"

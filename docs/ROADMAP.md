@@ -125,8 +125,11 @@ Detailed implementation notes and acceptance tests are in
   reflect them in gross, fees, refunds/adjustments, and net totals.
 - [x] Add an explicit reconciliation action and attempt history for unresolved
   Stripe fees. Do not silently treat missing provider data as zero.
-- [ ] Add a dedicated operator-facing queue for Stripe adjustment-import failures
-  if deployment monitoring and Stripe's webhook retry dashboard prove insufficient.
+- [x] Add a dedicated operator-facing queue for Stripe adjustment-import failures.
+  Verified refund, dispute, and fee-adjustment failures are recorded without raw
+  payloads, grouped by Stripe event ID across retries, and automatically resolved
+  after a successful replay. Operators can review and resolve the queue in Django
+  Administration.
 - [x] Define V1.1 as payment-level net reporting and explicitly defer Stripe
   payout-to-bank reconciliation as a separate optional milestone.
 - [x] Prevent edits/deletes that would rewrite closed-period financial history;

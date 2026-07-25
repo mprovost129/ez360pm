@@ -1,9 +1,9 @@
 from decimal import Decimal
 
 import django.core.validators
-from django.db import migrations, models
 import django.db.models.deletion
 import django.utils.timezone
+from django.db import migrations, models
 
 
 def copy_current_fees(apps, schema_editor):

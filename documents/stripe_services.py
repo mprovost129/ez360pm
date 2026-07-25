@@ -301,8 +301,16 @@ def _record_refund(refund):
     payment = _payment_for_stripe_object(refund)
     refund_id = _value(refund, "id")
     amount_cents = _value(refund, "amount")
-    if payment is None or not refund_id or amount_cents is None:
-        return None
+    if payment is None:
+        raise ValidationError(
+            "Stripe refund does not match a recorded payment.",
+            code="payment_not_found",
+        )
+    if not refund_id or amount_cents is None:
+        raise ValidationError(
+            "Stripe refund is missing required import data.",
+            code="invalid_adjustment_data",
+        )
     return record_payment_adjustment(
         payment=payment,
         adjustment_data={
@@ -323,8 +331,16 @@ def _record_dispute(dispute, *, reversal=False):
     payment = _payment_for_stripe_object(dispute)
     dispute_id = _value(dispute, "id")
     amount_cents = _value(dispute, "amount")
-    if payment is None or not dispute_id or amount_cents is None:
-        return None
+    if payment is None:
+        raise ValidationError(
+            "Stripe dispute does not match a recorded payment.",
+            code="payment_not_found",
+        )
+    if not dispute_id or amount_cents is None:
+        raise ValidationError(
+            "Stripe dispute is missing required import data.",
+            code="invalid_adjustment_data",
+        )
     amount = money(Decimal(amount_cents) / Decimal("100"))
     suffix = "reversal" if reversal else "created"
     return record_payment_adjustment(

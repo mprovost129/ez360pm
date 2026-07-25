@@ -1,6 +1,14 @@
 from decimal import Decimal
 
-from django.db.models import DecimalField, ExpressionWrapper, F, OuterRef, Subquery, Sum, Value
+from django.db.models import (
+    DecimalField,
+    ExpressionWrapper,
+    F,
+    OuterRef,
+    Subquery,
+    Sum,
+    Value,
+)
 from django.db.models.functions import Coalesce, Greatest
 
 from .models import Document, Payment, PaymentAdjustment

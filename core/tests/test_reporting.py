@@ -8,7 +8,12 @@ from django.utils import timezone
 from accounts.forms import CompanySettingsForm
 from accounts.models import Company, User
 from clients.tests.test_clients import create_client
-from documents.models import Payment, PaymentAdjustment, PaymentFeeReconciliationAttempt
+from documents.models import (
+    Document,
+    Payment,
+    PaymentAdjustment,
+    PaymentFeeReconciliationAttempt,
+)
 from documents.services import (
     create_invoice,
     issue_document,
