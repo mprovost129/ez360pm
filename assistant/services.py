@@ -74,7 +74,9 @@ never claim an unconfirmed write occurred. Stop when a record is ambiguous.
 
 def _redacted_summary(text, limit):
     text = re.sub(r"[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}", "[email]", text)
-    text = re.sub(r"\b(?:\+?1[-.\s]?)?\(?\d{3}\)?[-.\s]\d{3}[-.\s]\d{4}\b", "[phone]", text)
+    text = re.sub(
+        r"\b(?:\+?1[-.\s]?)?\(?\d{3}\)?[-.\s]\d{3}[-.\s]\d{4}\b", "[phone]", text
+    )
     text = " ".join(text.split())
     return text[:limit]
 
@@ -107,6 +109,7 @@ def estimate_usage_cost(input_tokens, output_tokens, model):
         + Decimal(output_tokens) * output_rate / million
     ).quantize(Decimal("0.000001"))
 
+
 def _safe_error_code(exc):
     if isinstance(exc, ProviderError):
         return exc.code
@@ -138,7 +141,9 @@ def _normalize_conversation_id(value):
     try:
         return uuid.UUID(str(value))
     except (TypeError, ValueError, AttributeError) as exc:
-        raise ValidationError("Start a new assistant conversation and try again.") from exc
+        raise ValidationError(
+            "Start a new assistant conversation and try again."
+        ) from exc
 
 
 def _conversation_context_items(*, user, conversation_id, policy):
@@ -260,7 +265,7 @@ def run_assistant(*, user, prompt, provider=None, conversation_id=None, page_pat
             input_tokens += int(usage.get("input_tokens") or 0)
             output_tokens += int(usage.get("output_tokens") or 0)
             calls = response.function_calls
-            input_items.extend(response.output)
+            input_items.extend(response.continuation_items)
             if not calls:
                 final_text = response.text
                 break
@@ -271,7 +276,9 @@ def run_assistant(*, user, prompt, provider=None, conversation_id=None, page_pat
                 try:
                     arguments = json.loads(call.get("arguments") or "{}")
                 except json.JSONDecodeError as exc:
-                    raise ToolInputError("The provider returned invalid tool JSON.") from exc
+                    raise ToolInputError(
+                        "The provider returned invalid tool JSON."
+                    ) from exc
                 tool_name = call.get("name", "")
                 tool = registry.get(tool_name)
                 trace_entry = {
@@ -322,7 +329,10 @@ def run_assistant(*, user, prompt, provider=None, conversation_id=None, page_pat
         )
     except (ProviderError, ToolInputError, ValidationError, ValueError) as exc:
         if isinstance(exc, ProviderError):
-            if exc.provider_request_id and exc.provider_request_id not in provider_request_ids:
+            if (
+                exc.provider_request_id
+                and exc.provider_request_id not in provider_request_ids
+            ):
                 provider_request_ids.append(exc.provider_request_id)
             if (
                 exc.client_request_id
@@ -337,11 +347,17 @@ def run_assistant(*, user, prompt, provider=None, conversation_id=None, page_pat
             is_ambiguity = "More than one" in message or "ambiguous" in message.lower()
             record_event(
                 user=user,
-                event_type=(AIEvent.Type.AMBIGUITY if is_ambiguity else AIEvent.Type.TOOL_FAILURE),
+                event_type=(
+                    AIEvent.Type.AMBIGUITY
+                    if is_ambiguity
+                    else AIEvent.Type.TOOL_FAILURE
+                ),
                 capability=active_tool_name or "record_resolution",
                 interaction=interaction,
                 metadata={
-                    "error_code": "ambiguous_record" if is_ambiguity else "domain_validation",
+                    "error_code": "ambiguous_record"
+                    if is_ambiguity
+                    else "domain_validation",
                     "tool_name": active_tool_name,
                 },
             )
@@ -357,7 +373,9 @@ def run_assistant(*, user, prompt, provider=None, conversation_id=None, page_pat
         logger.exception("Unexpected EZ360PM assistant failure.")
         interaction.status = AIInteraction.Status.FAILED
         interaction.error_code = "assistant_error"
-        safe_message = "The assistant failed safely. No unconfirmed action was performed."
+        safe_message = (
+            "The assistant failed safely. No unconfirmed action was performed."
+        )
         interaction.response_summary = (
             safe_message
             if policy.retain_interaction_summaries
@@ -368,7 +386,9 @@ def run_assistant(*, user, prompt, provider=None, conversation_id=None, page_pat
         interaction.input_tokens = input_tokens
         interaction.output_tokens = output_tokens
         interaction.total_tokens = input_tokens + output_tokens
-        interaction.estimated_cost_usd = estimate_usage_cost(input_tokens, output_tokens, interaction.model)
+        interaction.estimated_cost_usd = estimate_usage_cost(
+            input_tokens, output_tokens, interaction.model
+        )
         interaction.latency_ms = int((time.monotonic() - started) * 1000)
         interaction.provider_request_ids = provider_request_ids
         interaction.provider_client_request_ids = provider_client_request_ids

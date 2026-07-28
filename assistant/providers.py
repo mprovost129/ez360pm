@@ -76,6 +76,21 @@ class ProviderResponse:
         return self.raw.get("output", [])
 
     @property
+    def continuation_items(self):
+        """Return response items in the shape accepted as subsequent input."""
+        items = []
+        for item in self.output:
+            if not isinstance(item, dict):
+                continue
+            continuation = dict(item)
+            if continuation.get("type") in {"reasoning", "function_call"}:
+                # OpenAI returns this response-only field, but rejects it when a
+                # reasoning/tool item is replayed under `input`.
+                continuation.pop("status", None)
+            items.append(continuation)
+        return items
+
+    @property
     def usage(self):
         return self.raw.get("usage") or {}
 

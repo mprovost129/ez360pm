@@ -4,7 +4,7 @@ import httpx
 import openai
 from django.test import SimpleTestCase, override_settings
 
-from assistant.providers import OpenAIResponsesProvider, ProviderError
+from assistant.providers import OpenAIResponsesProvider, ProviderError, ProviderResponse
 
 
 class FakeResponse:
@@ -60,6 +60,36 @@ class RejectingResponses:
 
 @override_settings(AI_MAX_OUTPUT_TOKENS=900)
 class OpenAIResponsesProviderTests(SimpleTestCase):
+    def test_continuation_items_remove_response_only_status_fields(self):
+        response = FakeResponse().model_dump(mode="json")
+        response["output"] = [
+            {
+                "id": "reasoning-1",
+                "type": "reasoning",
+                "summary": [],
+                "encrypted_content": "encrypted-reasoning",
+                "status": "completed",
+            },
+            {
+                "id": "function-1",
+                "type": "function_call",
+                "call_id": "call-1",
+                "name": "find_projects",
+                "arguments": "{}",
+                "status": "completed",
+            },
+        ]
+
+        result = ProviderResponse(response)
+
+        self.assertEqual(
+            result.continuation_items[0]["encrypted_content"],
+            "encrypted-reasoning",
+        )
+        self.assertNotIn("status", result.continuation_items[0])
+        self.assertNotIn("status", result.continuation_items[1])
+        self.assertEqual(result.output[0]["status"], "completed")
+
     def test_official_sdk_request_uses_guarded_responses_api_options(self):
         responses = FakeResponses()
         client = SimpleNamespace(responses=responses)

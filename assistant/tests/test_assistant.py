@@ -103,7 +103,9 @@ class AssistantServiceTests(TestCase):
             client=self.client_record,
             project_data=project_data(number="2607001", name="Smith Addition"),
         )
-        other_client = create_client(self.other_company, company_name="Hidden Household")
+        other_client = create_client(
+            self.other_company, company_name="Hidden Household"
+        )
         self.hidden_project = create_project(
             company=self.other_company,
             client=other_client,
@@ -132,6 +134,48 @@ class AssistantServiceTests(TestCase):
         self.assertGreater(interaction.total_tokens, 0)
         self.assertEqual(interaction.provider_request_ids, ["req_read_123"])
 
+    def test_tool_round_replays_reasoning_without_response_status(self):
+        provider = QueueProvider(
+            {
+                "output": [
+                    {
+                        "id": "reasoning-1",
+                        "type": "reasoning",
+                        "summary": [],
+                        "encrypted_content": "encrypted-reasoning",
+                        "status": "completed",
+                    },
+                    {
+                        "id": "function-1",
+                        "type": "function_call",
+                        "name": "search_projects",
+                        "arguments": json.dumps({"query": "Addition", "limit": 10}),
+                        "call_id": "call-status-test",
+                        "status": "completed",
+                    },
+                ],
+                "usage": {"input_tokens": 20, "output_tokens": 10},
+            },
+            message("Done."),
+        )
+
+        run_assistant(
+            user=self.user,
+            prompt="Find my addition projects.",
+            provider=provider,
+        )
+
+        continued_input = provider.requests[1]["input_items"]
+        reasoning = next(
+            item for item in continued_input if item.get("type") == "reasoning"
+        )
+        function = next(
+            item for item in continued_input if item.get("type") == "function_call"
+        )
+        self.assertEqual(reasoning["encrypted_content"], "encrypted-reasoning")
+        self.assertNotIn("status", reasoning)
+        self.assertNotIn("status", function)
+
     def test_client_request_ids_are_unique_and_persisted_for_openai_calls(self):
         provider = TrackedQueueProvider(
             function_call("search_projects", {"query": "Addition", "limit": 10}),
@@ -148,7 +192,9 @@ class AssistantServiceTests(TestCase):
         self.assertEqual(interaction.provider_request_ids, ["req_tracked_123"])
         self.assertEqual(len(interaction.provider_client_request_ids), 2)
         self.assertEqual(len(set(interaction.provider_client_request_ids)), 2)
-        self.assertTrue(all(provider.requests[index]["client_request_id"] for index in range(2)))
+        self.assertTrue(
+            all(provider.requests[index]["client_request_id"] for index in range(2))
+        )
 
     def test_model_cannot_supply_company_id_to_a_tool(self):
         provider = QueueProvider(
@@ -217,7 +263,6 @@ class AssistantServiceTests(TestCase):
         self.assertEqual(AIActionAttempt.objects.count(), 0)
         self.assertEqual(TimeEntry.objects.count(), 0)
         self.assertIn("untrusted business data", provider.requests[0]["instructions"])
-
 
     def test_revenue_tool_reconciles_to_payment_rows(self):
         invoice = Document.objects.create(
@@ -300,8 +345,12 @@ class AssistantServiceTests(TestCase):
             "prospect_company_name": "",
         }
 
-        first = registry.invoke(context=context, name="create_note", arguments=arguments)
-        second = registry.invoke(context=context, name="create_note", arguments=arguments)
+        first = registry.invoke(
+            context=context, name="create_note", arguments=arguments
+        )
+        second = registry.invoke(
+            context=context, name="create_note", arguments=arguments
+        )
 
         self.assertEqual(first.pending_action.pk, second.pending_action.pk)
         self.assertEqual(AIActionAttempt.objects.count(), 1)
