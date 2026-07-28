@@ -1,4 +1,6 @@
 import logging
+import re
+from collections import Counter
 from dataclasses import dataclass
 
 import openai
@@ -6,6 +8,46 @@ from django.conf import settings
 from openai import OpenAI
 
 logger = logging.getLogger(__name__)
+
+
+def _safe_api_error_value(value, *, limit=500):
+    """Keep provider diagnostics useful without copying customer data into logs."""
+    if value in (None, ""):
+        return ""
+    text = " ".join(str(value).split())
+    text = re.sub(r"[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}", "[email]", text)
+    text = re.sub(
+        r"\b(?:\+?1[-.\s]?)?\(?\d{3}\)?[-.\s]\d{3}[-.\s]\d{4}\b",
+        "[phone]",
+        text,
+    )
+    text = re.sub(r"\bsk-[A-Za-z0-9_-]{12,}\b", "[api-key]", text)
+    return text[:limit]
+
+
+def _api_error_metadata(exc):
+    body = getattr(exc, "body", None)
+    if not isinstance(body, dict):
+        return {"type": "", "code": "", "param": "", "message": ""}
+    error = body.get("error", body)
+    if not isinstance(error, dict):
+        return {"type": "", "code": "", "param": "", "message": ""}
+    return {
+        key: _safe_api_error_value(
+            error.get(key), limit=500 if key == "message" else 200
+        )
+        for key in ("type", "code", "param", "message")
+    }
+
+
+def _input_item_summary(input_items):
+    counts = Counter()
+    for item in input_items:
+        if not isinstance(item, dict):
+            counts["unknown"] += 1
+            continue
+        counts[str(item.get("type") or item.get("role") or "unknown")] += 1
+    return ",".join(f"{name}:{count}" for name, count in sorted(counts.items()))
 
 
 class ProviderError(Exception):
@@ -137,10 +179,20 @@ class OpenAIResponsesProvider(BaseProvider):
                 client_request_id=client_request_id,
             ) from exc
         except openai.APIStatusError as exc:
+            metadata = _api_error_metadata(exc)
             logger.warning(
-                "OpenAI Responses API returned HTTP %s (request_id=%s).",
+                "OpenAI Responses API returned HTTP %s (request_id=%s, "
+                "error_type=%s, error_code=%s, error_param=%s, error_message=%s, "
+                "model=%s, input_items=%s, tool_count=%s).",
                 exc.status_code,
                 exc.request_id,
+                metadata["type"],
+                metadata["code"],
+                metadata["param"],
+                metadata["message"],
+                self.model,
+                _input_item_summary(input_items),
+                len(tools),
             )
             raise ProviderError(
                 "The OpenAI API rejected the request. No EZ360PM action was performed.",
