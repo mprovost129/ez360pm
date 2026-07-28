@@ -55,8 +55,12 @@ document links in email and Stripe redirects are built from this value.
 The production image collects static assets with nonsecret build-only settings,
 runs as the unprivileged `ez360pm` user, applies pending migrations before each
 container start, writes Gunicorn logs to stdout/stderr, honors the platform's
-`PORT` and `WEB_CONCURRENCY` values, and exposes a Docker health check against
-`/health/`. If migration fails, Gunicorn does not start and the deployment is
+`PORT`, `WEB_CONCURRENCY`, and `GUNICORN_TIMEOUT_SECONDS` values, and exposes a
+Docker health check against `/health/`. The worker timeout defaults to 180 seconds
+so a four-round assistant request can complete when each OpenAI call has a
+30-second timeout. It must remain at least `AI_PROVIDER_TIMEOUT_SECONDS` multiplied
+by `AI_MAX_TOOL_ROUNDS`, plus 15 seconds of shutdown headroom. If migration fails,
+Gunicorn does not start and the deployment is
 not promoted to receive traffic. Data-audit integrity errors also block startup;
 operational warnings remain in the deploy log for recovery and are failures in
 the scheduled strict audit. `EZ360PM_OWNER_PASSWORD` is strictly a one-time

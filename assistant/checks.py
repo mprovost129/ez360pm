@@ -29,7 +29,6 @@ def assistant_settings_check(app_configs, **kwargs):
             )
         )
 
-
     context_turns = getattr(settings, "AI_CONVERSATION_CONTEXT_TURNS", 0)
     if context_turns < 0 or context_turns > 12:
         messages.append(
@@ -76,16 +75,25 @@ def assistant_settings_check(app_configs, **kwargs):
 
     if not getattr(settings, "AI_ALLOWED_MODELS", []):
         messages.append(
-            Error("AI_ALLOWED_MODELS must contain at least one model.", id="assistant.E006")
+            Error(
+                "AI_ALLOWED_MODELS must contain at least one model.",
+                id="assistant.E006",
+            )
         )
     pricing = getattr(settings, "AI_MODEL_PRICING", {})
     if not isinstance(pricing, dict):
         messages.append(
-            Error("AI_MODEL_PRICING_JSON must decode to an object.", id="assistant.E009")
+            Error(
+                "AI_MODEL_PRICING_JSON must decode to an object.", id="assistant.E009"
+            )
         )
     else:
         for model, rates in pricing.items():
-            if not isinstance(rates, dict) or "input" not in rates or "output" not in rates:
+            if (
+                not isinstance(rates, dict)
+                or "input" not in rates
+                or "output" not in rates
+            ):
                 messages.append(
                     Error(
                         f"AI model pricing for {model!r} must contain input and output rates.",
@@ -166,7 +174,8 @@ def assistant_settings_check(app_configs, **kwargs):
 
     if (
         getattr(settings, "AI_COMPANY_DEFAULT_ENABLED", None) is True
-        and getattr(settings, "AI_COMPANY_DEFAULT_PRIVACY_ACKNOWLEDGED", None) is not True
+        and getattr(settings, "AI_COMPANY_DEFAULT_PRIVACY_ACKNOWLEDGED", None)
+        is not True
     ):
         messages.append(
             Warning(
@@ -187,6 +196,18 @@ def assistant_settings_check(app_configs, **kwargs):
     if getattr(settings, "AI_MAX_TOOL_ROUNDS", 0) < 1:
         messages.append(
             Error("AI_MAX_TOOL_ROUNDS must be at least 1.", id="assistant.E002")
+        )
+    provider_timeout = getattr(settings, "AI_PROVIDER_TIMEOUT_SECONDS", 0)
+    tool_rounds = getattr(settings, "AI_MAX_TOOL_ROUNDS", 0)
+    worker_timeout = getattr(settings, "GUNICORN_TIMEOUT_SECONDS", 0)
+    minimum_worker_timeout = provider_timeout * tool_rounds + 15
+    if worker_timeout < minimum_worker_timeout:
+        messages.append(
+            Error(
+                "GUNICORN_TIMEOUT_SECONDS must allow every configured AI tool round "
+                f"plus shutdown headroom; use at least {minimum_worker_timeout} seconds.",
+                id="assistant.E020",
+            )
         )
     if getattr(settings, "AI_MAX_TOOL_OUTPUT_CHARS", 0) < 1000:
         messages.append(

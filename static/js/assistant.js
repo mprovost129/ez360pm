@@ -236,7 +236,12 @@
         try {
             data = await response.json();
         } catch {
-            data = { ok: false, error: "EZ360PM returned an unreadable response." };
+            data = {
+                ok: false,
+                error: response.status >= 500
+                    ? "EZ360PM could not complete the AI request. The server may have timed out; no action was confirmed."
+                    : "EZ360PM returned an unreadable response.",
+            };
         }
         if (!response.ok || !data.ok) {
             throw new Error(data.error || "The assistant request failed.");
