@@ -4,10 +4,18 @@
 {% block title %}{{ project.number }} | EZ360PM{% endblock %}
 
 {% block content %}
-<div class="page-heading">
+<div class="page-heading project-heading">
     <div><p class="eyebrow">{{ project.number }} · {{ project.get_status_display }}</p><h1>{{ project.name }}</h1></div>
-    <div class="button-group">
-        <a class="btn btn-light" href="{% url 'projects:update' project.pk %}">Edit project</a>
+    <div class="project-heading__actions">
+        <form class="project-status-form" method="post" action="{% url 'projects:change-status' project.pk %}" data-confirm="Change this project's status? Proposals, invoices, payments, and time records will not be changed.">
+            {% csrf_token %}
+            <label for="{{ project_status_form.status.id_for_label }}">Project status</label>
+            <div class="project-status-form__controls">
+                {{ project_status_form.status }}
+                <button class="btn btn-primary" type="submit">Update status</button>
+            </div>
+        </form>
+        <a class="btn btn-light" href="{% url 'projects:update' project.pk %}">Edit project details</a>
     </div>
 </div>
 <section class="content-card workflow-actions">

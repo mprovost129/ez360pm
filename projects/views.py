@@ -18,9 +18,13 @@ from django.views.generic import (
 from clients.models import Client
 from core.mixins import CompanyScopedQuerysetMixin
 
-from .forms import ProjectEditForm, ProjectForm
+from .forms import ProjectForm, ProjectStatusForm
 from .models import Project
-from .workflow import complete_paid_project, start_without_retainer
+from .workflow import (
+    change_project_status,
+    complete_paid_project,
+    start_without_retainer,
+)
 
 
 class CompanyFormMixin:
@@ -103,6 +107,7 @@ class ProjectDetailView(LoginRequiredMixin, CompanyScopedQuerysetMixin, DetailVi
                 status="paid",
             ).exists()
         )
+        context["project_status_form"] = ProjectStatusForm(project=self.object)
         return context
 
 
@@ -146,25 +151,13 @@ class ProjectUpdateView(
     UpdateView,
 ):
     model = Project
-    form_class = ProjectEditForm
+    form_class = ProjectForm
     template_name = "shared/form.html"
     extra_context = {"page_title": "Edit project", "submit_label": "Save project"}
 
     def form_valid(self, form):
-        original_status = form.original_status
-        try:
-            response = super().form_valid(form)
-        except ValidationError as exc:
-            form.add_error("status", "; ".join(exc.messages))
-            return self.form_invalid(form)
-        if self.object.status != original_status:
-            messages.success(
-                self.request,
-                f"Project status changed from {Project.Status(original_status).label} "
-                f"to {self.object.get_status_display()}.",
-            )
-        else:
-            messages.success(self.request, "Project updated.")
+        response = super().form_valid(form)
+        messages.success(self.request, "Project updated.")
         return response
 
     def get_success_url(self):
@@ -195,6 +188,33 @@ class ProjectDeleteView(LoginRequiredMixin, CompanyScopedQuerysetMixin, DeleteVi
 
 def scoped_project(request, pk):
     return get_object_or_404(Project.objects.for_company(request.user.company), pk=pk)
+
+
+@login_required
+@require_POST
+def project_change_status(request, pk):
+    project = scoped_project(request, pk)
+    form = ProjectStatusForm(request.POST, project=project)
+    if not form.is_valid():
+        messages.error(request, "Choose a valid project status.")
+        return redirect("projects:detail", pk=pk)
+
+    previous_status = project.status
+    requested_status = form.cleaned_data["status"]
+    try:
+        project = change_project_status(project=project, status=requested_status)
+    except ValidationError as exc:
+        messages.error(request, "; ".join(exc.messages))
+    else:
+        if project.status == previous_status:
+            messages.info(request, f"Project is already {project.get_status_display()}.")
+        else:
+            messages.success(
+                request,
+                f"Project status changed from {Project.Status(previous_status).label} "
+                f"to {project.get_status_display()}.",
+            )
+    return redirect("projects:detail", pk=pk)
 
 
 @login_required

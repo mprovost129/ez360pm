@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+
+{% block title %}AI settings | EZ360PM{% endblock %}
+
+{% block content %}
+<div class="page-heading">
+    <div>
+        <p class="eyebrow">Settings</p>
+        <h1>AI assistant</h1>
+        <p class="text-secondary mb-0">Company-level controls for the OpenAI-powered EZ360PM assistant.</p>
+    </div>
+    <div class="d-flex gap-2 flex-wrap">
+        <a class="btn btn-light" href="{% url 'assistant:action-center' %}">Action center</a>
+        <a class="btn btn-light" href="{% url 'assistant:readiness' %}">AI readiness</a>
+        {% if user.is_staff %}<a class="btn btn-light" href="{% url 'assistant:pilot-operations' %}">Pilot operations</a>{% endif %}
+        <a class="btn btn-light" href="{% url 'assistant:evaluations' %}">Evaluation history</a>
+        <a class="btn btn-light" href="{% url 'assistant:usage' %}">Usage & reliability</a>
+        <a class="btn btn-light" href="{% url 'accounts:settings' %}">Company settings</a>
+    </div>
+</div>
+
+{% if not platform_ai_enabled %}
+<div class="alert alert-warning">The application-level AI feature flag is off. Company settings are saved, but the assistant remains unavailable until deployment enables it.</div>
+{% elif not openai_configured %}
+<div class="alert alert-danger">The OpenAI API key is not configured. Deployment checks will fail while AI is enabled.</div>
+{% endif %}
+<form method="post" class="content-card structured-form" novalidate>
+    {% csrf_token %}
+    {% if form.errors %}
+        <div class="form-error-summary" role="alert" tabindex="-1">
+            <strong>Please correct the highlighted fields.</strong>
+            {{ form.non_field_errors }}
+        </div>
+    {% endif %}
+
+    <fieldset class="form-section form-grid">
+        <legend>Availability and model</legend>
+        {% include 'shared/_form_field.html' with field=form.enabled %}
+        {% include 'shared/_form_field.html' with field=form.access_mode %}
+        {% include 'shared/_form_field.html' with field=form.model_override %}
+        {% include 'shared/_form_field.html' with field=form.proactive_insights_enabled %}
+    </fieldset>
+
+    <fieldset class="form-section form-grid">
+        <legend>Pilot safety</legend>
+        {% if object.suspended_at %}
+            <div class="alert alert-danger grid-column-full"><strong>AI is suspended.</strong> {{ object.suspension_reason }} <a href="{% url 'assistant:pilot-operations' %}">Review pilot operations</a>.</div>
+        {% endif %}
+        {% include 'shared/_form_field.html' with field=form.auto_pause_on_failures %}
+        {% include 'shared/_form_field.html' with field=form.failure_threshold %}
+        {% include 'shared/_form_field.html' with field=form.failure_window_minutes %}
+    </fieldset>
+
+    <fieldset class="form-section form-grid">
+        <legend>Allowed actions</legend>
+        <p class="text-secondary small grid-column-full mb-0">Disabling a category removes those tools from the OpenAI request and blocks any previously prepared confirmation in that category.</p>
+        {% include 'shared/_form_field.html' with field=form.allow_low_risk_writes %}
+        {% include 'shared/_form_field.html' with field=form.allow_structured_writes %}
+        {% include 'shared/_form_field.html' with field=form.allow_financial_drafts %}
+        {% include 'shared/_form_field.html' with field=form.allow_external_commits %}
+    </fieldset>
+
+    <fieldset class="form-section form-grid">
+        <legend>Usage limits</legend>
+        {% include 'shared/_form_field.html' with field=form.monthly_cost_limit_usd %}
+        {% include 'shared/_form_field.html' with field=form.monthly_request_limit %}
+    </fieldset>
+
+    <fieldset class="form-section form-grid">
+        <legend>Privacy and retention</legend>
+        <div class="grid-column-full alert alert-light border mb-2">
+            <strong>What is sent:</strong> your current command and only the company-scoped records selected by registered tools.<br>
+            <strong>What EZ360PM stores:</strong> operational metadata and, when enabled below, redacted length-limited summaries. Full prompts and full model responses are not stored in the EZ360PM database.<br>
+            <strong>Pilot feedback:</strong> helpful/not-helpful comments and incident details are stored only when a user deliberately submits them for review.<br>
+            <strong>What is never available to the model:</strong> database access, company selection, public document tokens, Stripe secrets, refunds, or unrestricted email/financial tools.
+        </div>
+        {% include 'shared/_form_field.html' with field=form.retain_interaction_summaries %}
+        {% include 'shared/_form_field.html' with field=form.interaction_retention_days %}
+        {% include 'shared/_form_field.html' with field=form.acknowledge_privacy_notice %}
+        {% if object.privacy_notice_acknowledged_at %}
+            <p class="small text-secondary grid-column-full mb-0">Notice version {{ object.privacy_notice_version }} acknowledged {{ object.privacy_notice_acknowledged_at|date:"M j, Y g:i A" }}.</p>
+        {% endif %}
+    </fieldset>
+
+    <div class="form-actions">
+        <button class="btn btn-primary" type="submit">Save AI settings</button>
+    </div>
+</form>
+{% endblock %}

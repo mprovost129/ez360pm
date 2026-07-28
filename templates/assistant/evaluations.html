@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+
+{% block title %}AI evaluations | EZ360PM{% endblock %}
+
+{% block content %}
+<div class="page-heading">
+    <div>
+        <p class="eyebrow">OpenAI assistant</p>
+        <h1>Evaluation history</h1>
+        <p class="text-secondary mb-0">Read-only launch checks for tool selection, safety boundaries, tokens, cost, and latency.</p>
+    </div>
+    <div class="d-flex gap-2 flex-wrap">
+        <a class="btn btn-light" href="{% url 'assistant:action-center' %}">Action center</a>
+        <a class="btn btn-light" href="{% url 'assistant:readiness' %}">AI readiness</a>
+        <a class="btn btn-light" href="{% url 'assistant:usage' %}">Usage & reliability</a>
+        <a class="btn btn-light" href="{% url 'assistant:settings' %}">AI settings</a>
+    </div>
+</div>
+
+<div class="alert alert-light border">
+    Live evaluations are run from the server command line and use the company’s real OpenAI configuration. The built-in live suites are read-only. They never confirm or execute a prepared write action.
+</div>
+
+{% if contract_run %}
+<div class="content-card mb-4">
+    <div class="d-flex flex-wrap justify-content-between gap-3 align-items-center">
+        <div>
+            <h2 class="h5 mb-1">Latest platform contract check</h2>
+            <p class="text-secondary mb-0">{{ contract_run.completed_at|default:contract_run.started_at|date:"M j, Y g:i A" }} · {{ contract_run.passed_cases }}/{{ contract_run.total_cases }} passed</p>
+        </div>
+        <span class="badge {% if contract_run.status == 'passed' %}text-bg-success{% else %}text-bg-danger{% endif %}">{{ contract_run.get_status_display }}</span>
+    </div>
+</div>
+{% endif %}
+
+<div class="row g-4">
+    <div class="col-lg-4">
+        <div class="content-card h-100">
+            <h2 class="h5">Company live runs</h2>
+            <div class="list-group list-group-flush mx-n3 mb-n3">
+                {% for run in runs %}
+                    <a class="list-group-item list-group-item-action {% if selected_run.pk == run.pk %}active{% endif %}" href="?run={{ run.pk }}">
+                        <div class="d-flex justify-content-between gap-2">
+                            <strong>{{ run.started_at|date:"M j, Y g:i A" }}</strong>
+                            <span>{{ run.get_status_display }}</span>
+                        </div>
+                        <div class="small {% if selected_run.pk == run.pk %}text-white-50{% else %}text-secondary{% endif %}">{{ run.suite|title }} · {{ run.model }} · {{ run.passed_cases }}/{{ run.total_cases }}</div>
+                    </a>
+                {% empty %}
+                    <div class="list-group-item text-secondary">No live evaluation has been run for this company.</div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-8">
+        {% if selected_run %}
+        <div class="content-card mb-4">
+            <div class="d-flex flex-wrap justify-content-between gap-3 align-items-start">
+                <div>
+                    <h2 class="h5 mb-1">{{ selected_run.suite|title }} suite</h2>
+                    <p class="text-secondary mb-0">{{ selected_run.model }} · {{ selected_run.total_tokens }} tokens · ${{ selected_run.estimated_cost_usd|floatformat:6 }}</p>
+                </div>
+                <span class="badge {% if selected_run.status == 'passed' %}text-bg-success{% else %}text-bg-danger{% endif %}">{{ selected_run.get_status_display }}</span>
+            </div>
+        </div>
+        <div class="content-card p-0 overflow-hidden">
+            <div class="table-responsive">
+                <table class="table mb-0 align-middle">
+                    <thead><tr><th>Case</th><th>Tools</th><th>Status</th><th class="text-end">Latency</th></tr></thead>
+                    <tbody>
+                    {% for case in selected_run.case_results.all %}
+                        <tr>
+                            <td>
+                                <strong>{{ case.title }}</strong>
+                                <div class="small text-secondary">{{ case.category }}{% if case.response_summary %} · {{ case.response_summary }}{% endif %}</div>
+                            </td>
+                            <td>{% for tool in case.actual_tools %}<code class="d-block">{{ tool }}</code>{% empty %}<span class="text-secondary">No tool</span>{% endfor %}</td>
+                            <td><span class="badge {% if case.status == 'passed' %}text-bg-success{% elif case.status == 'skipped' %}text-bg-secondary{% else %}text-bg-danger{% endif %}">{{ case.get_status_display }}</span></td>
+                            <td class="text-end">{{ case.latency_ms }} ms</td>
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% else %}
+        <div class="content-card text-secondary">Run the evaluation command after deployment to establish a live OpenAI baseline.</div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

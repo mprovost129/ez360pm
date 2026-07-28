@@ -114,6 +114,10 @@ class ProposalDetailView(LoginRequiredMixin, CompanyScopedQuerysetMixin, DetailV
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context["show_internal_notes"] = True
+        context["ai_draft_review"] = (
+            self.object.status == Document.Status.DRAFT
+            and self.request.GET.get("ai_draft") == "1"
+        )
         if self.object.status == Document.Status.DRAFT:
             context["details_form"] = ProposalEditForm(
                 company=self.request.user.company,

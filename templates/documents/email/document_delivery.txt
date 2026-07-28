@@ -1,6 +1,8 @@
 Hello {{ recipient_name }},
 
-{{ document.company.name }} has shared {{ document.get_doc_type_display|lower }} {{ document.number }} for {{ document.project.name }}.
+{% if custom_message %}{{ custom_message }}
+
+{% endif %}{{ document.company.name }} has shared {{ document.get_doc_type_display|lower }} {{ document.number }} for {{ document.project.name }}.
 
 Review it here: {{ document_url }}
 

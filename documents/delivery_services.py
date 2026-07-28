@@ -76,7 +76,17 @@ def _send_delivery(*, delivery, subject, document_url, template_base, context):
     return delivery
 
 
-def send_document_email(*, document, recipient_name, recipient_email, document_url):
+def send_document_email(
+    *,
+    document,
+    recipient_name,
+    recipient_email,
+    document_url,
+    subject="",
+    message="",
+    purpose=DocumentDelivery.Purpose.CLIENT_DOCUMENT,
+    follow_up_kind="",
+):
     document = Document.objects.select_related("company", "project", "project__client").get(
         pk=document.pk
     )
@@ -95,22 +105,41 @@ def send_document_email(*, document, recipient_name, recipient_email, document_u
     }
     if document.status not in allowed[document.doc_type]:
         raise ValueError("Only open, issued documents can be emailed.")
+    if purpose not in {
+        DocumentDelivery.Purpose.CLIENT_DOCUMENT,
+        DocumentDelivery.Purpose.CLIENT_FOLLOW_UP,
+    }:
+        raise ValueError("Client email purpose is not supported.")
+    if purpose == DocumentDelivery.Purpose.CLIENT_FOLLOW_UP:
+        if follow_up_kind not in DocumentDelivery.FollowUpKind.values:
+            raise ValueError("A recognized follow-up kind is required.")
+    else:
+        follow_up_kind = ""
     recipient_name = recipient_name.strip()
     recipient_email = recipient_email.strip().lower()
     validate_email(recipient_email)
+    label = document.get_doc_type_display()
+    subject = (subject or f"{label} {document.number} from {document.company.name}").strip()[:255]
+    message = (message or "").strip()[:4000]
     delivery = DocumentDelivery.objects.create(
         document=document,
-        purpose=DocumentDelivery.Purpose.CLIENT_DOCUMENT,
+        purpose=purpose,
+        follow_up_kind=follow_up_kind,
         recipient_name=recipient_name,
         recipient_email=recipient_email,
+        subject=subject,
+        message=message,
     )
-    label = document.get_doc_type_display()
     return _send_delivery(
         delivery=delivery,
-        subject=f"{label} {document.number} from {document.company.name}",
+        subject=subject,
         document_url=document_url,
         template_base="document_delivery",
-        context={"document": document, "recipient_name": recipient_name},
+        context={
+            "document": document,
+            "recipient_name": recipient_name,
+            "custom_message": message,
+        },
     )
 
 

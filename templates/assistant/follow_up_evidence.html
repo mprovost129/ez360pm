@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+
+{% block title %}AI follow-up evidence | EZ360PM{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4">
+        <div>
+            <p class="eyebrow mb-1">OpenAI assistant</p>
+            <h1 class="h3 mb-1">Client follow-up evidence</h1>
+            <p class="text-secondary mb-0">Manual proposal and invoice reminders prepared through AI. This report measures delivery and later outcomes; it does not claim the reminder caused the response or payment.</p>
+        </div>
+        <div class="d-flex flex-wrap align-items-center gap-2">
+            <a class="btn btn-light btn-sm" href="{% url 'assistant:usage' %}">Usage & reliability</a>
+            <a class="btn btn-light btn-sm" href="{% url 'assistant:draft-quality' %}">Draft quality</a>
+            <a class="btn btn-light btn-sm" href="{% url 'assistant:follow-up-evidence-export' %}?days={{ selected_days }}">Export CSV</a>
+            <a class="btn btn-light btn-sm" href="{% url 'assistant:action-center' %}">Action center</a>
+        <a class="btn btn-light btn-sm" href="{% url 'assistant:readiness' %}">AI readiness</a>
+            <form method="get" class="d-flex align-items-center gap-2">
+                <label for="days" class="small text-secondary">Period</label>
+                <select id="days" name="days" class="form-select form-select-sm" onchange="this.form.submit()">
+                    <option value="30" {% if selected_days == 30 %}selected{% endif %}>Last 30 days</option>
+                    <option value="90" {% if selected_days == 90 %}selected{% endif %}>Last 90 days</option>
+                    <option value="180" {% if selected_days == 180 %}selected{% endif %}>Last 180 days</option>
+                    <option value="365" {% if selected_days == 365 %}selected{% endif %}>Last year</option>
+                </select>
+            </form>
+        </div>
+    </div>
+
+    <div class="alert alert-light border">
+        Follow-ups remain manual. The assistant prepares one message, shows the exact recipient, subject, and wording, and sends only after the existing final confirmation. No schedule or repeating reminder is created.
+    </div>
+
+    <div class="row g-3 mb-4">
+        <div class="col-6 col-lg-3"><div class="card h-100"><div class="card-body"><div class="text-secondary small">Follow-ups prepared</div><div class="h4 mb-0">{{ metrics.total }}</div></div></div></div>
+        <div class="col-6 col-lg-3"><div class="card h-100"><div class="card-body"><div class="text-secondary small">Delivered</div><div class="h4 mb-0">{{ metrics.sent }}</div><div class="small text-secondary">{{ metrics.delivery_success_percent }}% delivery rate</div></div></div></div>
+        <div class="col-6 col-lg-3"><div class="card h-100"><div class="card-body"><div class="text-secondary small">Later response/payment</div><div class="h4 mb-0">{{ metrics.subsequent_outcomes }}</div><div class="small text-secondary">{{ metrics.subsequent_outcome_percent }}% of delivered reminders</div></div></div></div>
+        <div class="col-6 col-lg-3"><div class="card h-100"><div class="card-body"><div class="text-secondary small">Avg. time to later outcome</div><div class="h4 mb-0">{{ metrics.average_hours_to_outcome }} hr</div></div></div></div>
+    </div>
+
+    <div class="row g-4 mb-4">
+        <div class="col-lg-6">
+            <div class="card h-100">
+                <div class="card-header"><h2 class="h5 mb-0">Follow-up types</h2></div>
+                <div class="list-group list-group-flush">
+                    {% for row in metrics.kinds %}
+                        <div class="list-group-item d-flex justify-content-between"><span>{{ row.label }}</span><strong>{{ row.count }}</strong></div>
+                    {% empty %}
+                        <div class="list-group-item text-secondary">No AI follow-ups in this period.</div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-6">
+            <div class="card h-100">
+                <div class="card-header"><h2 class="h5 mb-0">Current outcomes</h2></div>
+                <div class="list-group list-group-flush">
+                    {% for row in metrics.outcomes %}
+                        <div class="list-group-item d-flex justify-content-between"><span>{{ row.label }}</span><strong>{{ row.count }}</strong></div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h2 class="h5 mb-0">Recent follow-ups</h2>
+            <span class="small text-secondary">Failed deliveries: {{ metrics.failed }}</span>
+        </div>
+        <div class="table-responsive">
+            <table class="table mb-0 align-middle">
+                <thead><tr><th>Sent</th><th>Document</th><th>Type</th><th>Recipient</th><th>Delivery</th><th>Later outcome</th><th class="text-end">Hours</th></tr></thead>
+                <tbody>
+                    {% for row in metrics.recent %}
+                    <tr>
+                        <td>{% if row.delivery.sent_at %}{{ row.delivery.sent_at|date:"M j, Y g:i A" }}{% else %}{{ row.delivery.created_at|date:"M j, Y g:i A" }}{% endif %}</td>
+                        <td>
+                            {% if row.document.doc_type == 'proposal' %}
+                                <a href="{% url 'proposals:detail' row.document.pk %}">{{ row.document.number }}</a>
+                            {% else %}
+                                <a href="{% url 'documents:invoice-detail' row.document.pk %}">{{ row.document.number }}</a>
+                            {% endif %}
+                            <div class="small text-secondary">{{ row.document.project.client.display_name }}</div>
+                        </td>
+                        <td>{{ row.kind_label }}</td>
+                        <td>{{ row.delivery.recipient_email }}</td>
+                        <td>{{ row.delivery.get_status_display }}</td>
+                        <td>{{ row.outcome_label }}</td>
+                        <td class="text-end">{% if row.hours_to_outcome is not None %}{{ row.hours_to_outcome }}{% else %}<span class="text-secondary">—</span>{% endif %}</td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="7" class="text-center text-secondary py-4">No manual AI follow-ups were prepared in this period.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

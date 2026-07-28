@@ -581,9 +581,16 @@ class StripeWebhookFailure(models.Model):
 class DocumentDelivery(models.Model):
     class Purpose(models.TextChoices):
         CLIENT_DOCUMENT = "client_document", "Client document"
+        CLIENT_FOLLOW_UP = "client_follow_up", "Client follow-up"
         ACCEPTANCE_NOTIFICATION = "acceptance_notification", "Acceptance notification"
         DECLINE_NOTIFICATION = "decline_notification", "Decline notification"
         PAYMENT_NOTIFICATION = "payment_notification", "Payment notification"
+
+    class FollowUpKind(models.TextChoices):
+        PROPOSAL = "proposal", "Proposal follow-up"
+        RETAINER = "retainer", "Retainer reminder"
+        INVOICE = "invoice", "Invoice reminder"
+        OVERDUE_INVOICE = "overdue_invoice", "Overdue invoice reminder"
 
     class Status(models.TextChoices):
         PENDING = "pending", "Pending"
@@ -600,8 +607,15 @@ class DocumentDelivery(models.Model):
         choices=Purpose.choices,
         default=Purpose.CLIENT_DOCUMENT,
     )
+    follow_up_kind = models.CharField(
+        max_length=30,
+        choices=FollowUpKind.choices,
+        blank=True,
+    )
     recipient_name = models.CharField(max_length=255)
     recipient_email = models.EmailField()
+    subject = models.CharField(max_length=255, blank=True)
+    message = models.TextField(blank=True)
     status = models.CharField(
         max_length=20,
         choices=Status.choices,

@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}AI action center | EZ360PM{% endblock %}
+
+{% block content %}
+<div class="d-none" aria-hidden="true">{% csrf_token %}</div>
+<div class="page-heading">
+    <div>
+        <p class="eyebrow">AI assistant</p>
+        <h1>Action center</h1>
+        <p class="text-secondary mb-0">Resume, confirm, or cancel AI-prepared actions after closing the assistant drawer or changing pages.</p>
+    </div>
+    <div class="d-flex gap-2 flex-wrap">
+        {% if ai_assistant_enabled %}<button class="btn btn-primary" type="button" data-bs-toggle="offcanvas" data-bs-target="#assistantDrawer" aria-controls="assistantDrawer">Open assistant</button>{% endif %}
+        <a class="btn btn-light" href="{% url 'assistant:usage' %}">Usage & reliability</a>
+    </div>
+</div>
+
+<section class="content-card mb-4">
+    <div class="d-flex align-items-center justify-content-between gap-3 mb-3">
+        <div>
+            <h2 class="h5 mb-1">Pending confirmation</h2>
+            <p class="text-secondary small mb-0">Expired actions are closed automatically. Financial and client-facing actions still require the final-review acknowledgment.</p>
+        </div>
+        <span class="badge text-bg-light">{{ pending_actions|length }} pending</span>
+    </div>
+
+    {% if pending_actions %}
+        <div class="d-grid gap-3" data-ai-action-center>
+            {% for action in pending_actions %}
+            <article class="assistant-action-card{% if action.risk_level == 'external_commit' %} assistant-action-card--external{% endif %}" data-action-center-card data-action-token="{{ action.confirmation_token }}">
+                <div class="d-flex align-items-start justify-content-between gap-3">
+                    <div>
+                        <h3 class="h6 mb-1">{{ action.preview.title|default:"Confirm action" }}</h3>
+                        <p class="mb-2">{{ action.preview.summary|default:"Review this action before continuing." }}</p>
+                    </div>
+                    <span class="badge text-bg-light">{{ action.get_risk_level_display }}</span>
+                </div>
+                {% if action.preview.details %}
+                    <ul class="small mb-3 ps-3">
+                        {% for detail in action.preview.details %}<li>{{ detail }}</li>{% endfor %}
+                    </ul>
+                {% endif %}
+                <p class="small text-secondary mb-3">Expires {{ action.confirmation_expires_at|date:"M j, Y g:i A" }}</p>
+                {% if action.risk_level == 'external_commit' %}
+                    <label class="form-check mb-3">
+                        <input class="form-check-input" type="checkbox" data-action-review>
+                        <span class="form-check-label">I reviewed the recipient, amounts, dates, and resulting action.</span>
+                    </label>
+                {% endif %}
+                <div class="d-flex gap-2 flex-wrap">
+                    <button class="btn btn-sm btn-primary" type="button"
+                            data-action-confirm-url="{% url 'assistant:confirm-action' action.confirmation_token %}"
+                            {% if action.risk_level == 'external_commit' %}disabled{% endif %}>
+                        {{ action.preview.confirm_label|default:"Confirm" }}
+                    </button>
+                    <button class="btn btn-sm btn-outline-secondary" type="button"
+                            data-action-cancel-url="{% url 'assistant:cancel-action' action.confirmation_token %}">Cancel</button>
+                </div>
+                <div class="small mt-2 d-none" role="status" data-action-status></div>
+            </article>
+            {% endfor %}
+        </div>
+    {% else %}
+        <div class="empty-state py-4">
+            <h3 class="h6">No pending AI actions</h3>
+            <p class="text-secondary mb-0">Prepared actions will appear here until confirmed, canceled, or expired.</p>
+        </div>
+    {% endif %}
+</section>
+
+<section class="content-card">
+    <h2 class="h5 mb-3">Recent action history</h2>
+    {% if recent_actions %}
+        <div class="table-responsive">
+            <table class="table align-middle">
+                <thead>
+                    <tr><th>Created</th><th>Action</th><th>Status</th><th>Result</th></tr>
+                </thead>
+                <tbody>
+                    {% for action in recent_actions %}
+                    <tr>
+                        <td class="text-nowrap">{{ action.created_at|date:"M j, Y g:i A" }}</td>
+                        <td>{{ action.preview.title|default:action.tool_name }}</td>
+                        <td><span class="badge text-bg-light">{{ action.get_status_display }}</span></td>
+                        <td>{{ action.result.message|default:action.error_code|default:"—" }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% else %}
+        <p class="text-secondary mb-0">No AI action history yet.</p>
+    {% endif %}
+</section>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/assistant_action_center.js' %}?v=1"></script>
+{% endblock %}

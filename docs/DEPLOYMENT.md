@@ -263,3 +263,141 @@ to repair a replay problem.
 Record workflow friction in [the real-use issue log](REAL_USE_LOG.md), excluding
 client or payment-sensitive information. Phase 7 changes should cite a repeated
 issue, an operational failure, or a measured accessibility/performance problem.
+
+## AI assistant (optional)
+
+The assistant is disabled by default. Before enabling it, follow
+`docs/AI_ASSISTANT_SETUP.md`, configure the provider and cost variables, migrate,
+collect static files, run deployment checks, and run the assistant plus full test
+suites. Ordinary EZ360PM workflows do not require an AI provider.
+
+## V1.5 AI controlled-delivery deployment
+
+V1.5 adds `documents.0007_documentdelivery_subject_message`. Run migrations before enabling the assistant. Then run:
+
+```bash
+python manage.py migrate
+python manage.py makemigrations --check
+python manage.py collectstatic --noinput
+python manage.py check --deploy
+python manage.py test assistant documents projects
+python manage.py test
+```
+
+Verify the configured email backend with a test document. Confirm that a failed send leaves the document issued and creates a failed `DocumentDelivery` record.
+
+
+## AI V1.6 migration
+
+Run `python manage.py migrate` to apply
+`assistant.0003_aievent_aiinsightdismissal`, then run `collectstatic` so the
+refinement drawer and usage screen use the current JavaScript and CSS.
+
+
+## AI V1.8 company-controls migration
+
+Run `python manage.py migrate` to apply
+`assistant.0004_aicompanysettings`. Existing companies retain the prior enabled
+capabilities; new-company defaults are controlled by the `AI_COMPANY_DEFAULT_*`
+environment variables.
+
+Before enabling production AI, visit `/assistant/settings/`, acknowledge the
+privacy notice, select an allowlisted model, set request/cost limits, and review
+each action category. Schedule `python manage.py purge_ai_history` at an
+appropriate cadence so each company's configured read-only retention is enforced.
+
+
+## AI evaluation gate
+
+After deployment and before enabling or changing the OpenAI model:
+
+```bash
+python manage.py evaluate_ai_assistant
+python manage.py evaluate_ai_assistant --live --user owner@example.com --suite all
+```
+
+Require the contract suite and live core/security suites to pass. Review the company-scoped Evaluation History screen and compare token use, estimated cost, and latency with the prior approved baseline. Live built-in cases are read-only and automatically cancel any unexpected prepared action.
+
+## AI V1.10 controlled-use readiness gate
+
+Run migrations to apply
+`assistant.0006_aievaluationrun_configuration_fingerprint`. Then establish a
+current fingerprinted baseline and require the readiness command to pass:
+
+```bash
+python manage.py migrate
+python manage.py makemigrations --check
+python manage.py check --deploy
+python manage.py test assistant
+python manage.py evaluate_ai_assistant
+python manage.py evaluate_ai_assistant --live --user owner@example.com --suite all --output var/ai-evaluation.json
+python manage.py check_ai_readiness --user owner@example.com --output var/ai-readiness.json
+python manage.py test
+```
+
+The OpenAI connection test is available from `/assistant/readiness/`. It is
+minimal and tool-free, but still counts against the company request and estimated
+cost allowances. Preserve the evaluation and readiness JSON files with the
+release record. A passing AI readiness result does not replace the full
+application, financial, email, Stripe, and backup/restore validation.
+
+## AI V1.13 controlled draft revisions
+
+V1.13 adds no database migration or environment variable. Deploy the code and run:
+
+```bash
+python manage.py makemigrations --check
+python manage.py check --deploy
+python manage.py test assistant.tests.test_phase13_document_revisions
+python manage.py test assistant
+python manage.py test
+```
+
+Before enabling the revision tools in production, verify that company AI settings
+allow Financial Draft actions. Test one proposal and one hourly invoice. Confirm
+that invoice descriptions can change while totals and linked time entries remain
+unchanged.
+
+
+## AI V1.15 conversation and Action Center migration
+
+Run migrations to apply `assistant.0009_ai_conversation_and_page_context`:
+
+```bash
+python manage.py migrate
+python manage.py makemigrations --check
+python manage.py collectstatic --noinput
+python manage.py check --deploy
+python manage.py test assistant.tests.test_phase15_context_and_action_center
+python manage.py test assistant
+python manage.py test
+```
+
+Review `AI_CONVERSATION_CONTEXT_TURNS` and
+`AI_CONVERSATION_CONTEXT_MINUTES`. Set context turns to `0` when conversation
+carry-over is not desired. Confirm that the Action Center is reachable at
+`/assistant/actions/` and that cross-company page URLs provide no context.
+
+
+## AI V1.16 OpenAI request observability migration
+
+Run migrations to apply `assistant.0010_aiinteraction_provider_client_request_ids`:
+
+```bash
+python manage.py migrate
+python manage.py makemigrations --check
+python manage.py check --deploy
+python manage.py test assistant.tests.test_openai_provider
+python manage.py test assistant.tests.test_assistant
+python manage.py evaluate_ai_assistant
+python manage.py test assistant
+python manage.py test
+```
+
+Optionally set `OPENAI_ORG_ID` and `OPENAI_PROJECT_ID` to make the SDK scope
+explicit. Every logical Responses API call now sends a unique
+`X-Client-Request-Id`; both that value and any OpenAI response request ID appear in
+the metadata-only AI audit export. `AI_WARN_ON_UNPINNED_MODEL=true` adds an
+informational deployment message and readiness warning for mutable aliases. It
+does not block startup, but a model alias change invalidates the evaluation
+fingerprint and requires a new live baseline.

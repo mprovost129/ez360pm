@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+
+{% block title %}AI draft quality | EZ360PM{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4">
+        <div>
+            <p class="eyebrow mb-1">OpenAI assistant</p>
+            <h1 class="h3 mb-1">Document draft quality</h1>
+            <p class="text-secondary mb-0">Metadata-only evidence showing whether AI-prepared proposals and invoices are revised, issued, delivered, or abandoned.</p>
+        </div>
+        <div class="d-flex flex-wrap align-items-center gap-2">
+            <a class="btn btn-light btn-sm" href="{% url 'assistant:usage' %}">Usage & reliability</a>
+            <a class="btn btn-light btn-sm" href="{% url 'assistant:follow-up-evidence' %}">Follow-up evidence</a>
+            <a class="btn btn-light btn-sm" href="{% url 'assistant:draft-quality-export' %}?days={{ selected_days }}">Export CSV</a>
+            <a class="btn btn-light btn-sm" href="{% url 'assistant:action-center' %}">Action center</a>
+        <a class="btn btn-light btn-sm" href="{% url 'assistant:readiness' %}">AI readiness</a>
+            <form method="get" class="d-flex align-items-center gap-2">
+                <label for="days" class="small text-secondary">Period</label>
+                <select id="days" name="days" class="form-select form-select-sm" onchange="this.form.submit()">
+                    <option value="30" {% if selected_days == 30 %}selected{% endif %}>Last 30 days</option>
+                    <option value="90" {% if selected_days == 90 %}selected{% endif %}>Last 90 days</option>
+                    <option value="180" {% if selected_days == 180 %}selected{% endif %}>Last 180 days</option>
+                    <option value="365" {% if selected_days == 365 %}selected{% endif %}>Last year</option>
+                </select>
+            </form>
+        </div>
+    </div>
+
+    <div class="alert alert-light border">
+        EZ360PM does not retain another copy of proposal sections, terms, notes, or line-item descriptions for this report. It stores hashes, changed field names, counts, totals, and lifecycle timestamps only.
+    </div>
+
+    <div class="row g-3 mb-4">
+        <div class="col-6 col-lg-3"><div class="card h-100"><div class="card-body"><div class="text-secondary small">AI drafts</div><div class="h4 mb-0">{{ metrics.total }}</div></div></div></div>
+        <div class="col-6 col-lg-3"><div class="card h-100"><div class="card-body"><div class="text-secondary small">Adoption rate</div><div class="h4 mb-0">{{ metrics.adoption_percent }}%</div><div class="small text-secondary">Issued vs. finalized drafts</div></div></div></div>
+        <div class="col-6 col-lg-3"><div class="card h-100"><div class="card-body"><div class="text-secondary small">Used as-is</div><div class="h4 mb-0">{{ metrics.as_is_percent }}%</div><div class="small text-secondary">Of issued AI drafts</div></div></div></div>
+        <div class="col-6 col-lg-3"><div class="card h-100"><div class="card-body"><div class="text-secondary small">Avg. time to issue</div><div class="h4 mb-0">{{ metrics.average_minutes_to_issue }} min</div></div></div></div>
+    </div>
+
+    <div class="row g-4 mb-4">
+        <div class="col-lg-6">
+            <div class="card h-100">
+                <div class="card-header"><h2 class="h5 mb-0">Draft outcomes</h2></div>
+                <div class="list-group list-group-flush">
+                    {% for row in metrics.outcomes %}
+                        <div class="list-group-item d-flex justify-content-between"><span>{{ row.label }}</span><strong>{{ row.count }}</strong></div>
+                    {% endfor %}
+                    <div class="list-group-item d-flex justify-content-between"><span>Stale active drafts</span><strong>{{ metrics.stale }}</strong></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-6">
+            <div class="card h-100">
+                <div class="card-header"><h2 class="h5 mb-0">Most frequently revised fields</h2></div>
+                <div class="list-group list-group-flush">
+                    {% for row in metrics.changed_fields %}
+                        <div class="list-group-item d-flex justify-content-between"><span>{{ row.label }}</span><strong>{{ row.count }}</strong></div>
+                    {% empty %}
+                        <div class="list-group-item text-secondary">No AI draft revisions recorded in this period.</div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h2 class="h5 mb-0">Recent AI document drafts</h2>
+            <span class="small text-secondary">Average {{ metrics.average_revisions }} revision events per draft</span>
+        </div>
+        <div class="table-responsive">
+            <table class="table mb-0 align-middle">
+                <thead><tr><th>Created</th><th>Document</th><th>Outcome</th><th class="text-end">Revisions</th><th>Changed fields</th><th>Issued</th><th>Delivered</th></tr></thead>
+                <tbody>
+                    {% for review in metrics.recent %}
+                    <tr>
+                        <td>{{ review.created_at|date:"M j, Y g:i A" }}</td>
+                        <td>
+                            {% if review.document %}
+                                {% if review.document_type == 'proposal' %}
+                                    <a href="{% url 'proposals:detail' review.document.pk %}">{{ review.document_number }}</a>
+                                {% else %}
+                                    <a href="{% url 'documents:invoice-detail' review.document.pk %}">{{ review.document_number }}</a>
+                                {% endif %}
+                            {% else %}
+                                {{ review.document_number }}
+                            {% endif %}
+                            <div class="small text-secondary">{{ review.document_type|title }}</div>
+                        </td>
+                        <td>{{ review.get_outcome_display }}</td>
+                        <td class="text-end">{{ review.revision_count }}</td>
+                        <td>{% if review.changed_fields %}{{ review.changed_fields|join:", " }}{% else %}<span class="text-secondary">None</span>{% endif %}</td>
+                        <td>{% if review.issued_at %}{{ review.issued_at|date:"M j, Y g:i A" }}{% else %}<span class="text-secondary">Not issued</span>{% endif %}</td>
+                        <td>{% if review.first_delivery_at %}{{ review.first_delivery_at|date:"M j, Y g:i A" }}{% else %}<span class="text-secondary">Not delivered</span>{% endif %}</td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="7" class="text-center text-secondary py-4">No AI document drafts were created in this period.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

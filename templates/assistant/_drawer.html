@@ -1,0 +1,47 @@
+<div class="offcanvas offcanvas-end assistant-drawer" tabindex="-1" id="assistantDrawer" aria-labelledby="assistantDrawerLabel"
+     data-assistant-home-url="{% url 'assistant:home-data' %}"
+     data-assistant-dismiss-url="{% url 'assistant:dismiss-insight' %}"
+     data-assistant-event-url="{% url 'assistant:record-event' %}"
+     data-assistant-feedback-url="{% url 'assistant:feedback' %}"
+     data-assistant-incident-url="{% url 'assistant:report-incident' %}"
+     data-assistant-action-center-url="{% url 'assistant:action-center' %}">
+    <div class="offcanvas-header border-bottom">
+        <div>
+            <h2 class="offcanvas-title h5 mb-1" id="assistantDrawerLabel">EZ360PM Assistant</h2>
+            <p class="small text-secondary mb-0">Ask about your work, manage CRM records, prepare documents, or control the timer.</p>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+            <button type="button" class="btn btn-sm btn-outline-secondary" data-assistant-new-conversation>New conversation</button>
+            <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+        </div>
+    </div>
+    <div class="offcanvas-body d-flex flex-column p-0">
+        <div class="assistant-insights border-bottom d-none" data-assistant-insights aria-label="Workflow alerts"></div>
+        <div class="assistant-transcript" data-assistant-transcript aria-live="polite">
+            <div class="assistant-message assistant-message--assistant">
+                <p class="mb-2">Common commands:</p>
+                <div data-assistant-suggestions>
+                    <button class="assistant-suggestion" type="button" data-assistant-suggestion-id="get_attention_summary" data-assistant-suggestion="What needs my attention today?">What needs my attention today?</button>
+                    <button class="assistant-suggestion" type="button" data-assistant-suggestion-id="get_revenue_summary" data-assistant-suggestion="How much revenue did I receive this year by payment method, and how much did Stripe deduct in fees?">Revenue and Stripe fees this year</button>
+                    <button class="assistant-suggestion" type="button" data-assistant-suggestion-id="start_timer" data-assistant-suggestion="Start a timer for a project. Ask me which project and what I am working on.">Start a project timer</button>
+                    <button class="assistant-suggestion" type="button" data-assistant-suggestion-id="create_note" data-assistant-suggestion="Create a quick note. Ask me for the note text.">Capture a quick note</button>
+                </div>
+            </div>
+        </div>
+        <div class="assistant-composer border-top">
+            <form data-assistant-form data-ask-url="{% url 'assistant:ask' %}">
+                {% csrf_token %}
+                <label class="visually-hidden" for="assistantPrompt">Ask EZ360PM</label>
+                <textarea id="assistantPrompt" class="form-control" rows="3" maxlength="4000" placeholder="Ask a question or give a command…" data-assistant-input required></textarea>
+                <div class="d-flex align-items-center justify-content-between gap-2 mt-2">
+                    <span class="d-flex gap-3 flex-wrap"><a class="small" href="{% url 'assistant:action-center' %}" data-assistant-action-center-link>Action center</a><a class="small" href="{% url 'assistant:readiness' %}">AI readiness</a>{% if user.is_staff %}<a class="small" href="{% url 'assistant:pilot-operations' %}">Pilot operations</a>{% endif %}<a class="small" href="{% url 'assistant:usage' %}">Usage & reliability</a><a class="small" href="{% url 'assistant:draft-quality' %}">Draft quality</a><a class="small" href="{% url 'assistant:follow-up-evidence' %}">Follow-up evidence</a><a class="small" href="{% url 'assistant:settings' %}">AI settings</a></span>
+                    <button class="btn btn-primary" type="submit" data-assistant-submit>
+                        <i class="bi bi-send" aria-hidden="true"></i>
+                        Send
+                    </button>
+                </div>
+            </form>
+            <p class="assistant-disclaimer mb-0 mt-2">Recent turns in this conversation may be used as redacted context. Current-page references are resolved through your company scope. Writes are prepared first and require confirmation.</p>
+        </div>
+    </div>
+</div>

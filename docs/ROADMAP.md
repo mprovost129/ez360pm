@@ -1,3 +1,105 @@
+## V1.16 - OpenAI request observability and model stability
+
+- [x] Assign one unique `X-Client-Request-Id` to every logical OpenAI Responses API call.
+- [x] Persist client-generated troubleshooting IDs even when a timeout prevents an OpenAI response ID from returning.
+- [x] Preserve OpenAI response request IDs from successful and rejected requests.
+- [x] Include both identifier types in the metadata-only AI audit CSV.
+- [x] Support optional `OPENAI_ORG_ID` and `OPENAI_PROJECT_ID` scoping through the official SDK.
+- [x] Add informational deployment and readiness guidance for mutable model aliases versus dated snapshots.
+- [x] Extend the contract evaluation to verify request guards and client-request tracking.
+- [ ] Run migrations, the Django suite, contract evaluation, live baseline, and readiness gate in the normal environment.
+
+Release details: [AI Assistant V1.16](RELEASE_NOTES_AI_ASSISTANT_V1_16.md).
+
+
+## V1.15 - AI workflow completion and usability
+
+- [x] Add bounded multi-turn context using recent redacted summaries from the same user, company, and browser conversation.
+- [x] Keep current-message explicit write intent mandatory; earlier turns cannot authorize a write.
+- [x] Add server-verified current-page context for supported client, project, proposal, invoice, and intake-note pages.
+- [x] Re-query every page object through the authenticated company boundary and exclude sensitive free text.
+- [x] Add a persistent Action Center for pending confirmations and recent outcomes.
+- [x] Reload pending confirmations in the assistant drawer and expire stale actions automatically.
+- [x] Document the AI completion point and stop speculative AI development until real-use evidence exists.
+- [ ] Run the full Django suite and controlled pilot in the normal environment.
+
+Release details: [AI Assistant V1.15](RELEASE_NOTES_AI_ASSISTANT_V1_15.md).
+Completion boundary: [AI Upgrade Completion Point](AI_UPGRADE_COMPLETION.md).
+
+
+## V1.14 - AI manual client follow-ups and evidence
+
+- [x] Add company-scoped follow-up context for open proposals, retainers, and invoices.
+- [x] Add one-at-a-time AI follow-up drafting with exact recipient, subject, and message preview.
+- [x] Require the existing external-commit acknowledgement and fresh document snapshot before sending.
+- [x] Block repeat AI follow-ups inside a configurable minimum interval.
+- [x] Preserve follow-up purpose and type on every successful or failed delivery record.
+- [x] Add company-scoped delivery/outcome evidence and CSV export without claiming causation.
+- [x] Keep schedules, repeating reminders, batch delivery, refunds, paid-invoice changes, and money movement unavailable.
+- [ ] Validate repeated manual follow-ups in real use before designing one narrow scheduled reminder workflow.
+
+Release details: [AI Assistant V1.14](RELEASE_NOTES_AI_ASSISTANT_V1_14.md).
+
+
+## V1.13 - AI controlled document draft revisions
+
+- [x] Add a company-scoped read tool for one editable proposal or invoice draft.
+- [x] Add proposal-draft revision with exact section, pricing-line, and total previews.
+- [x] Add invoice-draft revision for dates, terms, payment setting, and client-facing
+  line descriptions without allowing AI to change rates, quantities, taxes,
+  credits, time links, or totals.
+- [x] Require financial-draft confirmation and explicit current-message intent.
+- [x] Reject issued documents, ambiguous references, cross-company records, stale
+  previews, and line items from another invoice.
+- [x] Extend metadata-only draft-quality evidence to manually created drafts that
+  receive a confirmed AI revision.
+- [x] Keep issuing, sending, refunds, paid-invoice changes, and money movement
+  outside the revision tools.
+- [ ] Validate the tools with real proposal and invoice drafts before considering
+  any scheduled revision or reminder workflow.
+
+Release details: [AI Assistant V1.13](RELEASE_NOTES_AI_ASSISTANT_V1_13.md).
+
+
+## V1.12 - AI document draft quality evidence
+
+- [x] Track AI-created proposals, retainer invoices, and final invoices from creation
+  through revision, issue, delivery, and draft deletion.
+- [x] Store metadata and content hashes only; do not duplicate proposal sections,
+  terms, notes, or line-item descriptions.
+- [x] Classify finalized drafts as used as-is, edited then used, or abandoned.
+- [x] Add company-scoped adoption, revision, stale-draft, and time-to-issue reporting.
+- [x] Add a metadata-only CSV export and regression coverage for isolation,
+  lifecycle tracking, deletion, and privacy.
+- [ ] Gather real-use evidence before selecting any scheduled draft or reminder workflow.
+
+
+## V1.5 - AI controlled delivery and lifecycle actions
+
+- [x] Add fresh final-confirmation cards for document issue and delivery.
+- [x] Restrict AI-selected recipients to contacts on the document client.
+- [x] Re-read locked documents and reject stale totals, dates, line items, payments, recipients, or time attachments.
+- [x] Preserve custom email subject/message and every successful or failed delivery attempt.
+- [x] Add confirmed proposal withdrawal, unpaid-invoice voiding, manual payment entry, and void-invoice time release.
+- [x] Upgrade AI project-status changes to the external-commit confirmation level.
+- [x] Keep refunds, paid-invoice alteration, deletion of financial history, and money movement outside the assistant.
+- [ ] Run the full runtime suite and controlled real-use validation before enabling V1.5 in production.
+
+## V1.11 - AI controlled pilot operations
+
+- [x] Add company access modes for staff-only, selected-user, or all-user pilots.
+- [x] Add per-user selected access without exposing company scope to OpenAI.
+- [x] Add response helpful/not-helpful feedback tied to the exact interaction.
+- [x] Add company-scoped incident reporting; critical incidents pause AI immediately.
+- [x] Add configurable automatic suspension after repeated failed interactions.
+- [x] Add staff-only pilot operations, emergency pause/resume, incident resolution,
+  and feedback review screens.
+- [x] Add readiness checks for pilot access, circuit-breaker state, unresolved
+  high-severity incidents, and minimum real-use feedback.
+- [x] Add a management-command rollback path for suspend/resume and selected-user access.
+- [ ] Run the Django suite, OpenAI live baseline, and a controlled real-use pilot
+  before considering scheduled drafts or reminders.
+
 # EZ360PM Personal MVP Roadmap
 
 This roadmap turns the [personal MVP specification](ez360pm_personal_mvp.docx)
@@ -53,6 +155,22 @@ The architecture, relationships, and screen map are detailed in:
 - [Screen and workflow design](SCREEN_FLOWS.md)
 - [Decisions and open questions](DECISIONS.md)
 - [Deployment and integration setup](DEPLOYMENT.md)
+
+## AI assistant milestone - V1.4
+
+- [x] OpenAI Responses API foundation, read-only tools, note/timer controls, and
+  structured CRM/project actions.
+- [x] Add guarded financial-document draft tools for proposals, retainers, and
+  final invoices.
+- [x] Reuse existing document, time attachment, Decimal total, and retainer-credit
+  services; AI never calculates or persists authoritative totals directly.
+- [x] Keep every AI-created document in Draft and open the ordinary document
+  editor for review.
+- [ ] Complete the runtime Django suite and manual real-use validation before
+  production enablement.
+- [x] Phase 5 controlled issuing, sending, voiding, manual payment recording,
+  and time release is implemented with exact final confirmation. Refunds, paid
+  invoice changes, deletion of financial history, and money movement remain unavailable.
 
 ## Delivery map
 
@@ -158,9 +276,11 @@ successful backup/restore test.
   original pauses. Reset or consistently recalculate the pause fields during a
   manual duration edit, and add regression tests for paused-and-resumed entries.
 - [x] **Expose guarded manual project status changes.** Keep new projects at
-  Lead, add the existing status choices to Edit Project, require explicit
-  confirmation when the status changes, preserve all financial/history records,
-  and prevent hold/complete/cancel while the project timer is running.
+  Lead, place the existing status choices directly on the Project detail
+  dashboard, require explicit confirmation when the status changes, preserve all
+  financial/history records, and prevent hold/complete/cancel while the project
+  timer is running. Keep status out of Edit Project so record details and
+  workflow state remain separate actions.
 
 #### Estimate, proposal, and invoice experience
 
@@ -508,6 +628,31 @@ defines the evidence threshold for product changes.
   audit recovery.
 - Revisit SaaS onboarding only after the personal workflow is stable.
 
+## V1.4 - OpenAI API, CRM actions, and document drafts
+
+**Implementation status:** Phases 0-5 are implemented through V1.5. Production enablement is
+held behind migration, full tests, provider configuration, and the manual
+validation checklist. Phase 6 remains planned.
+
+**Goal:** add a natural-language command layer without allowing a model to bypass
+company scope, workflow services, deterministic financial logic, or human review.
+
+Implementation is split into guarded phases:
+
+1. AI boundary, provider adapter, tool registry, audit records, and threat tests.
+2. Read-only company-scoped questions and record navigation.
+3. Quick-note capture and timer control through existing services.
+4. Client/contact/project create and update with duplicate checks and field diffs.
+5. Proposal and invoice drafting through existing document services.
+6. Controlled issue/send and financial lifecycle actions with mandatory final
+   confirmation.
+7. Real-use refinement, cost controls, and later SaaS tenant controls.
+
+The detailed tasks, safety levels, and phase exit gates are maintained in
+[AI Assistant Roadmap](AI_ASSISTANT_ROADMAP.md). No AI phase begins until the
+current end-to-end application workflow and financial reporting are trusted in
+real use.
+
 ## Quality gates used in every phase
 
 - **Isolation:** request and form querysets are scoped; cross-company IDs are
@@ -531,3 +676,80 @@ accounts, teams and roles, global search, automated reminders, advanced reports,
 templates, imports/exports, accounting integrations, and enhanced authentication
 remain out of scope. They do not enter this roadmap without evidence from real
 use that they remove recurring workflow friction.
+
+
+## AI V1.6 real-use refinement
+
+- [x] Add local, read-only workflow alerts to the assistant drawer.
+- [x] Add dismissals and bounded refresh/item controls.
+- [x] Personalize fixed command suggestions from completed actions without prompt training.
+- [x] Add AI usage, cost, latency, confirmation, cancellation, and failure reporting.
+- [x] Log safe operational refinement events.
+- [ ] Observe real usage before adding scheduled drafts or reminders.
+- [x] Keep every send and financial commit behind the existing final confirmation.
+
+Release details: [AI Assistant V1.6](RELEASE_NOTES_AI_ASSISTANT_V1_6.md).
+
+
+## AI V1.7 production hardening
+
+- [x] Wrap every provider tool result in a server-owned untrusted-data security envelope.
+- [x] Flag instruction-like text inside stored business data without executing or deleting it.
+- [x] Require the current user message to explicitly authorize the matching write tool.
+- [x] Bound serialized tool output and fail closed when a lookup is too broad.
+- [x] Expand prompt-injection, tenant-isolation, financial reconciliation, timer lifecycle, duplicate, stale-data, and retry regression coverage.
+- [x] Add deployment checks for the new output boundary and explicit-write-intent setting.
+- [ ] Run the Django runtime suite and manual V1.7 security checklist in the normal project environment before production enablement.
+
+Release details: [AI Assistant V1.7](RELEASE_NOTES_AI_ASSISTANT_V1_7.md).
+
+## AI V1.8 company controls and privacy
+
+- [x] Add one company-owned AI policy record and settings screen.
+- [x] Add OpenAI model selection constrained by a deployment allowlist.
+- [x] Add company controls for low-risk writes, CRM/project writes, financial
+  drafts, external/financial commits, and proactive alerts.
+- [x] Remove disabled capability tools from provider requests and recheck policy
+  at confirmation execution.
+- [x] Add company-wide monthly request and estimated-cost limits that fail closed
+  before the provider call.
+- [x] Add privacy acknowledgement, redacted-summary controls, and company-specific
+  read-only retention.
+- [x] Add company-scoped current-month usage indicators and metadata-only audit CSV.
+- [x] Make the retention cleanup command use company policy by default.
+- [ ] Run the full Django suite and manual V1.8 checklist in the normal environment.
+- [ ] Map company allowances to SaaS subscription plans only when the SaaS billing
+  design begins.
+- [ ] Keep scheduled drafts and reminders deferred until repeated manual approvals
+  provide evidence for one narrow workflow.
+
+Release details: [AI Assistant V1.8](RELEASE_NOTES_AI_ASSISTANT_V1_8.md).
+
+
+## AI V1.9 evaluation and provider review
+
+- [x] Add strict static contract checks for every registered AI tool and provider guard.
+- [x] Add live read-only OpenAI evaluation suites for core business reads and safety boundaries.
+- [x] Fail a case and automatically cancel any unexpected prepared action.
+- [x] Store company-scoped evaluation history without storing business tool outputs.
+- [x] Report actual tools, pass/fail, tokens, estimated cost, and latency.
+- [x] Add deployment/CI JSON output and an evaluation-history screen.
+- [x] Complete an initial OpenAI provider security and data-processing review.
+- [ ] Run the full Django suite, contract suite, and live core/security suites in the normal environment.
+- [ ] Keep scheduled drafts and reminders deferred until repeated manual approvals provide evidence for one narrow workflow.
+
+Release details: [AI Assistant V1.9](RELEASE_NOTES_AI_ASSISTANT_V1_9.md).
+
+
+## AI V1.10 controlled-use readiness
+
+- [x] Add a company-scoped readiness checklist for platform configuration, company policy, model, usage limits, evaluations, and recent reliability.
+- [x] Add a minimal tool-free OpenAI Responses API connection test for the selected model.
+- [x] Record connection-test request ID, tokens, estimated cost, latency, and exact pass/fail contract.
+- [x] Require a recent passing static contract result and full read-only live baseline for a ready result.
+- [x] Add a fail-closed `check_ai_readiness` deployment command with JSON output.
+- [x] Add readiness and connection-test regression coverage.
+- [ ] Run the full Django suite, connection test, live baseline, and readiness command in the normal environment.
+- [ ] Keep scheduled drafts and reminders deferred until repeated real-use approvals identify one narrow, justified workflow.
+
+Release details: [AI Assistant V1.10](RELEASE_NOTES_AI_ASSISTANT_V1_10.md).

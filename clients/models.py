@@ -74,8 +74,8 @@ class Contact(models.Model):
     )
     first_name = models.CharField(max_length=150)
     last_name = models.CharField(max_length=150)
-    email = models.EmailField()
-    phone = models.CharField(max_length=50)
+    email = models.EmailField(blank=True)
+    phone = models.CharField(max_length=50, blank=True)
     is_primary = models.BooleanField(default=False)
 
     class Meta:

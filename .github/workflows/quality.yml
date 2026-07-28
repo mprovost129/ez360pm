@@ -63,7 +63,7 @@ jobs:
       - run: pip install -r requirements.txt
       - run: pip check
       - run: sh -n bin/start.sh
-      - run: ruff check accounts clients config core documents intake projects
+      - run: ruff check accounts assistant clients config core documents intake projects
       - run: python manage.py makemigrations --check --dry-run
       - run: python manage.py migrate --noinput
       - run: python manage.py test -v 1

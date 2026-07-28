@@ -14,6 +14,9 @@
     </div>
 </div>
 
+{% if ai_draft_review %}
+<div class="workflow-warning" role="status"><strong>AI-prepared draft:</strong> Review the customer wording, pricing, dates, terms, time, and credits before issuing. The assistant has not activated a public link or sent this document.</div>
+{% endif %}
 {% if invoice.status != 'draft' %}<div class="public-link"><strong>Public link:</strong> <a href="{% url 'public-documents:view' invoice.public_token %}" target="_blank">{{ request.scheme }}://{{ request.get_host }}{% url 'public-documents:view' invoice.public_token %}</a></div>{% endif %}
 {% if invoice.viewed_at %}<p class="access-note"><strong>Link first opened:</strong> {{ invoice.viewed_at|date:'M j, Y g:i a' }}. Email security scanners can open links; payment is the confirmed customer action.</p>{% endif %}
 
@@ -54,7 +57,7 @@
 </section>
 {% endif %}
 
-{% if invoice.deliveries.all %}<section class="content-card invoice-panel"><h2>Delivery history</h2>{% for delivery in invoice.deliveries.all %}<div class="detail-row"><span><strong>{{ delivery.recipient_email }}</strong><small>{{ delivery.get_purpose_display }} · {{ delivery.created_at|date:'M j, Y g:i a' }}</small></span><span>{{ delivery.get_status_display }}{% if delivery.error_code %}<small>{{ delivery.failure_message }}</small>{% endif %}{% if delivery.purpose == 'client_document' or delivery.status == 'failed' or delivery.status == 'pending' %}<form class="inline-form" method="post" action="{% url 'documents:delivery-resend' invoice.pk delivery.pk %}" data-confirm="{% if delivery.status == 'failed' %}Retry{% elif delivery.status == 'pending' %}Send{% else %}Resend{% endif %} this email to {{ delivery.recipient_email }}?">{% csrf_token %}<button class="link-button" type="submit">{% if delivery.status == 'failed' %}Retry{% elif delivery.status == 'pending' %}Send{% else %}Resend{% endif %}</button></form>{% endif %}</span></div>{% endfor %}</section>{% endif %}
+{% if invoice.deliveries.all %}<section class="content-card invoice-panel"><h2>Delivery history</h2>{% for delivery in invoice.deliveries.all %}<div class="detail-row"><span><strong>{{ delivery.recipient_email }}</strong><small>{{ delivery.get_purpose_display }}{% if delivery.follow_up_kind %} · {{ delivery.get_follow_up_kind_display }}{% endif %} · {{ delivery.created_at|date:'M j, Y g:i a' }}</small></span><span>{{ delivery.get_status_display }}{% if delivery.error_code %}<small>{{ delivery.failure_message }}</small>{% endif %}{% if delivery.purpose == 'client_document' or delivery.purpose == 'client_follow_up' or delivery.status == 'failed' or delivery.status == 'pending' %}<form class="inline-form" method="post" action="{% url 'documents:delivery-resend' invoice.pk delivery.pk %}" data-confirm="{% if delivery.status == 'failed' %}Retry{% elif delivery.status == 'pending' %}Send{% else %}Resend{% endif %} this email to {{ delivery.recipient_email }}?">{% csrf_token %}<button class="link-button" type="submit">{% if delivery.status == 'failed' %}Retry{% elif delivery.status == 'pending' %}Send{% else %}Resend{% endif %}</button></form>{% endif %}</span></div>{% endfor %}</section>{% endif %}
 
 {% if invoice.credits_received.all or credit_form %}
 <section class="content-card invoice-panel">

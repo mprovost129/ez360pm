@@ -18,7 +18,13 @@
         </div>
     </div>
     {% include 'shared/_running_timer.html' %}
-    <div class="d-flex align-items-center gap-3">
+    <div class="d-flex align-items-center gap-2 gap-sm-3">
+        {% if ai_assistant_enabled %}
+        <button class="btn btn-sm btn-outline-primary assistant-open-button" type="button" data-bs-toggle="offcanvas" data-bs-target="#assistantDrawer" aria-controls="assistantDrawer">
+            <i class="bi bi-stars" aria-hidden="true"></i>
+            <span class="d-none d-md-inline">Assistant</span>
+        </button>
+        {% endif %}
         <span class="text-secondary small d-none d-sm-inline">{{ user.get_short_name|default:user.email }}</span>
         <form method="post" action="{% url 'accounts:logout' %}">
             {% csrf_token %}

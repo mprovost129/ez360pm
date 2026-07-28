@@ -4,7 +4,7 @@ from django.db import transaction
 from core.forms import CompanyScopedModelForm
 
 from .models import Client, Contact
-from .services import create_client_with_primary_contact, save_contact
+from .services import create_client_with_primary_contact, save_contact, update_client
 
 CLIENT_FIELDS = (
     "company_name",
@@ -39,12 +39,21 @@ class ClientForm(CompanyScopedModelForm):
         fields = CLIENT_FIELDS
         widgets = {"internal_note": forms.Textarea(attrs={"rows": 3})}
 
+    def save(self, commit=True):
+        if not commit:
+            raise ValueError("ClientForm must be saved with commit=True.")
+        if not self.instance.pk:
+            return super().save(commit=True)
+        data = {field: self.cleaned_data[field] for field in CLIENT_FIELDS}
+        self.instance = update_client(client=self.instance, client_data=data)
+        return self.instance
+
 
 class ClientCreateForm(ClientForm):
     contact_first_name = forms.CharField(max_length=150)
     contact_last_name = forms.CharField(max_length=150)
-    contact_email = forms.EmailField()
-    contact_phone = forms.CharField(max_length=50)
+    contact_email = forms.EmailField(required=False)
+    contact_phone = forms.CharField(max_length=50, required=False)
 
     field_groups = (
         ("Client", ("company_name", "internal_note")),

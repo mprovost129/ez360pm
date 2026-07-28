@@ -1,0 +1,135 @@
+{% extends "base.html" %}
+
+{% block title %}AI pilot operations | EZ360PM{% endblock %}
+
+{% block content %}
+<div class="page-heading">
+    <div>
+        <p class="eyebrow">AI operations</p>
+        <h1>Controlled pilot</h1>
+        <p class="text-secondary mb-0">Manage access, review feedback and incidents, and pause or resume the OpenAI assistant without affecting ordinary EZ360PM workflows.</p>
+    </div>
+    <div class="d-flex gap-2 flex-wrap">
+        <a class="btn btn-light" href="{% url 'assistant:action-center' %}">Action center</a>
+        <a class="btn btn-light" href="{% url 'assistant:readiness' %}">AI readiness</a>
+        <a class="btn btn-light" href="{% url 'assistant:usage' %}">Usage & reliability</a>
+        <a class="btn btn-light" href="{% url 'assistant:draft-quality' %}">Draft quality</a>
+        <a class="btn btn-light" href="{% url 'assistant:settings' %}">AI settings</a>
+    </div>
+</div>
+
+{% if policy.suspended_at %}
+<div class="alert alert-danger d-flex flex-wrap justify-content-between align-items-start gap-3">
+    <div>
+        <strong>AI is suspended.</strong>
+        <div>{{ policy.suspension_reason }}</div>
+        <div class="small mt-1">Paused {{ policy.suspended_at|date:"M j, Y g:i A" }}. Clients, projects, timers, documents, and billing remain available through the normal interface.</div>
+    </div>
+    <form method="post" action="{% url 'assistant:pilot-resume' %}">
+        {% csrf_token %}
+        <button class="btn btn-danger" type="submit">Resume after review</button>
+    </form>
+</div>
+{% else %}
+<div class="alert alert-success d-flex flex-wrap justify-content-between align-items-start gap-3">
+    <div>
+        <strong>AI is not suspended.</strong>
+        <div class="small mt-1">The current company access mode is {{ policy.get_access_mode_display|lower }}.</div>
+    </div>
+    <form method="post" action="{% url 'assistant:pilot-suspend' %}" class="d-flex gap-2">
+        {% csrf_token %}
+        <input class="form-control form-control-sm" type="text" name="reason" maxlength="255" placeholder="Reason for pause" aria-label="Reason for pause">
+        <button class="btn btn-outline-danger btn-sm" type="submit">Emergency pause</button>
+    </form>
+</div>
+{% endif %}
+
+<div class="row g-3 mb-4">
+    <div class="col-sm-6 col-lg-3"><div class="content-card h-100"><div class="text-secondary small">Recent failures</div><div class="h3 mb-1">{{ recent_failures }}</div><div class="small text-secondary">Threshold {{ policy.failure_threshold }} in {{ policy.failure_window_minutes }} minutes</div></div></div>
+    <div class="col-sm-6 col-lg-3"><div class="content-card h-100"><div class="text-secondary small">Feedback received</div><div class="h3 mb-1">{{ feedback_summary.total|default:"0" }}</div><div class="small text-secondary">Pilot interactions with a rating</div></div></div>
+    <div class="col-sm-6 col-lg-3"><div class="content-card h-100"><div class="text-secondary small">Helpful</div><div class="h3 mb-1">{{ feedback_summary.helpful|default:"0" }}</div><div class="small text-secondary">Positive response ratings</div></div></div>
+    <div class="col-sm-6 col-lg-3"><div class="content-card h-100"><div class="text-secondary small">Not helpful</div><div class="h3 mb-1">{{ feedback_summary.not_helpful|default:"0" }}</div><div class="small text-secondary">Items to review</div></div></div>
+</div>
+
+<div class="content-card mb-4">
+    <div class="d-flex flex-wrap justify-content-between gap-2 align-items-start mb-3">
+        <div>
+            <h2 class="h5 mb-1">Pilot user access</h2>
+            <p class="small text-secondary mb-0">Selected-user switches are enforced only when AI Settings uses the Selected users access mode.</p>
+        </div>
+        <span class="badge text-bg-light border">{{ policy.get_access_mode_display }}</span>
+    </div>
+    <div class="table-responsive">
+        <table class="table align-middle mb-0">
+            <thead><tr><th>User</th><th>Staff</th><th>Selected access</th><th>Effective now</th><th class="text-end">Update</th></tr></thead>
+            <tbody>
+            {% for row in user_rows %}
+                <tr>
+                    <td>{{ row.user.email }}</td>
+                    <td>{% if row.user.is_staff %}Yes{% else %}No{% endif %}</td>
+                    <td>{% if row.access and row.access.enabled %}Enabled{% else %}Disabled{% endif %}</td>
+                    <td><span class="badge {% if row.effective_access %}text-bg-success{% else %}text-bg-secondary{% endif %}">{% if row.effective_access %}Allowed{% else %}Blocked{% endif %}</span></td>
+                    <td class="text-end">
+                        <form method="post" action="{% url 'assistant:pilot-user-access' %}" class="d-inline-flex align-items-center gap-2">
+                            {% csrf_token %}
+                            <input type="hidden" name="user_id" value="{{ row.user.pk }}">
+                            <div class="form-check form-switch mb-0">
+                                <input class="form-check-input" type="checkbox" name="enabled" id="ai-access-{{ row.user.pk }}" {% if row.access and row.access.enabled %}checked{% endif %}>
+                                <label class="visually-hidden" for="ai-access-{{ row.user.pk }}">Selected AI access for {{ row.user.email }}</label>
+                            </div>
+                            <button class="btn btn-sm btn-outline-primary" type="submit">Save</button>
+                        </form>
+                    </td>
+                </tr>
+            {% empty %}
+                <tr><td colspan="5" class="text-secondary text-center py-4">No company users were found.</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="row g-4">
+    <div class="col-xl-7">
+        <div class="content-card h-100">
+            <h2 class="h5">Open incidents</h2>
+            <p class="small text-secondary">Critical incident reports pause the assistant immediately. Resolving an incident does not automatically resume AI.</p>
+            <div class="d-grid gap-3">
+            {% for incident in open_incidents %}
+                <article class="border rounded p-3">
+                    <div class="d-flex flex-wrap justify-content-between gap-2">
+                        <div><strong>#{{ incident.pk }} — {{ incident.summary }}</strong><div class="small text-secondary">{{ incident.get_category_display }} · reported by {{ incident.reported_by.email }} · {{ incident.created_at|date:"M j, Y g:i A" }}</div></div>
+                        <span class="badge {% if incident.severity == 'critical' %}text-bg-danger{% elif incident.severity == 'high' %}text-bg-warning{% else %}text-bg-secondary{% endif %}">{{ incident.get_severity_display }}</span>
+                    </div>
+                    {% if incident.details %}<p class="small mt-2 mb-2">{{ incident.details }}</p>{% endif %}
+                    <form method="post" action="{% url 'assistant:resolve-incident' incident.pk %}" class="d-flex flex-wrap gap-2">
+                        {% csrf_token %}
+                        <input class="form-control form-control-sm flex-grow-1" type="text" name="resolution_note" maxlength="1000" placeholder="Resolution note">
+                        <button class="btn btn-sm btn-primary" type="submit" name="status" value="resolved">Resolve</button>
+                        <button class="btn btn-sm btn-outline-secondary" type="submit" name="status" value="dismissed">Dismiss</button>
+                    </form>
+                </article>
+            {% empty %}
+                <p class="text-secondary mb-0">No open AI incidents.</p>
+            {% endfor %}
+            </div>
+        </div>
+    </div>
+    <div class="col-xl-5">
+        <div class="content-card h-100">
+            <h2 class="h5">Recent feedback</h2>
+            <div class="list-group list-group-flush">
+            {% for feedback in recent_feedback %}
+                <div class="list-group-item px-0">
+                    <div class="d-flex justify-content-between gap-2"><strong>{{ feedback.get_rating_display }}</strong><span class="small text-secondary">{{ feedback.created_at|date:"M j, g:i A" }}</span></div>
+                    <div class="small text-secondary">{{ feedback.user.email }} · {{ feedback.get_category_display }} · interaction #{{ feedback.interaction_id }}</div>
+                    {% if feedback.comment %}<div class="small mt-1">{{ feedback.comment }}</div>{% endif %}
+                </div>
+            {% empty %}
+                <p class="text-secondary mb-0">No pilot feedback has been submitted.</p>
+            {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

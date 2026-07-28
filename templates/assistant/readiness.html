@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+
+{% block title %}AI readiness | EZ360PM{% endblock %}
+
+{% block content %}
+<div class="page-heading">
+    <div>
+        <p class="eyebrow">OpenAI assistant</p>
+        <h1>Controlled-use readiness</h1>
+        <p class="text-secondary mb-0">A company-scoped launch checklist for configuration, provider connectivity, evaluations, usage limits, and recent reliability.</p>
+    </div>
+    <div class="d-flex gap-2 flex-wrap">
+        <a class="btn btn-light" href="{% url 'assistant:action-center' %}">Action center</a>
+        <a class="btn btn-light" href="{% url 'assistant:settings' %}">AI settings</a>
+        {% if user.is_staff %}<a class="btn btn-light" href="{% url 'assistant:pilot-operations' %}">Pilot operations</a>{% endif %}
+        <a class="btn btn-light" href="{% url 'assistant:evaluations' %}">Evaluations</a>
+        <a class="btn btn-light" href="{% url 'assistant:usage' %}">Usage & reliability</a>
+    </div>
+</div>
+
+<div class="content-card mb-4">
+    <div class="d-flex flex-wrap justify-content-between gap-3 align-items-center">
+        <div>
+            <p class="eyebrow mb-1">Current result</p>
+            <h2 class="h4 mb-1">
+                {% if readiness.ready %}Ready for controlled use{% else %}Not ready for controlled use{% endif %}
+            </h2>
+            <p class="text-secondary mb-0">Model: {{ readiness.model }} · {{ readiness.failed_count }} failed · {{ readiness.warning_count }} warning{{ readiness.warning_count|pluralize }}</p>
+        </div>
+        <span class="badge fs-6 {% if readiness.ready %}text-bg-success{% else %}text-bg-danger{% endif %}">
+            {% if readiness.ready %}Ready{% else %}Action required{% endif %}
+        </span>
+    </div>
+</div>
+
+<div class="alert alert-light border d-flex flex-wrap justify-content-between gap-3 align-items-center">
+    <div>
+        <strong>OpenAI connection test</strong><br>
+        <span class="text-secondary">Sends one minimal, tool-free Responses API request. It uses the selected company model and counts against the normal request and cost limits.</span>
+    </div>
+    <form method="post" action="{% url 'assistant:connection-test' %}">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-primary">Test OpenAI connection</button>
+    </form>
+</div>
+
+<div class="content-card p-0 overflow-hidden mb-4">
+    <div class="table-responsive">
+        <table class="table mb-0 align-middle">
+            <thead>
+                <tr><th>Check</th><th>Status</th><th>Details</th><th></th></tr>
+            </thead>
+            <tbody>
+            {% for check in readiness.checks %}
+                <tr>
+                    <td><strong>{{ check.title }}</strong></td>
+                    <td>
+                        <span class="badge {% if check.status == 'pass' %}text-bg-success{% elif check.status == 'warn' %}text-bg-warning{% else %}text-bg-danger{% endif %}">
+                            {% if check.status == 'pass' %}Passed{% elif check.status == 'warn' %}Warning{% else %}Failed{% endif %}
+                        </span>
+                    </td>
+                    <td class="text-secondary">{{ check.detail }}</td>
+                    <td class="text-end">
+                        {% if check.action_url %}<a class="btn btn-sm btn-light" href="{{ check.action_url }}">{{ check.action_label|default:"Review" }}</a>{% endif %}
+                    </td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="row g-4">
+    <div class="col-md-6">
+        <div class="content-card h-100">
+            <h2 class="h5">Monthly requests</h2>
+            <p class="display-6 mb-1">{{ readiness.requests_used }} <span class="fs-6 text-secondary">/ {{ readiness.request_limit }}</span></p>
+            <p class="text-secondary mb-0">All completed and failed assistant requests, connection checks, and live evaluations count toward this company allowance.</p>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="content-card h-100">
+            <h2 class="h5">Estimated OpenAI cost</h2>
+            <p class="display-6 mb-1">${{ readiness.cost_used|floatformat:6 }} <span class="fs-6 text-secondary">/ ${{ readiness.cost_limit|floatformat:2 }}</span></p>
+            <p class="text-secondary mb-0">The estimate depends on the configured per-model input and output token rates.</p>
+        </div>
+    </div>
+</div>
+
+<div class="alert alert-warning mt-4 mb-0">
+    This checklist covers the AI layer only. It does not replace the full Django test suite, backup-and-restore drill, Stripe reconciliation, email-delivery test, or ordinary EZ360PM end-to-end validation.
+</div>
+{% endblock %}

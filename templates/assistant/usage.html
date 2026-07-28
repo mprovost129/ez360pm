@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+
+{% block title %}AI usage and reliability | EZ360PM{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4">
+        <div>
+            <h1 class="h3 mb-1">AI usage and reliability</h1>
+            <p class="text-secondary mb-0">Operational metrics only. Full prompts and sensitive business text are not required for this report.</p>
+        </div>
+        <div class="d-flex flex-wrap align-items-center gap-2">
+            <a class="btn btn-light btn-sm" href="{% url 'assistant:action-center' %}">Action center</a>
+        <a class="btn btn-light btn-sm" href="{% url 'assistant:readiness' %}">AI readiness</a>
+            <a class="btn btn-light btn-sm" href="{% url 'assistant:draft-quality' %}">Draft quality</a>
+            <a class="btn btn-light btn-sm" href="{% url 'assistant:follow-up-evidence' %}">Follow-up evidence</a>
+            {% if user.is_staff %}<a class="btn btn-light btn-sm" href="{% url 'assistant:pilot-operations' %}">Pilot operations</a>{% endif %}
+            <a class="btn btn-light btn-sm" href="{% url 'assistant:evaluations' %}">Evaluation history</a>
+            <a class="btn btn-light btn-sm" href="{% url 'assistant:settings' %}">AI settings</a>
+            <a class="btn btn-light btn-sm" href="{% url 'assistant:usage-export' %}?days={{ selected_days }}">Export audit CSV</a>
+            <form method="get" class="d-flex align-items-center gap-2">
+                <label for="days" class="small text-secondary">Period</label>
+                <select id="days" name="days" class="form-select form-select-sm" onchange="this.form.submit()">
+                    <option value="7" {% if selected_days == 7 %}selected{% endif %}>Last 7 days</option>
+                    <option value="30" {% if selected_days == 30 %}selected{% endif %}>Last 30 days</option>
+                    <option value="90" {% if selected_days == 90 %}selected{% endif %}>Last 90 days</option>
+                    <option value="365" {% if selected_days == 365 %}selected{% endif %}>Last year</option>
+                </select>
+            </form>
+        </div>
+    </div>
+
+
+    <div class="card mb-4">
+        <div class="card-header d-flex justify-content-between align-items-center"><h2 class="h5 mb-0">Current-month company limits</h2><span class="badge {% if ai_policy.enabled %}text-bg-success{% else %}text-bg-secondary{% endif %}">{% if ai_policy.enabled %}Enabled{% else %}Disabled{% endif %}</span></div>
+        <div class="card-body">
+            <div class="row g-4">
+                <div class="col-lg-6">
+                    <div class="d-flex justify-content-between mb-1"><span>Requests</span><strong>{{ metrics.monthly_requests }} / {{ metrics.monthly_request_limit }}</strong></div>
+                    <div class="progress" role="progressbar" aria-label="Monthly AI request usage" aria-valuenow="{{ metrics.monthly_request_percent }}" aria-valuemin="0" aria-valuemax="100"><div class="progress-bar" style="width: {{ metrics.monthly_request_percent }}%"></div></div>
+                </div>
+                <div class="col-lg-6">
+                    <div class="d-flex justify-content-between mb-1"><span>Estimated API cost</span><strong>${{ metrics.monthly_cost|floatformat:4 }} / ${{ metrics.monthly_cost_limit|floatformat:2 }}</strong></div>
+                    <div class="progress" role="progressbar" aria-label="Monthly AI cost usage" aria-valuenow="{{ metrics.monthly_cost_percent }}" aria-valuemin="0" aria-valuemax="100"><div class="progress-bar" style="width: {{ metrics.monthly_cost_percent }}%"></div></div>
+                </div>
+            </div>
+            <p class="small text-secondary mb-0 mt-3">Limits are company-wide. The platform-wide hard limit can be lower than the company setting.</p>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-4">
+        <div class="col-6 col-lg-3"><div class="card h-100"><div class="card-body"><div class="text-secondary small">Requests</div><div class="h4 mb-0">{{ metrics.interaction_count }}</div></div></div></div>
+        <div class="col-6 col-lg-3"><div class="card h-100"><div class="card-body"><div class="text-secondary small">Completed</div><div class="h4 mb-0">{{ metrics.completed_interactions }}</div></div></div></div>
+        <div class="col-6 col-lg-3"><div class="card h-100"><div class="card-body"><div class="text-secondary small">Estimated API cost</div><div class="h4 mb-0">${{ metrics.estimated_cost|floatformat:4 }}</div></div></div></div>
+        <div class="col-6 col-lg-3"><div class="card h-100"><div class="card-body"><div class="text-secondary small">Average latency</div><div class="h4 mb-0">{{ metrics.average_latency_ms }} ms</div></div></div></div>
+    </div>
+
+    <div class="card mb-4">
+        <div class="card-header"><h2 class="h5 mb-0">Actions by capability</h2></div>
+        <div class="table-responsive">
+            <table class="table mb-0 align-middle">
+                <thead><tr><th>Capability</th><th class="text-end">Prepared</th><th class="text-end">Completed</th><th class="text-end">Canceled</th><th class="text-end">Failed</th></tr></thead>
+                <tbody>
+                {% for row in metrics.capabilities %}
+                    <tr><td><code>{{ row.tool_name }}</code></td><td class="text-end">{{ row.prepared }}</td><td class="text-end">{{ row.completed }}</td><td class="text-end">{{ row.canceled }}</td><td class="text-end">{{ row.failed }}</td></tr>
+                {% empty %}
+                    <tr><td colspan="5" class="text-secondary py-4 text-center">No confirmed or prepared actions in this period.</td></tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="row g-3">
+        <div class="col-lg-6">
+            <div class="card h-100">
+                <div class="card-header"><h2 class="h5 mb-0">Action outcomes</h2></div>
+                <div class="list-group list-group-flush">
+                    {% for item in metrics.action_outcomes %}<div class="list-group-item d-flex justify-content-between"><span>{{ item.label }}</span><strong>{{ item.value }}</strong></div>{% endfor %}
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-6">
+            <div class="card h-100">
+                <div class="card-header"><h2 class="h5 mb-0">Refinement events</h2></div>
+                <div class="list-group list-group-flush">
+                    {% for item in metrics.event_outcomes %}<div class="list-group-item d-flex justify-content-between"><span>{{ item.label }}</span><strong>{{ item.value }}</strong></div>{% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

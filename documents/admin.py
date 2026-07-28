@@ -44,16 +44,18 @@ class DocumentDeliveryAdmin(admin.ModelAdmin):
     list_display = (
         "document",
         "purpose",
+        "follow_up_kind",
         "recipient_email",
         "status",
         "created_at",
         "sent_at",
     )
-    list_filter = ("purpose", "status")
+    list_filter = ("purpose", "follow_up_kind", "status")
     search_fields = ("document__number", "recipient_email")
     readonly_fields = (
         "document",
         "purpose",
+        "follow_up_kind",
         "recipient_name",
         "recipient_email",
         "status",
