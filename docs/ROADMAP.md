@@ -1,3 +1,76 @@
+## V1.22 - Discoverable local client intake and route safety
+
+- [x] Add a persistent Client template control to the assistant composer.
+- [x] Fill the zero-token client form locally without sending an OpenAI request.
+- [x] Hide the local template shortcut when structured writes are disabled by company policy.
+- [x] Keep the client template in one server-owned constant used by the parser, UI, and focused instructions.
+- [x] Add template text to the AI evaluation fingerprint.
+- [x] Protect unsent composer text from accidental replacement.
+- [x] Build confirm/cancel URLs from Django's reversed Action Center route instead of a hardcoded path.
+- [x] Add Ctrl/Command+Enter submission and provider-neutral slow-request wording.
+- [x] Add regression and manual validation coverage.
+- [ ] Run the Django suite and manual drawer checks in the normal environment.
+
+Release details: [AI Assistant V1.22](RELEASE_NOTES_AI_ASSISTANT_V1_22.md).
+
+
+## V1.21 - Local-action privacy and usage accuracy
+
+- [x] Stop copying structured client-template customer fields into retained AI interaction summaries.
+- [x] Keep the pending confirmation as the reviewed execution payload.
+- [x] Separate OpenAI-backed requests from zero-token local actions in Usage & Reliability.
+- [x] Calculate token totals, API cost, and average OpenAI latency from provider-backed requests only.
+- [x] Clarify that monthly request and cost limits apply to OpenAI calls, not local actions.
+- [x] Add privacy and reporting regression coverage.
+- [ ] Run the Django suite and manual privacy/reporting checks in the normal environment.
+
+Release details: [AI Assistant V1.21](RELEASE_NOTES_AI_ASSISTANT_V1_21.md).
+
+
+## V1.20 - Local action budget independence
+
+- [x] Resolve deterministic local actions before applying OpenAI provider budgets.
+- [x] Keep company/user access, suspension, privacy acknowledgement, risk permissions, confirmation, and duplicate safeguards enforced.
+- [x] Allow the zero-token client template when the OpenAI request or cost allowance is exhausted.
+- [x] Remove provider-model allowlist dependency from deterministic local actions.
+- [x] Keep provider-backed prompts blocked by request and cost guards.
+- [x] Classify domain validation as blocked/needs-correction rather than an operational failure.
+- [x] Exclude current and historical domain-validation outcomes from circuit-breaker and reliability failure counts.
+- [x] Separate needs-correction outcomes from operational failures in the usage report.
+- [x] Add regression and manual validation coverage.
+- [ ] Run the Django suite and manual request/cost-limit checks in the normal environment.
+
+Release details: [AI Assistant V1.20](RELEASE_NOTES_AI_ASSISTANT_V1_20.md).
+
+
+## V1.18 - Focused AI fast path
+
+- [x] Force the single `create_client` function when the current request already contains a usable contact name.
+- [x] Leave incomplete client requests on automatic tool choice so the assistant can ask one concise question.
+- [x] Exclude earlier conversation summaries from focused write requests.
+- [x] Exclude unrelated page context from focused client creation.
+- [x] Limit focused writes to one OpenAI tool round and one registered tool call.
+- [x] Use compact focused instructions, a smaller output-token cap, minimal reasoning, and low text verbosity.
+- [x] Add deployment checks and regression coverage for focused request controls.
+- [ ] Run the Django suite and live natural-language client-creation scenarios in the normal environment.
+
+Release details: [AI Assistant V1.18](RELEASE_NOTES_AI_ASSISTANT_V1_18.md).
+
+
+## V1.17 - Focused AI action orchestration
+
+- [x] Route clear single-action CRM, note, timer, and project commands to a minimal tool catalog.
+- [x] Let client creation perform its own duplicate check instead of spending separate search rounds.
+- [x] Stop immediately after a write confirmation is prepared; do not call OpenAI again for a summary.
+- [x] Add a hard per-request registered-tool-call budget.
+- [x] Reject provider calls to tools outside the server-approved request scope.
+- [x] Tighten write-intent patterns that could confuse project detail, project status, notes, contacts, and clients.
+- [x] Add regression coverage for the live client-creation failure mode.
+- [ ] Run the full Django suite and live client-creation scenarios in the normal environment.
+
+Release details: [AI Assistant V1.17](RELEASE_NOTES_AI_ASSISTANT_V1_17.md).
+
+
 ## V1.16 - OpenAI request observability and model stability
 
 - [x] Assign one unique `X-Client-Request-Id` to every logical OpenAI Responses API call.
@@ -753,3 +826,11 @@ Release details: [AI Assistant V1.9](RELEASE_NOTES_AI_ASSISTANT_V1_9.md).
 - [ ] Keep scheduled drafts and reminders deferred until repeated real-use approvals identify one narrow, justified workflow.
 
 Release details: [AI Assistant V1.10](RELEASE_NOTES_AI_ASSISTANT_V1_10.md).
+
+
+### V1.19 retry-safe client intake — complete
+
+- [x] Parse the explicit filled client template locally with zero OpenAI tokens.
+- [x] Reuse identical unexpired pending confirmations across retries.
+- [x] Add long-request progress and browser-timeout guidance.
+- [x] Include routing and retry behavior in the AI evaluation fingerprint.

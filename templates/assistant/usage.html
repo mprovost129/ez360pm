@@ -36,7 +36,7 @@
         <div class="card-body">
             <div class="row g-4">
                 <div class="col-lg-6">
-                    <div class="d-flex justify-content-between mb-1"><span>Requests</span><strong>{{ metrics.monthly_requests }} / {{ metrics.monthly_request_limit }}</strong></div>
+                    <div class="d-flex justify-content-between mb-1"><span>OpenAI requests</span><strong>{{ metrics.monthly_requests }} / {{ metrics.monthly_request_limit }}</strong></div>
                     <div class="progress" role="progressbar" aria-label="Monthly AI request usage" aria-valuenow="{{ metrics.monthly_request_percent }}" aria-valuemin="0" aria-valuemax="100"><div class="progress-bar" style="width: {{ metrics.monthly_request_percent }}%"></div></div>
                 </div>
                 <div class="col-lg-6">
@@ -44,15 +44,19 @@
                     <div class="progress" role="progressbar" aria-label="Monthly AI cost usage" aria-valuenow="{{ metrics.monthly_cost_percent }}" aria-valuemin="0" aria-valuemax="100"><div class="progress-bar" style="width: {{ metrics.monthly_cost_percent }}%"></div></div>
                 </div>
             </div>
-            <p class="small text-secondary mb-0 mt-3">Limits are company-wide. The platform-wide hard limit can be lower than the company setting.</p>
+            <p class="small text-secondary mb-0 mt-3">OpenAI limits are company-wide. Zero-token local actions are reported separately and do not consume these allowances.</p>
         </div>
     </div>
 
     <div class="row g-3 mb-4">
-        <div class="col-6 col-lg-3"><div class="card h-100"><div class="card-body"><div class="text-secondary small">Requests</div><div class="h4 mb-0">{{ metrics.interaction_count }}</div></div></div></div>
+        <div class="col-6 col-lg-3"><div class="card h-100"><div class="card-body"><div class="text-secondary small">Assistant interactions</div><div class="h4 mb-0">{{ metrics.interaction_count }}</div></div></div></div>
+        <div class="col-6 col-lg-3"><div class="card h-100"><div class="card-body"><div class="text-secondary small">OpenAI requests</div><div class="h4 mb-0">{{ metrics.provider_request_count }}</div></div></div></div>
+        <div class="col-6 col-lg-3"><div class="card h-100"><div class="card-body"><div class="text-secondary small">Local actions</div><div class="h4 mb-0">{{ metrics.local_action_count }}</div></div></div></div>
         <div class="col-6 col-lg-3"><div class="card h-100"><div class="card-body"><div class="text-secondary small">Completed</div><div class="h4 mb-0">{{ metrics.completed_interactions }}</div></div></div></div>
+        <div class="col-6 col-lg-3"><div class="card h-100"><div class="card-body"><div class="text-secondary small">Needs correction</div><div class="h4 mb-0">{{ metrics.blocked_interactions }}</div></div></div></div>
+        <div class="col-6 col-lg-3"><div class="card h-100"><div class="card-body"><div class="text-secondary small">Operational failures</div><div class="h4 mb-0">{{ metrics.failed_interactions }}</div></div></div></div>
         <div class="col-6 col-lg-3"><div class="card h-100"><div class="card-body"><div class="text-secondary small">Estimated API cost</div><div class="h4 mb-0">${{ metrics.estimated_cost|floatformat:4 }}</div></div></div></div>
-        <div class="col-6 col-lg-3"><div class="card h-100"><div class="card-body"><div class="text-secondary small">Average latency</div><div class="h4 mb-0">{{ metrics.average_latency_ms }} ms</div></div></div></div>
+        <div class="col-6 col-lg-3"><div class="card h-100"><div class="card-body"><div class="text-secondary small">Average OpenAI latency</div><div class="h4 mb-0">{{ metrics.average_latency_ms }} ms</div></div></div></div>
     </div>
 
     <div class="card mb-4">

@@ -315,11 +315,15 @@ def pilot_operations(request):
     window_start = timezone.now() - timedelta(minutes=policy.failure_window_minutes)
     if policy.failure_count_reset_at and policy.failure_count_reset_at > window_start:
         window_start = policy.failure_count_reset_at
-    recent_interaction_failures = AIInteraction.objects.filter(
-        company=company,
-        status=AIInteraction.Status.FAILED,
-        created_at__gte=window_start,
-    ).count()
+    recent_interaction_failures = (
+        AIInteraction.objects.filter(
+            company=company,
+            status=AIInteraction.Status.FAILED,
+            created_at__gte=window_start,
+        )
+        .exclude(error_code="domain_validation")
+        .count()
+    )
     recent_action_failures = AIActionAttempt.objects.filter(
         company=company,
         status=AIActionAttempt.Status.FAILED,

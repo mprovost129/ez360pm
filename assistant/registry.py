@@ -3,7 +3,7 @@ import json
 from dataclasses import dataclass
 from datetime import timedelta
 
-from django.db import IntegrityError
+from django.db import IntegrityError, transaction
 from django.utils import timezone
 
 from .models import AIActionAttempt
@@ -55,15 +55,21 @@ class ToolRegistry:
             raise ValueError(f"Tool already registered: {tool.name}")
         self._tools[tool.name] = tool
 
-    def definitions(self, *, policy=None):
+    def definitions(self, *, policy=None, names=None):
+        requested = set(names) if names is not None else None
+        tools = [
+            tool
+            for tool in self._tools.values()
+            if requested is None or tool.name in requested
+        ]
         if policy is None:
-            return [tool.api_definition() for tool in self._tools.values()]
+            return [tool.api_definition() for tool in tools]
         from .policies import allowed_risk_levels
 
         permitted = allowed_risk_levels(policy)
         return [
             tool.api_definition()
-            for tool in self._tools.values()
+            for tool in tools
             if tool.risk_level in permitted
         ]
 
@@ -103,6 +109,7 @@ class ToolRegistry:
             if tool.risk_level == AIActionAttempt.RiskLevel.EXTERNAL_COMMIT
             else 10
         )
+        now = timezone.now()
         defaults = {
             "company": context.company,
             "user": context.user,
@@ -111,21 +118,55 @@ class ToolRegistry:
             "risk_level": tool.risk_level,
             "normalized_arguments": execution_arguments,
             "preview": preview,
-            "confirmation_expires_at": timezone.now()
-            + timedelta(minutes=expiry_minutes),
+            "confirmation_expires_at": now + timedelta(minutes=expiry_minutes),
         }
-        try:
-            attempt, _ = AIActionAttempt.objects.get_or_create(
-                idempotency_key=idempotency_key,
-                defaults=defaults,
+
+        # Serialize preparation per company so a browser retry or duplicated provider
+        # response cannot create two confirmation cards for the same pending write.
+        with transaction.atomic():
+            context.company.__class__.objects.select_for_update().only("pk").get(
+                pk=context.company.pk
             )
-        except IntegrityError:
-            attempt = AIActionAttempt.objects.get(idempotency_key=idempotency_key)
+            candidates = AIActionAttempt.objects.filter(
+                company=context.company,
+                user=context.user,
+                tool_name=tool.name,
+                status=AIActionAttempt.Status.PENDING,
+                confirmation_expires_at__gt=now,
+            ).order_by("-created_at", "-pk")[:25]
+            for candidate in candidates:
+                candidate_canonical = json.dumps(
+                    candidate.normalized_arguments,
+                    sort_keys=True,
+                    separators=(",", ":"),
+                    default=str,
+                )
+                if candidate_canonical == canonical:
+                    return ToolResult(
+                        {
+                            "confirmation_required": True,
+                            "action": candidate.preview,
+                            "confirmation_token": str(candidate.confirmation_token),
+                            "reused_pending_action": True,
+                        },
+                        pending_action=candidate,
+                    )
+
+            try:
+                with transaction.atomic():
+                    attempt, _ = AIActionAttempt.objects.get_or_create(
+                        idempotency_key=idempotency_key,
+                        defaults=defaults,
+                    )
+            except IntegrityError:
+                attempt = AIActionAttempt.objects.get(idempotency_key=idempotency_key)
+
         return ToolResult(
             {
                 "confirmation_required": True,
                 "action": preview,
                 "confirmation_token": str(attempt.confirmation_token),
+                "reused_pending_action": False,
             },
             pending_action=attempt,
         )

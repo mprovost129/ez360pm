@@ -121,9 +121,19 @@ class ProviderResponse:
 class BaseProvider:
     name = "base"
     supports_client_request_id = False
+    supports_request_options = False
 
     def create_response(
-        self, *, input_items, instructions, tools, client_request_id=None
+        self,
+        *,
+        input_items,
+        instructions,
+        tools,
+        client_request_id=None,
+        tool_choice="auto",
+        max_output_tokens=None,
+        reasoning_effort="",
+        text_verbosity="",
     ):
         raise NotImplementedError
 
@@ -133,6 +143,7 @@ class OpenAIResponsesProvider(BaseProvider):
 
     name = "openai"
     supports_client_request_id = True
+    supports_request_options = True
 
     def __init__(self, *, api_key=None, model=None, timeout=None, client=None):
         self.api_key = api_key or settings.OPENAI_API_KEY
@@ -147,18 +158,37 @@ class OpenAIResponsesProvider(BaseProvider):
         )
 
     def create_response(
-        self, *, input_items, instructions, tools, client_request_id=None
+        self,
+        *,
+        input_items,
+        instructions,
+        tools,
+        client_request_id=None,
+        tool_choice="auto",
+        max_output_tokens=None,
+        reasoning_effort="",
+        text_verbosity="",
     ):
         request_kwargs = {
             "model": self.model,
             "input": input_items,
             "instructions": instructions,
             "tools": tools,
-            "tool_choice": "auto",
+            "tool_choice": tool_choice or "auto",
             "parallel_tool_calls": False,
             "store": False,
-            "max_output_tokens": settings.AI_MAX_OUTPUT_TOKENS,
+            "max_output_tokens": (
+                max_output_tokens
+                if max_output_tokens is not None
+                else settings.AI_MAX_OUTPUT_TOKENS
+            ),
         }
+        model_name = str(self.model).lower()
+        supports_reasoning_control = model_name.startswith("gpt-5") or model_name.startswith("o")
+        if reasoning_effort and supports_reasoning_control:
+            request_kwargs["reasoning"] = {"effort": reasoning_effort}
+        if text_verbosity and model_name.startswith("gpt-5"):
+            request_kwargs["text"] = {"verbosity": text_verbosity}
         if client_request_id:
             request_kwargs["extra_headers"] = {
                 "X-Client-Request-Id": str(client_request_id)

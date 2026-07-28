@@ -325,13 +325,17 @@ def usage_metrics(user, days=30, policy=None):
         company=user.company, created_at__gte=start
     )
     events = AIEvent.objects.filter(company=user.company, created_at__gte=start)
-    totals = interactions.aggregate(
+    provider_interactions = interactions.exclude(provider="local")
+    local_interactions = interactions.filter(provider="local")
+    totals = interactions.aggregate(interactions=Count("id"))
+    provider_totals = provider_interactions.aggregate(
         interactions=Count("id"),
         total_tokens=Sum("total_tokens"),
         cost=Sum("estimated_cost_usd"),
         latency=Sum("latency_ms"),
     )
     interaction_count = totals["interactions"] or 0
+    provider_request_count = provider_totals["interactions"] or 0
     action_counts = {
         row["status"]: row["total"]
         for row in actions.values("status").annotate(total=Count("id"))
@@ -366,16 +370,29 @@ def usage_metrics(user, days=30, policy=None):
         "monthly_cost_limit": cost_limit,
         "monthly_cost_percent": round(cost_percent, 1),
         "interaction_count": interaction_count,
+        "provider_request_count": provider_request_count,
+        "local_action_count": local_interactions.count(),
         "completed_interactions": interactions.filter(
             status=AIInteraction.Status.COMPLETED
         ).count(),
-        "failed_interactions": interactions.filter(
-            status=AIInteraction.Status.FAILED
-        ).count(),
-        "total_tokens": totals["total_tokens"] or 0,
-        "estimated_cost": totals["cost"] or 0,
-        "average_latency_ms": round((totals["latency"] or 0) / interaction_count)
-        if interaction_count
+        "blocked_interactions": (
+            interactions.filter(status=AIInteraction.Status.BLOCKED).count()
+            + interactions.filter(
+                status=AIInteraction.Status.FAILED,
+                error_code="domain_validation",
+            ).count()
+        ),
+        "failed_interactions": (
+            interactions.filter(status=AIInteraction.Status.FAILED)
+            .exclude(error_code="domain_validation")
+            .count()
+        ),
+        "total_tokens": provider_totals["total_tokens"] or 0,
+        "estimated_cost": provider_totals["cost"] or 0,
+        "average_latency_ms": round(
+            (provider_totals["latency"] or 0) / provider_request_count
+        )
+        if provider_request_count
         else 0,
         "action_counts": action_counts,
         "event_counts": event_counts,

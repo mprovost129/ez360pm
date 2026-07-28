@@ -21,7 +21,9 @@ INSTRUCTION_MARKERS = (
 
 
 WRITE_INTENT_PATTERNS = {
-    "create_note": (r"\b(?:create|add|save|capture|take|make)\b.{0,80}\bnote\b",),
+    "create_note": (
+        r"\b(?:create|add|save|capture|take|make)\s+(?:a\s+|new\s+|the\s+)?(?:quick\s+)?note\b",
+    ),
     "start_timer": (
         r"\b(?:start|begin|run)\b.{0,60}\btimer\b",
         r"\bstart\b.{0,60}\btracking\s+time\b",
@@ -33,7 +35,8 @@ WRITE_INTENT_PATTERNS = {
         r"\bstop\b.{0,60}\btracking\s+time\b",
     ),
     "create_client": (
-        r"\b(?:create|add|make|prepare)\b.{0,100}\bclient\b",
+        r"\b(?:create|add|make|prepare)\s+(?:a\s+|an\s+|new\s+|the\s+)?(?:client|customer)\b",
+        r"\b(?:create|add|make)\b.{0,80}\bas\s+(?:a\s+|new\s+)?(?:client|customer)\b",
         # A filled template requested by the assistant is itself a direct
         # current-turn submission. Final saving still requires confirmation.
         r"\bcontact_first_name\s*:.{0,500}\bcontact_last_name\s*:",
@@ -41,20 +44,28 @@ WRITE_INTENT_PATTERNS = {
     "update_client": (
         r"\b(?:update|edit|change|correct)\b.{0,100}\b(?:client|billing address)\b",
     ),
-    "add_contact": (r"\b(?:create|add)\b.{0,100}\bcontact\b",),
+    "add_contact": (
+        r"\b(?:create|add)\s+(?:a\s+|new\s+|the\s+)?contact\b",
+    ),
     "update_contact": (
         r"\b(?:update|edit|change|correct)\b.{0,100}\b(?:contact|email|phone)\b",
     ),
     "set_primary_contact": (r"\b(?:set|make|change)\b.{0,100}\bprimary\s+contact\b",),
-    "create_project": (r"\b(?:create|add|open|make)\b.{0,100}\b(?:project|job)\b",),
+    "create_project": (
+        r"\b(?:create|add|open|make)\s+(?:a\s+|new\s+|the\s+)?(?:project|job)\b",
+        r"\b(?:create|add|open|make)\b.{0,80}\bas\s+(?:a\s+|new\s+)?(?:project|job)\b",
+    ),
     "update_project_details": (
         r"\b(?:update|edit|change|correct)\b.{0,100}\b(?:project|job)\b",
     ),
     "change_project_status": (
-        r"\b(?:change|set|update|mark|move)\b.{0,120}\b(?:project\s+status|project|job|lead|approved|active|hold|complete|completed|cancel|canceled|cancelled)\b",
+        r"\b(?:change|set|update)\b.{0,80}\b(?:project|job)\s+status\b",
+        r"\b(?:mark|move|set|change|update)\b.{0,80}\b(?:project|job)\b.{0,80}\b(?:lead|approved|active|on[\s_-]?hold|complete|completed|cancel|canceled|cancelled)\b",
+        r"\b(?:mark|move|set|change|update)\b.{0,80}\b(?:lead|approved|active|on[\s_-]?hold|complete|completed|cancel|canceled|cancelled)\b",
     ),
     "create_client_and_project_from_note": (
-        r"\b(?:create|convert|turn|make)\b.{0,100}\b(?:client|project)\b.{0,160}\b(?:project|client|note)\b",
+        r"\b(?:create|convert|turn|make)\b.{0,120}\b(?:client|project)\b.{0,160}\b(?:from|using)\b.{0,40}\bnote\b",
+        r"\b(?:create|convert|turn|make)\b.{0,120}\bnote\b.{0,160}\b(?:client|project)\b",
     ),
     "attach_note_to_client": (r"\battach\b.{0,80}\bnote\b.{0,80}\bclient\b",),
     "attach_note_to_project": (r"\battach\b.{0,80}\bnote\b.{0,80}\bproject\b",),
@@ -147,10 +158,7 @@ def serialize_tool_output(*, tool_name, data, encoder):
     return output
 
 
-def write_intent_authorized(*, prompt, tool_name):
-    """Require the user's current message—not retrieved records—to request a write."""
-    if not getattr(settings, "AI_REQUIRE_EXPLICIT_WRITE_INTENT", True):
-        return True
+def write_intent_matches(*, prompt, tool_name):
     patterns = WRITE_INTENT_PATTERNS.get(tool_name)
     if not patterns:
         return False
@@ -158,6 +166,21 @@ def write_intent_authorized(*, prompt, tool_name):
     return any(
         re.search(pattern, normalized, flags=re.I | re.S) for pattern in patterns
     )
+
+
+def matching_write_intents(prompt):
+    return tuple(
+        tool_name
+        for tool_name in WRITE_INTENT_PATTERNS
+        if write_intent_matches(prompt=prompt, tool_name=tool_name)
+    )
+
+
+def write_intent_authorized(*, prompt, tool_name):
+    """Require the user's current message—not retrieved records—to request a write."""
+    if not getattr(settings, "AI_REQUIRE_EXPLICIT_WRITE_INTENT", True):
+        return True
+    return write_intent_matches(prompt=prompt, tool_name=tool_name)
 
 
 def assert_write_intent(*, prompt, tool_name):

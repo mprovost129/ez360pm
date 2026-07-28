@@ -374,3 +374,18 @@ settings passed only to the official SDK.
 Mutable model aliases remain supported, but the readiness report warns that their
 behavior can change. Configuration fingerprints still force a new baseline after
 any model, instruction, tool, schema, SDK, or provider-path change.
+
+
+## Focused action orchestration (V1.17)
+
+Before an OpenAI request, the server compares the current message with the same
+explicit-write-intent rules used at tool execution. An unambiguous ordinary write
+receives a minimal registered-tool catalog and a one-call budget. The model cannot
+select a tool omitted from that request; the server verifies the returned tool name
+before invocation.
+
+The domain tool still prepares an ordinary `AIActionAttempt`. Once that pending
+action exists, orchestration stops and returns a deterministic review message. No
+second provider round is required. Ambiguous and multi-part requests keep the
+normal policy-filtered catalog. This optimization changes neither tenant scope nor
+confirmation authority.

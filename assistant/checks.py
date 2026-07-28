@@ -197,6 +197,14 @@ def assistant_settings_check(app_configs, **kwargs):
         messages.append(
             Error("AI_MAX_TOOL_ROUNDS must be at least 1.", id="assistant.E002")
         )
+    max_tool_calls = getattr(settings, "AI_MAX_TOOL_CALLS", 0)
+    if max_tool_calls < 1 or max_tool_calls > 12:
+        messages.append(
+            Error(
+                "AI_MAX_TOOL_CALLS must be between 1 and 12.",
+                id="assistant.E021",
+            )
+        )
     provider_timeout = getattr(settings, "AI_PROVIDER_TIMEOUT_SECONDS", 0)
     tool_rounds = getattr(settings, "AI_MAX_TOOL_ROUNDS", 0)
     worker_timeout = getattr(settings, "GUNICORN_TIMEOUT_SECONDS", 0)
@@ -209,11 +217,45 @@ def assistant_settings_check(app_configs, **kwargs):
                 id="assistant.E020",
             )
         )
+    browser_timeout = getattr(settings, "AI_BROWSER_REQUEST_TIMEOUT_SECONDS", 0)
+    if browser_timeout < worker_timeout + 5:
+        messages.append(
+            Error(
+                "AI_BROWSER_REQUEST_TIMEOUT_SECONDS must exceed the Gunicorn worker "
+                f"timeout; use at least {worker_timeout + 5} seconds.",
+                id="assistant.E025",
+            )
+        )
     if getattr(settings, "AI_MAX_TOOL_OUTPUT_CHARS", 0) < 1000:
         messages.append(
             Error(
                 "AI_MAX_TOOL_OUTPUT_CHARS must be at least 1000.",
                 id="assistant.E005",
+            )
+        )
+    focused_tokens = getattr(settings, "AI_FOCUSED_MAX_OUTPUT_TOKENS", 0)
+    if focused_tokens < 128 or focused_tokens > getattr(settings, "AI_MAX_OUTPUT_TOKENS", 0):
+        messages.append(
+            Error(
+                "AI_FOCUSED_MAX_OUTPUT_TOKENS must be at least 128 and no greater "
+                "than AI_MAX_OUTPUT_TOKENS.",
+                id="assistant.E022",
+            )
+        )
+    focused_effort = getattr(settings, "AI_FOCUSED_REASONING_EFFORT", "")
+    if focused_effort not in {"", "none", "minimal", "low", "medium", "high", "xhigh"}:
+        messages.append(
+            Error(
+                "AI_FOCUSED_REASONING_EFFORT is not an allowed value.",
+                id="assistant.E023",
+            )
+        )
+    focused_verbosity = getattr(settings, "AI_FOCUSED_VERBOSITY", "")
+    if focused_verbosity not in {"", "low", "medium", "high"}:
+        messages.append(
+            Error(
+                "AI_FOCUSED_VERBOSITY must be low, medium, high, or blank.",
+                id="assistant.E024",
             )
         )
     if not getattr(settings, "AI_REQUIRE_EXPLICIT_WRITE_INTENT", True):

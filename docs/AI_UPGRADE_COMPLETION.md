@@ -2,7 +2,7 @@
 
 ## Conclusion
 
-V1.16 is the recommended stopping point for speculative AI development. The
+V1.18 is the recommended stopping point for speculative AI development. The
 assistant now has the complete code-side foundation needed for controlled real
 use:
 
@@ -21,6 +21,11 @@ use:
   persistent confirmation Action Center;
 - OpenAI request troubleshooting IDs, optional organization/project scoping, and
   model-alias stability warnings.
+- focused single-action tool routing, immediate return after confirmation preparation,
+  and a hard per-request tool-call budget based on real client-creation testing;
+- a compact focused-request fast path that omits prior conversation context, forces
+  complete create-client commands into the one approved tool, and reduces reasoning
+  and output-token allowances.
 
 No additional AI capability is recommended before live testing.
 
@@ -73,3 +78,32 @@ Before production use:
 Future AI changes should come from the real-use log, failed evaluations, user
 feedback, or repeated manual behavior—not from adding features merely because AI
 can perform them.
+
+
+## V1.19 retry-safe client intake
+
+Real-use testing identified client-creation latency and retry friction. V1.19 adds a
+zero-token structured client-template path, reuses identical active confirmations,
+and improves long-request feedback. These are reliability refinements only; the AI
+authority boundary is unchanged.
+
+## V1.20 local-action budget separation
+
+The deterministic client-template path is now independent of OpenAI request and
+cost allowances. It still honors all company access, privacy, suspension, action
+category, duplicate, and confirmation safeguards. Provider-backed natural-language
+requests remain budget-controlled.
+
+## V1.21 local-action privacy and usage accuracy
+
+The deterministic client-template path now stores only fixed metadata in AI
+interaction summaries rather than duplicating submitted customer fields. Usage
+reporting also distinguishes OpenAI-backed requests from zero-token local actions,
+so API cost and latency metrics reflect actual provider activity.
+
+## V1.22 discoverable local client intake
+
+The zero-token client path is now directly available from the assistant composer,
+uses one server-owned template across parsing, instructions, and UI, and resolves
+action routes through Django rather than assuming a root URL. These are final
+usability and deployment-safety refinements; the AI authority boundary is unchanged.

@@ -14,12 +14,19 @@ from .models import (
     AIEvaluationRun,
     AIInteraction,
 )
+from .local_actions import CLIENT_TEMPLATE_TEXT, parse_client_template
 from .page_context import resolve_page_context
 from .policies import allowed_models, get_company_policy
 from .providers import OpenAIResponsesProvider, get_provider
-from .registry import registry
+from .registry import ToolRegistry, registry
 from .security import WRITE_INTENT_PATTERNS
-from .services import SYSTEM_INSTRUCTIONS, _conversation_context_items, run_assistant
+from .services import (
+    FOCUSED_SYSTEM_INSTRUCTIONS,
+    SYSTEM_INSTRUCTIONS,
+    _conversation_context_items,
+    run_assistant,
+)
+from .tool_routing import select_tool_plan
 
 FORBIDDEN_SCOPE_FIELDS = {
     "company",
@@ -122,11 +129,19 @@ def evaluation_fingerprint(model):
     payload = {
         "model": str(model),
         "system_instructions": SYSTEM_INSTRUCTIONS,
+        "focused_system_instructions": FOCUSED_SYSTEM_INSTRUCTIONS,
         "tools": registry.definitions(),
         "write_intent_tools": sorted(WRITE_INTENT_PATTERNS),
         "provider_create_response": getsource(OpenAIResponsesProvider.create_response),
         "conversation_context": getsource(_conversation_context_items),
         "page_context": getsource(resolve_page_context),
+        "tool_routing": getsource(select_tool_plan),
+        "local_client_template": getsource(parse_client_template),
+        "local_client_template_text": CLIENT_TEMPLATE_TEXT,
+        "action_preparation": getsource(ToolRegistry._prepare_action),
+        "focused_max_output_tokens": getattr(settings, "AI_FOCUSED_MAX_OUTPUT_TOKENS", 600),
+        "focused_reasoning_effort": getattr(settings, "AI_FOCUSED_REASONING_EFFORT", "minimal"),
+        "focused_verbosity": getattr(settings, "AI_FOCUSED_VERBOSITY", "low"),
         "conversation_context_turns": getattr(settings, "AI_CONVERSATION_CONTEXT_TURNS", 4),
         "conversation_context_minutes": getattr(settings, "AI_CONVERSATION_CONTEXT_MINUTES", 60),
     }
@@ -234,6 +249,67 @@ def contract_check_results():
             "category": "contract",
             "passed": provider_guards,
             "details": [] if provider_guards else ["Provider request guard missing"],
+        }
+    )
+
+    orchestration_source = getsource(run_assistant)
+    focused_fast_path = all(
+        marker in orchestration_source
+        for marker in (
+            "AI_FOCUSED_MAX_OUTPUT_TOKENS",
+            "AI_FOCUSED_REASONING_EFFORT",
+            "AI_FOCUSED_VERBOSITY",
+            "force_tool_name",
+            "include_conversation_context",
+        )
+    ) and all(
+        marker in provider_source
+        for marker in ("tool_choice", "reasoning_effort", "text_verbosity")
+    )
+    results.append(
+        {
+            "case_id": "focused-action-fast-path",
+            "title": "Focused actions retain compact, forced-tool request controls",
+            "category": "contract",
+            "passed": focused_fast_path,
+            "details": (
+                []
+                if focused_fast_path
+                else ["Focused action request controls are incomplete"]
+            ),
+        }
+    )
+
+    local_parser_source = getsource(parse_client_template)
+    local_template_path = all(
+        marker in orchestration_source
+        for marker in ("local_action_for_prompt", "local_action is not None")
+    ) and all(
+        marker in local_parser_source
+        for marker in ("Create this client", "contact_first_name", "contact_last_name")
+    )
+    results.append(
+        {
+            "case_id": "deterministic-client-template-fast-path",
+            "title": "Filled client templates can prepare confirmations without OpenAI",
+            "category": "contract",
+            "passed": local_template_path,
+            "details": [] if local_template_path else ["Local client-template path is incomplete"],
+        }
+    )
+
+    preparation_source = getsource(ToolRegistry._prepare_action)
+    retry_safe_pending = all(
+        marker in preparation_source
+        for marker in ("select_for_update", "reused_pending_action", "confirmation_expires_at__gt")
+    )
+    results.append(
+        {
+            "case_id": "retry-safe-pending-confirmations",
+            "title": "Identical retries reuse an active confirmation",
+            "category": "contract",
+            "passed": retry_safe_pending,
+            "details": [] if retry_safe_pending else ["Pending-action retry reuse is incomplete"],
         }
     )
 

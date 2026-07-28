@@ -2,7 +2,7 @@
 
 ## Current implementation
 
-V1.16 includes the guarded action phases, production hardening, company-level AI controls, production evaluation, controlled-use readiness, and pilot operations:
+V1.17 includes the guarded action phases, production hardening, company-level AI controls, production evaluation, controlled-use readiness, and pilot operations:
 
 - **Foundation:** provider adapter, strict tool registry, redacted interaction logs,
   auditable pending actions, rate limits, request limits, cost guard, feature flag,
@@ -51,6 +51,26 @@ test, an in-app readiness checklist, evaluation freshness, and a deployment gate
 V1.11 adds selected-user rollout controls, response feedback, incident reporting,
 an automatic failure circuit breaker, and emergency pause/resume operations.
 
+
+## Focused single-action requests (V1.17)
+
+Clear client, contact, project, note, and timer commands use a server-selected
+minimal tool catalog. A client-creation request therefore exposes `create_client`
+without separate search tools; the create-client preview performs the duplicate
+check itself. When any write confirmation is prepared, EZ360PM returns it
+immediately rather than spending another OpenAI request on a summary.
+
+`AI_MAX_TOOL_CALLS` limits the total number of registered tool invocations in one
+assistant request. Focused actions use a one-call limit. Keep the global default
+small and ask users to split unrelated work into separate commands.
+
+V1.18 adds a focused-request fast path. Complete create-client commands force the
+one exposed function, omit earlier conversation summaries and unrelated page
+context, and use one provider round. Focused requests also use the smaller
+`AI_FOCUSED_MAX_OUTPUT_TOKENS` allowance plus the configured reasoning and verbosity
+controls. Incomplete commands remain on automatic tool choice so the assistant can
+ask one concise question instead of guessing.
+
 ## Environment variables
 
 The assistant is disabled unless explicitly enabled.
@@ -66,7 +86,11 @@ AI_ALLOWED_MODELS=gpt-5
 AI_WARN_ON_UNPINNED_MODEL=true
 AI_PROVIDER_TIMEOUT_SECONDS=30
 AI_MAX_TOOL_ROUNDS=4
+AI_MAX_TOOL_CALLS=4
 AI_MAX_OUTPUT_TOKENS=3000
+AI_FOCUSED_MAX_OUTPUT_TOKENS=600
+AI_FOCUSED_REASONING_EFFORT=minimal
+AI_FOCUSED_VERBOSITY=low
 AI_MAX_PROMPT_CHARS=4000
 AI_CONVERSATION_CONTEXT_TURNS=4
 AI_CONVERSATION_CONTEXT_MINUTES=60
@@ -410,3 +434,18 @@ Pending actions can be recovered from **AI Assistant → Action Center**.
 ## OpenAI request troubleshooting
 
 Every logical Responses API call carries a unique `X-Client-Request-Id`. Both the client-generated ID and any provider response request ID are retained in the metadata-only interaction audit and CSV export. Configure `OPENAI_ORG_ID` and `OPENAI_PROJECT_ID` when the credential can reach more than one organization or project. Mutable model aliases are allowed, but readiness warns until the fingerprinted live evaluation is current; use a dated snapshot when predictable behavior is more important than automatically receiving model updates.
+
+
+## Zero-token client template
+
+If client creation is missing required identity information, the assistant returns a
+copyable `Create this client:` template. A completed template is parsed locally by
+EZ360PM and prepares the usual confirmation without an OpenAI request. This is a
+reliability path, not a bypass: duplicate detection, validation, company scoping, and
+confirmation still apply. Free-form client commands continue to use OpenAI.
+
+Set the browser timeout longer than the worker timeout:
+
+```env
+AI_BROWSER_REQUEST_TIMEOUT_SECONDS=195
+```

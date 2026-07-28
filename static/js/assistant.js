@@ -8,6 +8,8 @@
     const suggestionsContainer = document.querySelector("[data-assistant-suggestions]");
     const newConversation = document.querySelector("[data-assistant-new-conversation]");
     const actionCenterLink = document.querySelector("[data-assistant-action-center-link]");
+    const clientTemplateButton = drawer.querySelector("[data-assistant-client-template]");
+    const clientTemplateSource = drawer.querySelector("[data-assistant-client-template-source]");
     if (!form || !transcript || !input || !submit || !drawer) return;
 
     const csrfToken = form.querySelector('[name="csrfmiddlewaretoken"]')?.value || "";
@@ -39,6 +41,26 @@
     let conversationId = loadConversationId();
     let homeLoadedAt = 0;
     let homeRefreshSeconds = 3600;
+    const rawActionBaseUrl = drawer.dataset.assistantActionCenterUrl || "";
+    const actionBaseUrl = rawActionBaseUrl ? rawActionBaseUrl.replace(/\/?$/, "/") : "";
+    const clientTemplateText = clientTemplateSource?.content?.textContent?.trim() || "";
+
+    function actionUrl(token, mode) {
+        if (!actionBaseUrl) throw new Error("The assistant action route is unavailable. Reload the page and try again.");
+        return `${actionBaseUrl}${encodeURIComponent(token)}/${mode}/`;
+    }
+
+    function fillClientTemplate() {
+        if (!clientTemplateText) return;
+        const existing = input.value.trim();
+        if (existing && existing !== clientTemplateText) {
+            const replace = window.confirm("Replace the current assistant message with the client template?");
+            if (!replace) return;
+        }
+        input.value = `${clientTemplateText}\n`;
+        input.focus();
+        input.setSelectionRange(input.value.length, input.value.length);
+    }
 
     function scrollTranscript() {
         transcript.scrollTop = transcript.scrollHeight;
@@ -221,17 +243,35 @@
         scrollTranscript();
     }
 
-    async function postJson(url, body = {}) {
-        const response = await fetch(url, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                "X-CSRFToken": csrfToken,
-                "X-Requested-With": "XMLHttpRequest",
-            },
-            body: JSON.stringify(body),
-            credentials: "same-origin",
-        });
+    async function postJson(url, body = {}, options = {}) {
+        const timeoutMs = Math.max(Number(options.timeoutMs) || 0, 0);
+        const controller = timeoutMs ? new AbortController() : null;
+        const timeoutHandle = controller
+            ? window.setTimeout(() => controller.abort(), timeoutMs)
+            : null;
+        let response;
+        try {
+            response = await fetch(url, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-CSRFToken": csrfToken,
+                    "X-Requested-With": "XMLHttpRequest",
+                },
+                body: JSON.stringify(body),
+                credentials: "same-origin",
+                signal: controller?.signal,
+            });
+        } catch (error) {
+            if (error?.name === "AbortError") {
+                throw new Error(
+                    "The assistant request exceeded the browser timeout. Check the Action center before retrying; the server may have prepared a confirmation before the connection closed."
+                );
+            }
+            throw new Error("The assistant request could not reach EZ360PM. Check your connection and try again.");
+        } finally {
+            if (timeoutHandle) window.clearTimeout(timeoutHandle);
+        }
         let data;
         try {
             data = await response.json();
@@ -239,7 +279,7 @@
             data = {
                 ok: false,
                 error: response.status >= 500
-                    ? "EZ360PM could not complete the AI request. The server may have timed out; no action was confirmed."
+                    ? "EZ360PM could not complete the AI request. The server may have timed out; check the Action center before retrying."
                     : "EZ360PM returned an unreadable response.",
             };
         }
@@ -365,6 +405,17 @@
     async function ask(prompt) {
         appendMessage("user", prompt);
         const waiting = appendMessage("assistant", "Working…");
+        const waitingText = waiting.querySelector("p");
+        const progressTimers = [
+            window.setTimeout(() => {
+                if (waitingText?.isConnected) waitingText.textContent = "Still working…";
+            }, 8000),
+            window.setTimeout(() => {
+                if (waitingText?.isConnected) {
+                    waitingText.textContent = "EZ360PM is still processing this request. No write will occur without a confirmation card.";
+                }
+            }, 25000),
+        ];
         submit.disabled = true;
         input.disabled = true;
         try {
@@ -372,6 +423,8 @@
                 prompt,
                 conversation_id: conversationId,
                 page_path: window.location.pathname,
+            }, {
+                timeoutMs: Number(drawer.dataset.assistantRequestTimeoutMs) || 195000,
             });
             if (data.conversation_id) saveConversationId(data.conversation_id);
             waiting.remove();
@@ -381,6 +434,7 @@
             waiting.remove();
             appendMessage("error", error.message);
         } finally {
+            progressTimers.forEach((timer) => window.clearTimeout(timer));
             submit.disabled = false;
             input.disabled = false;
             input.focus();
@@ -394,6 +448,13 @@
         input.value = "";
         ask(prompt);
     });
+    input.addEventListener("keydown", (event) => {
+        if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
+            event.preventDefault();
+            form.requestSubmit();
+        }
+    });
+    clientTemplateButton?.addEventListener("click", fillClientTemplate);
 
     document.querySelectorAll("[data-assistant-suggestion]").forEach(bindSuggestion);
     newConversation?.addEventListener("click", () => {
@@ -422,7 +483,7 @@
         card?.querySelectorAll("button").forEach((control) => { control.disabled = true; });
         try {
             const data = await postJson(
-                `/assistant/actions/${token}/${mode}/`,
+                actionUrl(token, mode),
                 button.dataset.assistantExternalCommit
                     ? { final_review_acknowledged: true }
                     : (mode === "cancel" ? { reason: isRevision ? "revise" : "cancel" } : {})

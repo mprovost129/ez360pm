@@ -24,3 +24,19 @@ class AssistantDeploymentCheckTests(SimpleTestCase):
             message for message in errors if message.id == "assistant.E020"
         )
         self.assertIn("at least 135 seconds", timeout_error.msg)
+
+    @override_settings(AI_MAX_TOOL_CALLS=0)
+    def test_invalid_tool_call_budget_is_rejected(self):
+        errors = assistant_settings_check(None)
+
+        self.assertIn("assistant.E021", {message.id for message in errors})
+
+    @override_settings(
+        GUNICORN_TIMEOUT_SECONDS=180,
+        AI_BROWSER_REQUEST_TIMEOUT_SECONDS=180,
+    )
+    def test_browser_timeout_must_outlast_worker_timeout(self):
+        errors = assistant_settings_check(None)
+
+        self.assertIn("assistant.E025", {message.id for message in errors})
+

@@ -200,7 +200,7 @@ def current_month_usage(company):
     interactions = AIInteraction.objects.filter(
         company=company,
         created_at__date__gte=month_start,
-    )
+    ).exclude(provider="local")
     totals = interactions.aggregate(
         requests=Count("id"),
         cost=Sum("estimated_cost_usd"),
@@ -282,11 +282,17 @@ def evaluate_failure_circuit_breaker(policy, *, interaction=None):
     window_start = timezone.now() - timedelta(minutes=policy.failure_window_minutes)
     if policy.failure_count_reset_at and policy.failure_count_reset_at > window_start:
         window_start = policy.failure_count_reset_at
-    interaction_failures = AIInteraction.objects.filter(
-        company=policy.company,
-        status=AIInteraction.Status.FAILED,
-        created_at__gte=window_start,
-    ).count()
+    interaction_failures = (
+        AIInteraction.objects.filter(
+            company=policy.company,
+            status=AIInteraction.Status.FAILED,
+            created_at__gte=window_start,
+        )
+        # Preserve compatibility with V1.19 and earlier rows where ordinary
+        # domain validation was recorded as failed instead of blocked.
+        .exclude(error_code="domain_validation")
+        .count()
+    )
     action_failures = AIActionAttempt.objects.filter(
         company=policy.company,
         status=AIActionAttempt.Status.FAILED,

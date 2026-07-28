@@ -390,7 +390,11 @@ def build_readiness_report(user):
     recent_since = timezone.now() - timedelta(hours=24)
     recent = AIInteraction.objects.filter(company=company, created_at__gte=recent_since)
     recent_total = recent.count()
-    recent_failures = recent.filter(status=AIInteraction.Status.FAILED).count()
+    recent_failures = (
+        recent.filter(status=AIInteraction.Status.FAILED)
+        .exclude(error_code="domain_validation")
+        .count()
+    )
     if recent_total == 0:
         recent_status = "warn"
         recent_detail = "No assistant request has run in the last 24 hours; use the connection test and live baseline before launch."

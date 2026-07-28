@@ -11,6 +11,7 @@ from assistant.models import AIActionAttempt, AIInteraction
 from assistant.providers import ProviderResponse
 from assistant.registry import ActionContext, registry
 from assistant.services import run_assistant
+from assistant.tool_routing import select_tool_plan
 from clients.models import Client
 from clients.tests.test_clients import create_client
 from documents.models import Document, Payment
@@ -386,10 +387,97 @@ class AssistantServiceTests(TestCase):
             provider=provider,
         )
 
-        self.assertEqual(len(provider.requests), 2)
+        self.assertEqual(len(provider.requests), 1)
+        self.assertEqual(
+            [tool["name"] for tool in provider.requests[0]["tools"]],
+            ["create_client"],
+        )
+        self.assertIn("private EZ360PM action parser", provider.requests[0]["instructions"])
+        self.assertEqual(
+            provider.requests[0]["input_items"],
+            [{"role": "user", "content": (
+                "contact_first_name: Andrew\n"
+                "contact_last_name: Standring\n"
+                "contact_email: andrew@example.com"
+            )}],
+        )
+        self.assertEqual(
+            result.message,
+            "Create client is ready for review. Confirm, revise, or cancel it below.",
+        )
         self.assertEqual(len(result.pending_actions), 1)
         self.assertEqual(result.pending_actions[0]["preview"]["title"], "Create client")
         self.assertEqual(Client.objects.filter(company=self.company).count(), 1)
+
+
+    def test_natural_create_client_phrase_uses_focused_tool(self):
+        plan = select_tool_plan("Add Andrew Standring as a client.")
+
+        self.assertEqual(plan.tool_names, ("create_client",))
+        self.assertEqual(plan.force_tool_name, "create_client")
+        self.assertEqual(plan.max_tool_rounds, 1)
+        self.assertFalse(plan.include_conversation_context)
+        self.assertFalse(plan.include_page_context)
+
+    def test_incomplete_create_client_request_can_ask_for_required_name(self):
+        plan = select_tool_plan("Create a client.")
+
+        self.assertEqual(plan.tool_names, ("create_client",))
+        self.assertEqual(plan.force_tool_name, "")
+        self.assertEqual(plan.max_tool_rounds, 1)
+
+    def test_focused_client_request_rejects_an_unexposed_search_tool(self):
+        provider = QueueProvider(
+            function_call("search_clients", {"query": "Andrew", "limit": 10})
+        )
+
+        result = run_assistant(
+            user=self.user,
+            prompt="Create a client for Andrew Standring.",
+            provider=provider,
+        )
+
+        self.assertIn("outside the server-approved scope", result.message)
+        self.assertEqual(AIActionAttempt.objects.count(), 0)
+        self.assertEqual(len(provider.requests), 1)
+
+    def test_project_address_change_routes_only_to_detail_update(self):
+        plan = select_tool_plan("Change the project address to 10 Main Street.")
+
+        self.assertTrue(plan.focused)
+        self.assertEqual(plan.tool_names, ("update_project_details",))
+        self.assertNotIn("change_project_status", plan.tool_names)
+
+    @override_settings(AI_MAX_TOOL_CALLS=1)
+    def test_general_request_stops_after_tool_call_budget(self):
+        provider = QueueProvider(
+            {
+                "output": [
+                    {
+                        "type": "function_call",
+                        "name": "search_projects",
+                        "arguments": json.dumps({"query": "Addition", "limit": 10}),
+                        "call_id": "call-1",
+                    },
+                    {
+                        "type": "function_call",
+                        "name": "search_clients",
+                        "arguments": json.dumps({"query": "Smith", "limit": 10}),
+                        "call_id": "call-2",
+                    },
+                ],
+                "usage": {"input_tokens": 20, "output_tokens": 10},
+            }
+        )
+
+        result = run_assistant(
+            user=self.user,
+            prompt="Find the Smith project and client.",
+            provider=provider,
+        )
+
+        self.assertIn("too many tools", result.message)
+        self.assertEqual(AIActionAttempt.objects.count(), 0)
 
     def test_registry_definitions_never_accept_company_id(self):
         serialized = json.dumps(registry.definitions())

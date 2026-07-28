@@ -59,7 +59,7 @@ container start, writes Gunicorn logs to stdout/stderr, honors the platform's
 Docker health check against `/health/`. The worker timeout defaults to 180 seconds
 so a four-round assistant request can complete when each OpenAI call has a
 30-second timeout. It must remain at least `AI_PROVIDER_TIMEOUT_SECONDS` multiplied
-by `AI_MAX_TOOL_ROUNDS`, plus 15 seconds of shutdown headroom. If migration fails,
+by `AI_MAX_TOOL_ROUNDS`, plus 15 seconds of shutdown headroom. The browser-side `AI_BROWSER_REQUEST_TIMEOUT_SECONDS` must exceed `GUNICORN_TIMEOUT_SECONDS` by at least five seconds so the browser does not abandon a request before the worker does. If migration fails,
 Gunicorn does not start and the deployment is
 not promoted to receive traffic. Data-audit integrity errors also block startup;
 operational warnings remain in the deploy log for recovery and are failures in
@@ -405,3 +405,15 @@ the metadata-only AI audit export. `AI_WARN_ON_UNPINNED_MODEL=true` adds an
 informational deployment message and readiness warning for mutable aliases. It
 does not block startup, but a model alias change invalidates the evaluation
 fingerprint and requires a new live baseline.
+
+
+## AI V1.17 focused-action settings
+
+No migration is required. Configure a small registered-tool budget:
+
+```env
+AI_MAX_TOOL_CALLS=4
+```
+
+After deployment, run the assistant tests and manually verify that a complete
+create-client command prepares one confirmation in one OpenAI request.

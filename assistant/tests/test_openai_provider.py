@@ -135,6 +135,49 @@ class OpenAIResponsesProviderTests(SimpleTestCase):
         self.assertEqual(result.request_id, "req_test_123")
         self.assertEqual(result.client_request_id, "client-test-123")
 
+
+    def test_focused_request_can_force_one_tool_and_use_compact_model_controls(self):
+        responses = FakeResponses()
+        provider = OpenAIResponsesProvider(
+            api_key="test-key",
+            model="gpt-5",
+            timeout=15,
+            client=SimpleNamespace(responses=responses),
+        )
+        tools = [
+            {
+                "type": "function",
+                "name": "create_client",
+                "description": "Create a client preview.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {},
+                    "required": [],
+                    "additionalProperties": False,
+                },
+                "strict": True,
+            }
+        ]
+
+        provider.create_response(
+            input_items=[{"role": "user", "content": "Add Andrew Standring as a client."}],
+            instructions="Use the one provided tool.",
+            tools=tools,
+            client_request_id="focused-client-123",
+            tool_choice={"type": "function", "name": "create_client"},
+            max_output_tokens=600,
+            reasoning_effort="minimal",
+            text_verbosity="low",
+        )
+
+        self.assertEqual(
+            responses.payload["tool_choice"],
+            {"type": "function", "name": "create_client"},
+        )
+        self.assertEqual(responses.payload["max_output_tokens"], 600)
+        self.assertEqual(responses.payload["reasoning"], {"effort": "minimal"})
+        self.assertEqual(responses.payload["text"], {"verbosity": "low"})
+
     def test_bad_request_logs_safe_provider_details_and_request_shape(self):
         provider = OpenAIResponsesProvider(
             api_key="test-key",

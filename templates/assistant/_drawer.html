@@ -4,7 +4,8 @@
      data-assistant-event-url="{% url 'assistant:record-event' %}"
      data-assistant-feedback-url="{% url 'assistant:feedback' %}"
      data-assistant-incident-url="{% url 'assistant:report-incident' %}"
-     data-assistant-action-center-url="{% url 'assistant:action-center' %}">
+     data-assistant-action-center-url="{% url 'assistant:action-center' %}"
+     data-assistant-request-timeout-ms="{{ ai_assistant_request_timeout_ms|default:195000 }}">
     <div class="offcanvas-header border-bottom">
         <div>
             <h2 class="offcanvas-title h5 mb-1" id="assistantDrawerLabel">EZ360PM Assistant</h2>
@@ -33,12 +34,16 @@
                 {% csrf_token %}
                 <label class="visually-hidden" for="assistantPrompt">Ask EZ360PM</label>
                 <textarea id="assistantPrompt" class="form-control" rows="3" maxlength="4000" placeholder="Ask a question or give a command…" data-assistant-input required></textarea>
+                <template data-assistant-client-template-source>{{ ai_client_template_text }}</template>
                 <div class="d-flex align-items-center justify-content-between gap-2 mt-2">
                     <span class="d-flex gap-3 flex-wrap"><a class="small" href="{% url 'assistant:action-center' %}" data-assistant-action-center-link>Action center</a><a class="small" href="{% url 'assistant:readiness' %}">AI readiness</a>{% if user.is_staff %}<a class="small" href="{% url 'assistant:pilot-operations' %}">Pilot operations</a>{% endif %}<a class="small" href="{% url 'assistant:usage' %}">Usage & reliability</a><a class="small" href="{% url 'assistant:draft-quality' %}">Draft quality</a><a class="small" href="{% url 'assistant:follow-up-evidence' %}">Follow-up evidence</a><a class="small" href="{% url 'assistant:settings' %}">AI settings</a></span>
-                    <button class="btn btn-primary" type="submit" data-assistant-submit>
-                        <i class="bi bi-send" aria-hidden="true"></i>
-                        Send
-                    </button>
+                    <span class="d-flex align-items-center gap-2 flex-shrink-0">
+                        {% if ai_client_template_enabled %}<button class="btn btn-sm btn-outline-secondary" type="button" data-assistant-client-template title="Fill a structured client form without calling OpenAI">Client template</button>{% endif %}
+                        <button class="btn btn-primary" type="submit" data-assistant-submit>
+                            <i class="bi bi-send" aria-hidden="true"></i>
+                            Send
+                        </button>
+                    </span>
                 </div>
             </form>
             <p class="assistant-disclaimer mb-0 mt-2">Recent turns in this conversation may be used as redacted context. Current-page references are resolved through your company scope. Writes are prepared first and require confirmation.</p>

@@ -58,12 +58,17 @@ The target experience is a command bar available from desktop and mobile:
   response/payment evidence. It does not schedule, repeat, or batch-send.
 - **Workflow completion and usability:** V1.15 adds bounded multi-turn context
   from redacted summaries, server-verified current-page context, and a persistent
-  Action Center for confirmations after navigation. This is the recommended
-  stopping point for code-side AI development before controlled real use.
+  Action Center for confirmations after navigation.
 - **OpenAI operational observability:** V1.16 adds a unique client-generated
   troubleshooting ID to every OpenAI request, persists both client and provider
   request IDs, supports explicit OpenAI organization/project scoping, and warns
   when mutable model aliases require especially careful evaluation freshness.
+- **Focused action performance:** V1.17 narrows clear write requests to the one
+  relevant tool and stops immediately after preparing confirmation. V1.18 adds a
+  compact one-round fast path, forces complete create-client requests into the
+  approved function, omits stale conversation context, and reduces focused output
+  and reasoning allowances. V1.18 is the recommended stopping point before
+  controlled real use.
 - Setup, retention, deployment, and validation instructions are in
   [AI Assistant Setup and Operations](AI_ASSISTANT_SETUP.md).
 
@@ -357,8 +362,9 @@ financial corrections, duplicate records, privacy risk, or support burden.
 
 ## Code-side completion point
 
-V1.16 completes the currently recommended AI implementation and operational observability. Additional AI
-features should be driven by controlled-pilot evidence. Scheduled preparation
+V1.18 completes the currently recommended AI implementation, operational
+observability, and focused-action performance work. Additional AI features should
+be driven by controlled-pilot evidence. Scheduled preparation
 may be considered only after repeated manual approvals; autonomous sending,
 refunds, paid-invoice changes, financial-history deletion, and money movement
 remain outside the assistant. See `AI_UPGRADE_COMPLETION.md`.

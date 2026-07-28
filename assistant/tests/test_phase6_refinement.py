@@ -116,6 +116,41 @@ class Phase6RefinementTests(TestCase):
         self.assertEqual(metrics["interaction_count"], 1)
         self.assertEqual(metrics["estimated_cost"], Decimal("0.010000"))
 
+
+    def test_usage_metrics_separate_local_actions_from_openai_requests(self):
+        AIInteraction.objects.create(
+            company=self.company,
+            user=self.user,
+            provider="openai",
+            model="test",
+            prompt_summary="provider request",
+            status=AIInteraction.Status.COMPLETED,
+            input_tokens=10,
+            output_tokens=5,
+            total_tokens=15,
+            latency_ms=1200,
+            estimated_cost_usd=Decimal("0.010000"),
+        )
+        AIInteraction.objects.create(
+            company=self.company,
+            user=self.user,
+            provider="local",
+            model="deterministic-client-template-v1",
+            prompt_summary="Local create client request; field values omitted.",
+            status=AIInteraction.Status.COMPLETED,
+            latency_ms=100,
+            estimated_cost_usd=Decimal("0"),
+        )
+
+        metrics = usage_metrics(self.user)
+
+        self.assertEqual(metrics["interaction_count"], 2)
+        self.assertEqual(metrics["provider_request_count"], 1)
+        self.assertEqual(metrics["local_action_count"], 1)
+        self.assertEqual(metrics["total_tokens"], 15)
+        self.assertEqual(metrics["estimated_cost"], Decimal("0.010000"))
+        self.assertEqual(metrics["average_latency_ms"], 1200)
+
     def test_home_data_and_dismiss_endpoints_require_company_user(self):
         self.client.force_login(self.user)
         response = self.client.get(reverse("assistant:home-data"))
