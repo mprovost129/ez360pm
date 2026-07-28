@@ -33,13 +33,13 @@
         {% elif project.status == 'lead' %}<a class="btn btn-primary" href="{% url 'proposals:create' %}?project={{ project.pk }}">New estimate / proposal</a>
         {% elif project.status == 'approved' and can_start_without_retainer %}<form method="post" action="{% url 'projects:start-without-retainer' project.pk %}" data-confirm="Start this project without recording a paid retainer?">{% csrf_token %}<button class="btn btn-success" type="submit">Start without retainer</button></form>
         {% elif project.status == 'approved' %}<a class="btn btn-primary" href="#project-invoices">Review retainer</a>
-        {% elif project.accepts_time and not running_time_entry %}<a class="btn btn-success" href="{% url 'projects:timer-start' %}?project={{ project.pk }}">Start timer</a>
+        {% elif project.accepts_time and not running_time_entry %}<form method="post" action="{% url 'projects:timer-start' %}">{% csrf_token %}<input type="hidden" name="project" value="{{ project.pk }}"><input type="hidden" name="billable" value="on"><input type="hidden" name="next" value="{% url 'projects:detail' project.pk %}"><button class="btn btn-success" type="submit">Start timer</button></form>
         {% elif project.accepts_time %}<a class="btn btn-primary" href="{% url 'projects:time-create' %}?project={{ project.pk }}">Add manual entry</a>{% endif %}
     </div>
     <details class="workflow-actions__more">
         <summary>More project actions</summary>
         <div class="button-group">
-            {% if project.accepts_time and not running_time_entry %}<a class="btn btn-light" href="{% url 'projects:timer-start' %}?project={{ project.pk }}">Start timer</a>{% endif %}
+            {% if project.accepts_time and not running_time_entry %}<form method="post" action="{% url 'projects:timer-start' %}">{% csrf_token %}<input type="hidden" name="project" value="{{ project.pk }}"><input type="hidden" name="billable" value="on"><input type="hidden" name="next" value="{% url 'projects:detail' project.pk %}"><button class="btn btn-light" type="submit">Start timer</button></form>{% endif %}
             {% if project.accepts_time %}<a class="btn btn-light" href="{% url 'projects:time-create' %}?project={{ project.pk }}">Add manual entry</a>{% endif %}
             {% if project.status == 'lead' %}<a class="btn btn-light" href="#project-proposals">Review proposals</a>{% endif %}
             <a class="btn btn-light" href="{% url 'documents:invoice-create' %}?project={{ project.pk }}">New invoice</a>

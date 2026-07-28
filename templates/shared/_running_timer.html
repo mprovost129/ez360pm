@@ -25,6 +25,16 @@
         </form>
     </div>
     {% else %}
-    <a class="btn btn-sm btn-success" href="{% url 'projects:timer-start' %}{% if project %}?project={{ project.pk }}{% endif %}"><i class="bi bi-play-fill" aria-hidden="true"></i> Start timer</a>
+    {% if project and project.accepts_time %}
+    <form method="post" action="{% url 'projects:timer-start' %}">
+        {% csrf_token %}
+        <input type="hidden" name="project" value="{{ project.pk }}">
+        <input type="hidden" name="billable" value="on">
+        <input type="hidden" name="next" value="{% url 'projects:detail' project.pk %}">
+        <button class="btn btn-sm btn-success" type="submit"><i class="bi bi-play-fill" aria-hidden="true"></i> Start timer</button>
+    </form>
+    {% else %}
+    <a class="btn btn-sm btn-success" href="{% url 'projects:timer-start' %}"><i class="bi bi-play-fill" aria-hidden="true"></i> Start timer</a>
+    {% endif %}
     {% endif %}
 </div>
