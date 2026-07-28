@@ -24,18 +24,54 @@ from .policies import (
 )
 
 SUGGESTION_LIBRARY = {
-    "create_note": ("Capture a quick note", "Create a quick note. Ask me for the note text."),
-    "start_timer": ("Start a project timer", "Start a timer for a project. Ask me which project and what I am working on."),
-    "stop_timer": ("Stop my timer", "Stop my active timer after showing me the current project and elapsed time."),
-    "create_client": ("Add a client", "Create a new client and primary contact. Show the exact fields and possible duplicates first."),
-    "create_project": ("Open a lead project", "Create a lead project for an existing client. Show all project and billing fields before saving."),
-    "prepare_proposal_draft": ("Draft a proposal", "Prepare an editable proposal draft for a project. Ask me to identify the project and show scope and pricing before creating it."),
-    "prepare_final_invoice_draft": ("Draft a final invoice", "Prepare a final invoice draft using eligible unbilled time and available retainer credit. Show the complete draft first."),
-    "issue_and_send_document": ("Send a reviewed document", "Review a draft document and prepare to issue and email it to an eligible client contact. Show the exact final confirmation first."),
-    "send_document_follow_up": ("Draft a client follow-up", "Prepare one reviewed follow-up for an open proposal, retainer, or invoice. Ask me which document and show the exact recipient, subject, and message before sending."),
-    "record_manual_payment": ("Record a manual payment", "Prepare to record a verified check, cash, or other manual payment. Ask me for the invoice and payment details."),
-    "get_attention_summary": ("Review what needs attention", "What needs my attention today?"),
-    "get_revenue_summary": ("Review revenue and fees", "How much revenue did I receive this year by payment method, and how much did Stripe deduct in fees?"),
+    "create_note": (
+        "Capture a quick note",
+        "Create a quick note. Ask me for the note text.",
+    ),
+    "start_timer": (
+        "Start a project timer",
+        "Start a timer for a project. Ask me which project and what I am working on.",
+    ),
+    "stop_timer": (
+        "Stop my timer",
+        "Stop my active timer after showing me the current project and elapsed time.",
+    ),
+    "create_client": (
+        "Add a client",
+        "Create a new client and primary contact. Ask for missing fields with a template beginning 'Create this client:'. Use the built-in duplicate check before confirmation.",
+    ),
+    "create_project": (
+        "Open a lead project",
+        "Create a lead project for an existing client. Show all project and billing fields before saving.",
+    ),
+    "prepare_proposal_draft": (
+        "Draft a proposal",
+        "Prepare an editable proposal draft for a project. Ask me to identify the project and show scope and pricing before creating it.",
+    ),
+    "prepare_final_invoice_draft": (
+        "Draft a final invoice",
+        "Prepare a final invoice draft using eligible unbilled time and available retainer credit. Show the complete draft first.",
+    ),
+    "issue_and_send_document": (
+        "Send a reviewed document",
+        "Review a draft document and prepare to issue and email it to an eligible client contact. Show the exact final confirmation first.",
+    ),
+    "send_document_follow_up": (
+        "Draft a client follow-up",
+        "Prepare one reviewed follow-up for an open proposal, retainer, or invoice. Ask me which document and show the exact recipient, subject, and message before sending.",
+    ),
+    "record_manual_payment": (
+        "Record a manual payment",
+        "Prepare to record a verified check, cash, or other manual payment. Ask me for the invoice and payment details.",
+    ),
+    "get_attention_summary": (
+        "Review what needs attention",
+        "What needs my attention today?",
+    ),
+    "get_revenue_summary": (
+        "Review revenue and fees",
+        "How much revenue did I receive this year by payment method, and how much did Stripe deduct in fees?",
+    ),
 }
 
 SUGGESTION_RISKS = {
@@ -61,7 +97,15 @@ DEFAULT_SUGGESTIONS = [
 ]
 
 
-def record_event(*, user, event_type, capability="", interaction=None, action_attempt=None, metadata=None):
+def record_event(
+    *,
+    user,
+    event_type,
+    capability="",
+    interaction=None,
+    action_attempt=None,
+    metadata=None,
+):
     safe_metadata = {}
     for key, value in (metadata or {}).items():
         if key in {"reason", "suggestion_id", "insight_key", "error_code", "tool_name"}:
@@ -256,11 +300,17 @@ def command_suggestions(user, limit=6, policy=None):
     )
     used = list(counts)
     ordered = used + [
-        name for name in DEFAULT_SUGGESTIONS if name in allowed_names and name not in used
+        name
+        for name in DEFAULT_SUGGESTIONS
+        if name in allowed_names and name not in used
     ]
     ordered += [name for name in allowed_names if name not in ordered]
     return [
-        {"id": name, "label": SUGGESTION_LIBRARY[name][0], "prompt": SUGGESTION_LIBRARY[name][1]}
+        {
+            "id": name,
+            "label": SUGGESTION_LIBRARY[name][0],
+            "prompt": SUGGESTION_LIBRARY[name][1],
+        }
         for name in ordered[:limit]
     ]
 
@@ -268,8 +318,12 @@ def command_suggestions(user, limit=6, policy=None):
 def usage_metrics(user, days=30, policy=None):
     policy = policy or get_company_policy(user.company)
     start = timezone.now() - timedelta(days=days)
-    interactions = AIInteraction.objects.filter(company=user.company, created_at__gte=start)
-    actions = AIActionAttempt.objects.filter(company=user.company, created_at__gte=start)
+    interactions = AIInteraction.objects.filter(
+        company=user.company, created_at__gte=start
+    )
+    actions = AIActionAttempt.objects.filter(
+        company=user.company, created_at__gte=start
+    )
     events = AIEvent.objects.filter(company=user.company, created_at__gte=start)
     totals = interactions.aggregate(
         interactions=Count("id"),
@@ -278,8 +332,14 @@ def usage_metrics(user, days=30, policy=None):
         latency=Sum("latency_ms"),
     )
     interaction_count = totals["interactions"] or 0
-    action_counts = {row["status"]: row["total"] for row in actions.values("status").annotate(total=Count("id"))}
-    event_counts = {row["event_type"]: row["total"] for row in events.values("event_type").annotate(total=Count("id"))}
+    action_counts = {
+        row["status"]: row["total"]
+        for row in actions.values("status").annotate(total=Count("id"))
+    }
+    event_counts = {
+        row["event_type"]: row["total"]
+        for row in events.values("event_type").annotate(total=Count("id"))
+    }
     capability_rows = list(
         actions.values("tool_name")
         .annotate(
@@ -294,9 +354,7 @@ def usage_metrics(user, days=30, policy=None):
     cost_limit = effective_cost_limit(policy)
     request_limit = policy.monthly_request_limit
     cost_percent = (
-        min(float(monthly["cost"] / cost_limit * 100), 100.0)
-        if cost_limit
-        else 100.0
+        min(float(monthly["cost"] / cost_limit * 100), 100.0) if cost_limit else 100.0
     )
     request_percent = min(monthly["requests"] / request_limit * 100, 100.0)
     return {
@@ -308,11 +366,17 @@ def usage_metrics(user, days=30, policy=None):
         "monthly_cost_limit": cost_limit,
         "monthly_cost_percent": round(cost_percent, 1),
         "interaction_count": interaction_count,
-        "completed_interactions": interactions.filter(status=AIInteraction.Status.COMPLETED).count(),
-        "failed_interactions": interactions.filter(status=AIInteraction.Status.FAILED).count(),
+        "completed_interactions": interactions.filter(
+            status=AIInteraction.Status.COMPLETED
+        ).count(),
+        "failed_interactions": interactions.filter(
+            status=AIInteraction.Status.FAILED
+        ).count(),
         "total_tokens": totals["total_tokens"] or 0,
         "estimated_cost": totals["cost"] or 0,
-        "average_latency_ms": round((totals["latency"] or 0) / interaction_count) if interaction_count else 0,
+        "average_latency_ms": round((totals["latency"] or 0) / interaction_count)
+        if interaction_count
+        else 0,
         "action_counts": action_counts,
         "event_counts": event_counts,
         "action_outcomes": [
@@ -325,7 +389,6 @@ def usage_metrics(user, days=30, policy=None):
         ],
         "capabilities": capability_rows,
     }
-
 
 
 def draft_quality_metrics(user, days=90):
@@ -353,12 +416,13 @@ def draft_quality_metrics(user, days=90):
         for field in review.changed_fields or []:
             field_counts[field] = field_counts.get(field, 0) + 1
         if review.issued_at:
-            issue_seconds.append(max((review.issued_at - review.created_at).total_seconds(), 0))
+            issue_seconds.append(
+                max((review.issued_at - review.created_at).total_seconds(), 0)
+            )
 
-    adopted = (
-        outcome_counts.get(AIDocumentDraftReview.Outcome.USED_AS_IS, 0)
-        + outcome_counts.get(AIDocumentDraftReview.Outcome.EDITED_THEN_USED, 0)
-    )
+    adopted = outcome_counts.get(
+        AIDocumentDraftReview.Outcome.USED_AS_IS, 0
+    ) + outcome_counts.get(AIDocumentDraftReview.Outcome.EDITED_THEN_USED, 0)
     finalized = adopted + outcome_counts.get(AIDocumentDraftReview.Outcome.ABANDONED, 0)
     as_is = outcome_counts.get(AIDocumentDraftReview.Outcome.USED_AS_IS, 0)
     stale_cutoff = timezone.now() - timedelta(
@@ -384,7 +448,9 @@ def draft_quality_metrics(user, days=90):
         "adoption_percent": round(adopted / finalized * 100, 1) if finalized else 0,
         "as_is_percent": round(as_is / adopted * 100, 1) if adopted else 0,
         "average_revisions": round(total_revisions / len(reviews), 1) if reviews else 0,
-        "average_minutes_to_issue": round(sum(issue_seconds) / len(issue_seconds) / 60, 1)
+        "average_minutes_to_issue": round(
+            sum(issue_seconds) / len(issue_seconds) / 60, 1
+        )
         if issue_seconds
         else 0,
         "outcomes": [
@@ -401,7 +467,9 @@ def draft_quality_metrics(user, days=90):
         ],
         "changed_fields": [
             {"field": key, "label": key.replace("_", " ").title(), "count": value}
-            for key, value in sorted(field_counts.items(), key=lambda item: (-item[1], item[0]))
+            for key, value in sorted(
+                field_counts.items(), key=lambda item: (-item[1], item[0])
+            )
         ],
         "recent": reviews[:50],
     }

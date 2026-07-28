@@ -11,6 +11,7 @@ from assistant.models import AIActionAttempt, AIInteraction
 from assistant.providers import ProviderResponse
 from assistant.registry import ActionContext, registry
 from assistant.services import run_assistant
+from clients.models import Client
 from clients.tests.test_clients import create_client
 from documents.models import Document, Payment
 from intake.models import Note
@@ -354,6 +355,41 @@ class AssistantServiceTests(TestCase):
 
         self.assertEqual(first.pending_action.pk, second.pending_action.pk)
         self.assertEqual(AIActionAttempt.objects.count(), 1)
+
+    def test_completed_client_template_prepares_without_separate_search_rounds(self):
+        arguments = {
+            "company_name": "",
+            "contact_first_name": "Andrew",
+            "contact_last_name": "Standring",
+            "contact_email": "andrew@example.com",
+            "contact_phone": "774-555-0199",
+            "billing_address_1": "20 Lorine Rd.",
+            "billing_address_2": "",
+            "billing_city": "Attleboro",
+            "billing_state": "MA",
+            "billing_postal_code": "02703",
+            "billing_country": "USA",
+            "internal_note": "Wants addition/renovation.",
+        }
+        provider = QueueProvider(
+            function_call("create_client", arguments),
+            message("Review the duplicate check and confirm the prepared client."),
+        )
+
+        result = run_assistant(
+            user=self.user,
+            prompt=(
+                "contact_first_name: Andrew\n"
+                "contact_last_name: Standring\n"
+                "contact_email: andrew@example.com"
+            ),
+            provider=provider,
+        )
+
+        self.assertEqual(len(provider.requests), 2)
+        self.assertEqual(len(result.pending_actions), 1)
+        self.assertEqual(result.pending_actions[0]["preview"]["title"], "Create client")
+        self.assertEqual(Client.objects.filter(company=self.company).count(), 1)
 
     def test_registry_definitions_never_accept_company_id(self):
         serialized = json.dumps(registry.definitions())

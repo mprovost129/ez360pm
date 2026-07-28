@@ -101,10 +101,9 @@ def _resolve_client(company, reference):
             )
             if reference.casefold() in searchable.casefold():
                 contact_match = True
-            if (
-                contact.email
-                and contact.email.casefold() == reference.casefold()
-            ) or (phone and _normalize_phone(contact.phone) == phone):
+            if (contact.email and contact.email.casefold() == reference.casefold()) or (
+                phone and _normalize_phone(contact.phone) == phone
+            ):
                 exact_contact = True
 
         exact_name = bool(
@@ -112,8 +111,7 @@ def _resolve_client(company, reference):
             and client.company_name.casefold() == reference.casefold()
         )
         exact_primary = bool(
-            primary
-            and primary.get_full_name().casefold() == reference.casefold()
+            primary and primary.get_full_name().casefold() == reference.casefold()
         )
         if exact_name or exact_primary or exact_contact:
             exact_matches[client.pk] = client
@@ -218,9 +216,7 @@ def _duplicate_candidates(
 def _raise_strong_duplicates(strong):
     if not strong:
         return
-    choices = ", ".join(
-        f"{client.pk} — {client.display_name}" for client in strong[:8]
-    )
+    choices = ", ".join(f"{client.pk} — {client.display_name}" for client in strong[:8])
     raise ValidationError(
         "A client/contact with the same email or phone already exists: "
         f"{choices}. Update or attach the existing record instead."
@@ -270,7 +266,9 @@ def _diff_details(instance, changes, labels):
         expected[field] = _serialize(old_value)
         old_display = "—" if old_value in (None, "") else str(old_value)
         new_display = "—" if new_value in (None, "") else str(new_value)
-        details.append(f"{labels.get(field, field.replace('_', ' ').title())}: {old_display} → {new_display}")
+        details.append(
+            f"{labels.get(field, field.replace('_', ' ').title())}: {old_display} → {new_display}"
+        )
     return details, expected
 
 
@@ -289,18 +287,68 @@ def _assert_expected(instance, expected):
 
 CLIENT_CREATE_SCHEMA = _object_schema(
     {
-        "company_name": {"type": "string", "maxLength": 255},
-        "contact_first_name": {"type": "string", "minLength": 1, "maxLength": 150},
-        "contact_last_name": {"type": "string", "minLength": 1, "maxLength": 150},
-        "contact_email": {"type": "string", "maxLength": 254},
-        "contact_phone": {"type": "string", "maxLength": 50},
-        "billing_address_1": {"type": "string", "maxLength": 255},
-        "billing_address_2": {"type": "string", "maxLength": 255},
-        "billing_city": {"type": "string", "maxLength": 100},
-        "billing_state": {"type": "string", "maxLength": 100},
-        "billing_postal_code": {"type": "string", "maxLength": 20},
-        "billing_country": {"type": "string", "maxLength": 100},
-        "internal_note": {"type": "string", "maxLength": 4000},
+        "company_name": {
+            "type": "string",
+            "maxLength": 255,
+            "description": "Optional company or household name; use an empty string when not provided.",
+        },
+        "contact_first_name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 150,
+            "description": "Required primary-contact first name.",
+        },
+        "contact_last_name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 150,
+            "description": "Required primary-contact last name.",
+        },
+        "contact_email": {
+            "type": "string",
+            "maxLength": 254,
+            "description": "Optional primary-contact email; use an empty string when unknown.",
+        },
+        "contact_phone": {
+            "type": "string",
+            "maxLength": 50,
+            "description": "Optional primary-contact phone; use an empty string when unknown.",
+        },
+        "billing_address_1": {
+            "type": "string",
+            "maxLength": 255,
+            "description": "Optional billing address line 1; use an empty string when unknown.",
+        },
+        "billing_address_2": {
+            "type": "string",
+            "maxLength": 255,
+            "description": "Optional billing address line 2; use an empty string when unknown.",
+        },
+        "billing_city": {
+            "type": "string",
+            "maxLength": 100,
+            "description": "Optional billing city; use an empty string when unknown.",
+        },
+        "billing_state": {
+            "type": "string",
+            "maxLength": 100,
+            "description": "Optional billing state or region; use an empty string when unknown.",
+        },
+        "billing_postal_code": {
+            "type": "string",
+            "maxLength": 20,
+            "description": "Optional billing postal code; use an empty string when unknown.",
+        },
+        "billing_country": {
+            "type": "string",
+            "maxLength": 100,
+            "description": "Optional billing country; use an empty string when unknown.",
+        },
+        "internal_note": {
+            "type": "string",
+            "maxLength": 4000,
+            "description": "Optional internal note; use an empty string when not provided.",
+        },
     }
 )
 
@@ -454,7 +502,10 @@ CONTACT_CREATE_SCHEMA = _object_schema(
 
 def preview_add_contact(context, arguments):
     client = _resolve_client(context.company, arguments["client_reference"])
-    data = {key: arguments[key] for key in ("first_name", "last_name", "email", "phone", "is_primary")}
+    data = {
+        key: arguments[key]
+        for key in ("first_name", "last_name", "email", "phone", "is_primary")
+    }
     candidate = Contact(client=client, **data)
     candidate.full_clean(exclude=["client"], validate_unique=False)
     strong, _possible = _duplicate_candidates(
@@ -555,11 +606,15 @@ def execute_update_contact(context, arguments):
 def preview_set_primary_contact(context, arguments):
     contact = _get_contact(context.company, arguments["contact_id"])
     if contact.is_primary:
-        raise ValidationError(f"{contact.get_full_name()} is already the primary contact.")
+        raise ValidationError(
+            f"{contact.get_full_name()} is already the primary contact."
+        )
     return {
         "title": "Change primary contact",
         "summary": f"Make {contact.get_full_name()} the primary contact for {contact.client.display_name}.",
-        "details": ["The existing primary contact will remain on the client as a non-primary contact."],
+        "details": [
+            "The existing primary contact will remain on the client as a non-primary contact."
+        ],
         "confirm_label": "Set primary contact",
         "_execution_arguments": {
             "contact_id": contact.pk,
@@ -739,15 +794,14 @@ def preview_update_project(context, arguments):
             "A project with workflow history cannot be moved to another client."
         )
 
-    merged = {
-        field: getattr(project, field)
-        for field in PROJECT_UPDATE_FIELDS
-    }
+    merged = {field: getattr(project, field) for field in PROJECT_UPDATE_FIELDS}
     merged.update(changes)
     _validate_project_candidate(context.company, client, merged, existing=project)
     details, expected = _diff_details(project, changes, PROJECT_UPDATE_FIELDS)
     if client_changed:
-        details.insert(0, f"Client: {project.client.display_name} → {client.display_name}")
+        details.insert(
+            0, f"Client: {project.client.display_name} → {client.display_name}"
+        )
     return {
         "title": "Update project",
         "summary": f"Review changes to {project.number} — {project.name}.",
@@ -764,7 +818,9 @@ def preview_update_project(context, arguments):
 
 
 def execute_update_project(context, arguments):
-    project = Project.objects.for_company(context.company).get(pk=arguments["project_id"])
+    project = Project.objects.for_company(context.company).get(
+        pk=arguments["project_id"]
+    )
     _assert_expected(project, arguments["expected"])
     if project.client_id != arguments["expected_client_id"]:
         raise ValidationError("The project client changed after the AI preview.")
@@ -814,7 +870,9 @@ def execute_change_project_status(context, arguments):
     if project.status != arguments["expected_status"]:
         raise ValidationError("The project status changed after the AI preview.")
     if project.updated_at.isoformat() != arguments["expected_updated_at"]:
-        raise ValidationError("The project changed after the AI preview. Prepare a new confirmation.")
+        raise ValidationError(
+            "The project changed after the AI preview. Prepare a new confirmation."
+        )
     saved = change_project_status(project=project, status=arguments["status"])
     return {
         "message": f"Project status changed to {saved.get_status_display()}.",
@@ -881,7 +939,9 @@ def preview_create_client_project_from_note(context, arguments):
             "expected_note_updated_at": note.updated_at.isoformat(),
             "client_data": client_data,
             "contact_data": contact_data,
-            "project_data": {key: _serialize(value) for key, value in project_data.items()},
+            "project_data": {
+                key: _serialize(value) for key, value in project_data.items()
+            },
             "archive_note": arguments["archive_note"],
         },
     }
@@ -984,7 +1044,9 @@ def execute_attach_note_to_project(context, arguments):
     note = _get_note(context.company, arguments["note_id"])
     if note.updated_at.isoformat() != arguments["expected_note_updated_at"]:
         raise ValidationError("The intake note changed after the AI preview.")
-    project = Project.objects.for_company(context.company).get(pk=arguments["project_id"])
+    project = Project.objects.for_company(context.company).get(
+        pk=arguments["project_id"]
+    )
     note.project = project
     note.client = project.client
     note.is_archived = arguments["archive_note"]
@@ -1000,7 +1062,7 @@ def execute_attach_note_to_project(context, arguments):
 registry.register(
     RegisteredTool(
         "create_client",
-        "Prepare a new client and primary contact. Search first when a similar client may already exist.",
+        "Prepare a new client and primary contact. Only contact first and last name require non-empty values; pass empty strings for other unknown fields. This tool performs its own company-scoped duplicate check for email, phone, company name, and address; do not call separate search tools first solely to check duplicates.",
         CLIENT_CREATE_SCHEMA,
         preview_create_client,
         risk_level=AIActionAttempt.RiskLevel.STRUCTURED_WRITE,
@@ -1013,8 +1075,15 @@ registry.register(
         "Prepare field-level client changes. Null means leave that field unchanged; an empty string explicitly clears a blank-allowed field.",
         _object_schema(
             {
-                "client_reference": {"type": "string", "minLength": 1, "maxLength": 255},
-                **{field: _nullable_string(4000 if field == "internal_note" else 255) for field in CLIENT_UPDATE_FIELDS},
+                "client_reference": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 255,
+                },
+                **{
+                    field: _nullable_string(4000 if field == "internal_note" else 255)
+                    for field in CLIENT_UPDATE_FIELDS
+                },
             }
         ),
         preview_update_client,
@@ -1077,7 +1146,11 @@ registry.register(
         "Prepare field-level project-detail changes. This tool cannot change project status. Null leaves a field unchanged.",
         _object_schema(
             {
-                "project_reference": {"type": "string", "minLength": 1, "maxLength": 255},
+                "project_reference": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 255,
+                },
                 "client_reference": _nullable_string(255),
                 "number": _nullable_string(30),
                 "name": _nullable_string(255),
@@ -1089,7 +1162,10 @@ registry.register(
                 "postal_code": _nullable_string(20),
                 "municipality": _nullable_string(100),
                 "parcel_id": _nullable_string(100),
-                "billing_type": {"type": ["string", "null"], "enum": ["hourly", "flat_fee", None]},
+                "billing_type": {
+                    "type": ["string", "null"],
+                    "enum": ["hourly", "flat_fee", None],
+                },
                 "hourly_rate": _nullable_number(),
                 "fixed_fee": _nullable_number(),
                 "estimated_hours": _nullable_number(),
@@ -1106,7 +1182,11 @@ registry.register(
         "Prepare a separate project-status transition through the existing workflow rules.",
         _object_schema(
             {
-                "project_reference": {"type": "string", "minLength": 1, "maxLength": 255},
+                "project_reference": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 255,
+                },
                 "status": {"type": "string", "enum": list(Project.Status.values)},
             }
         ),
@@ -1132,7 +1212,11 @@ registry.register(
         _object_schema(
             {
                 "note_id": {"type": "integer", "minimum": 1},
-                "client_reference": {"type": "string", "minLength": 1, "maxLength": 255},
+                "client_reference": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 255,
+                },
                 "archive_note": {"type": "boolean"},
             }
         ),
@@ -1148,7 +1232,11 @@ registry.register(
         _object_schema(
             {
                 "note_id": {"type": "integer", "minimum": 1},
-                "project_reference": {"type": "string", "minLength": 1, "maxLength": 255},
+                "project_reference": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 255,
+                },
                 "archive_note": {"type": "boolean"},
             }
         ),

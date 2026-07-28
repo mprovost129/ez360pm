@@ -32,7 +32,12 @@ WRITE_INTENT_PATTERNS = {
         r"\b(?:stop|end|finish)\b.{0,60}\btimer\b",
         r"\bstop\b.{0,60}\btracking\s+time\b",
     ),
-    "create_client": (r"\b(?:create|add|make)\b.{0,100}\bclient\b",),
+    "create_client": (
+        r"\b(?:create|add|make|prepare)\b.{0,100}\bclient\b",
+        # A filled template requested by the assistant is itself a direct
+        # current-turn submission. Final saving still requires confirmation.
+        r"\bcontact_first_name\s*:.{0,500}\bcontact_last_name\s*:",
+    ),
     "update_client": (
         r"\b(?:update|edit|change|correct)\b.{0,100}\b(?:client|billing address)\b",
     ),
@@ -40,12 +45,8 @@ WRITE_INTENT_PATTERNS = {
     "update_contact": (
         r"\b(?:update|edit|change|correct)\b.{0,100}\b(?:contact|email|phone)\b",
     ),
-    "set_primary_contact": (
-        r"\b(?:set|make|change)\b.{0,100}\bprimary\s+contact\b",
-    ),
-    "create_project": (
-        r"\b(?:create|add|open|make)\b.{0,100}\b(?:project|job)\b",
-    ),
+    "set_primary_contact": (r"\b(?:set|make|change)\b.{0,100}\bprimary\s+contact\b",),
+    "create_project": (r"\b(?:create|add|open|make)\b.{0,100}\b(?:project|job)\b",),
     "update_project_details": (
         r"\b(?:update|edit|change|correct)\b.{0,100}\b(?:project|job)\b",
     ),
@@ -55,12 +56,8 @@ WRITE_INTENT_PATTERNS = {
     "create_client_and_project_from_note": (
         r"\b(?:create|convert|turn|make)\b.{0,100}\b(?:client|project)\b.{0,160}\b(?:project|client|note)\b",
     ),
-    "attach_note_to_client": (
-        r"\battach\b.{0,80}\bnote\b.{0,80}\bclient\b",
-    ),
-    "attach_note_to_project": (
-        r"\battach\b.{0,80}\bnote\b.{0,80}\bproject\b",
-    ),
+    "attach_note_to_client": (r"\battach\b.{0,80}\bnote\b.{0,80}\bclient\b",),
+    "attach_note_to_project": (r"\battach\b.{0,80}\bnote\b.{0,80}\bproject\b",),
     "prepare_proposal_draft": (
         r"\b(?:prepare|create|draft|write|make)\b.{0,120}\b(?:proposal|estimate)\b",
     ),
@@ -78,9 +75,7 @@ WRITE_INTENT_PATTERNS = {
     "revise_invoice_draft": (
         r"\b(?:revise|rewrite|update|edit|change|improve|polish)\b.{0,140}\binvoice\b",
     ),
-    "issue_document": (
-        r"\bissue\b.{0,100}\b(?:proposal|invoice|document)\b",
-    ),
+    "issue_document": (r"\bissue\b.{0,100}\b(?:proposal|invoice|document)\b",),
     "issue_and_send_document": (
         r"\b(?:send|email)\b.{0,100}\b(?:proposal|invoice|document)\b",
         r"\bissue\s+and\s+send\b.{0,100}\b(?:proposal|invoice|document)\b",
@@ -160,7 +155,9 @@ def write_intent_authorized(*, prompt, tool_name):
     if not patterns:
         return False
     normalized = " ".join(str(prompt).lower().split())
-    return any(re.search(pattern, normalized, flags=re.I | re.S) for pattern in patterns)
+    return any(
+        re.search(pattern, normalized, flags=re.I | re.S) for pattern in patterns
+    )
 
 
 def assert_write_intent(*, prompt, tool_name):
