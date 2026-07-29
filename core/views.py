@@ -1,24 +1,16 @@
-import csv
+from calendar import monthrange
+from datetime import date, timedelta
+from decimal import Decimal
 
-from django.conf import settings
-from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.core.cache import cache
 from django.db import connection
-from django.http import HttpResponse, JsonResponse
-from django.shortcuts import redirect
-from django.urls import reverse
+from django.db.models import Sum
+from django.http import JsonResponse
 from django.utils import timezone
 from django.views import View
 from django.views.generic import ListView, TemplateView
 
 from documents.models import Document, Payment
-from documents.revenue_reporting import (
-    available_revenue_years,
-    build_revenue_report,
-    parse_revenue_filters,
-)
-from documents.stripe_services import reconcile_pending_payment_fee
 
 from .dashboard import dashboard_context
 
@@ -32,193 +24,55 @@ class HomeView(LoginRequiredMixin, TemplateView):
         return context
 
 
-def _spreadsheet_safe(value):
-    text = str(value or "")
-    stripped = text.lstrip(" \t\r\n")
-    if text.startswith(("\t", "\r", "\n")) or stripped.startswith(
-        ("=", "+", "-", "@")
-    ):
-        return f"'{text}"
-    return text
+def _selected_month(value):
+    if value:
+        try:
+            return date.fromisoformat(f"{value}-01")
+        except ValueError:
+            pass
+    return timezone.localdate().replace(day=1)
 
 
-class RevenueView(LoginRequiredMixin, TemplateView):
+class RevenueView(LoginRequiredMixin, ListView):
+    model = Payment
+    context_object_name = "payments"
     template_name = "core/revenue.html"
+    paginate_by = 100
+    month = None
+
+    def get_queryset(self):
+        self.month = _selected_month(self.request.GET.get("month"))
+        month_end = self.month.replace(day=monthrange(self.month.year, self.month.month)[1])
+        return Payment.objects.filter(
+            document__company=self.request.user.company,
+            received_at__range=(self.month, month_end),
+        ).select_related("document", "document__project", "document__project__client")
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        filters = parse_revenue_filters(self.request.GET)
-        report = build_revenue_report(
-            company=self.request.user.company,
-            filters=filters,
+        context["selected_month"] = self.month
+        context["revenue_total"] = self.object_list.aggregate(value=Sum("amount"))[
+            "value"
+        ] or Decimal("0.00")
+        context["fee_total"] = self.object_list.aggregate(value=Sum("fee_amount"))[
+            "value"
+        ] or Decimal("0.00")
+        context["net_total"] = context["revenue_total"] - context["fee_total"]
+        context["pending_fee_count"] = self.object_list.filter(fee_pending=True).count()
+        context["method_totals"] = self.object_list.values("method").annotate(
+            total=Sum("amount")
         )
-        is_print = self.request.GET.get("print") == "1"
-        per_page = max(len(report.entries), 1) if is_print else 100
-        page_obj = report.page(self.request.GET.get("page"), per_page=per_page)
-        available_years = available_revenue_years(company=self.request.user.company)
-        if filters.calendar_year and filters.calendar_year not in available_years:
-            available_years.append(filters.calendar_year)
-            available_years.sort(reverse=True)
-        context.update(
+        context["method_totals"] = [
             {
-                "report": report,
-                "filters": filters,
-                "entries": page_obj.object_list,
-                "page_obj": page_obj,
-                "paginator": page_obj.paginator,
-                "is_paginated": page_obj.has_other_pages(),
-                "method_choices": Payment.Method.choices,
-                "available_years": available_years,
-                "export_query": filters.query_string,
-                "print_query": f"{filters.query_string}&print=1",
-                "is_print": is_print,
-                "books_closed_through": self.request.user.company.books_closed_through,
-                # Backward-compatible names used by existing tests and any
-                # saved template customizations.
-                "revenue_total": report.gross,
-                "fee_total": report.fees,
-                "net_total": report.net,
-                "pending_fee_count": report.pending_fee_count,
-                "method_totals": report.method_rows,
+                "label": Payment.Method(row["method"]).label,
+                "total": row["total"],
             }
-        )
+            for row in context["method_totals"]
+        ]
+        context["previous_month"] = (self.month - timedelta(days=1)).replace(day=1)
+        month_end = self.month.replace(day=monthrange(self.month.year, self.month.month)[1])
+        context["next_month"] = (month_end + timedelta(days=1)).replace(day=1)
         return context
-
-
-class RevenueCsvView(LoginRequiredMixin, View):
-    def get(self, request):
-        filters = parse_revenue_filters(request.GET)
-        report = build_revenue_report(company=request.user.company, filters=filters)
-        fee_suffix = "-pending-fees" if filters.pending_fees_only else ""
-        filename = (
-            f"ez360pm-payments-{filters.start_date.isoformat()}-to-"
-            f"{filters.end_date.isoformat()}-{filters.method or 'all'}{fee_suffix}.csv"
-        )
-        response = HttpResponse(content_type="text/csv; charset=utf-8")
-        response["Content-Disposition"] = f'attachment; filename="{filename}"'
-        response.write("\ufeff")
-        writer = csv.writer(response)
-        writer.writerow(["EZ360PM Revenue & Fees Report"])
-        writer.writerow(["Company", _spreadsheet_safe(request.user.company.name)])
-        writer.writerow(["Generated at", timezone.localtime().isoformat()])
-        writer.writerow(["Period", filters.period_label])
-        writer.writerow(["Method", Payment.Method(filters.method).label if filters.method else "All methods"])
-        writer.writerow(["Fee status", "Pending only" if filters.pending_fees_only else "All fee statuses"])
-        writer.writerow(["Financial records locked through", request.user.company.books_closed_through or "Not locked"])
-        writer.writerow(["Gross received", f"{report.gross:.2f}"])
-        writer.writerow(["Original processing fees", f"{report.original_fees:.2f}"])
-        writer.writerow(["Processing fee adjustments", f"{report.fee_adjustments:.2f}"])
-        writer.writerow(["Net processing fees", f"{report.fees:.2f}"])
-        writer.writerow(["Refunds / other adjustments", f"{report.adjustments:.2f}"])
-        writer.writerow(["Net after known fees", f"{report.net:.2f}"])
-        writer.writerow(["Pending Stripe fees", report.pending_fee_count])
-        writer.writerow([])
-        writer.writerow(
-            [
-                "Effective date",
-                "Entry type",
-                "Client",
-                "Project",
-                "Invoice",
-                "Invoice kind",
-                "Method",
-                "Reference",
-                "Gross",
-                "Original fee",
-                "Fee adjustment",
-                "Fee status",
-                "Last fee reconciliation attempt",
-                "Fee reconciliation result",
-                "Fee reconciliation detail",
-                "Refund / other adjustment",
-                "Net",
-                "Stripe Payment Intent ID",
-                "Provider adjustment ID",
-                "Internal record ID",
-            ]
-        )
-        for entry in report.entries:
-            writer.writerow(
-                [
-                    entry.effective_date.isoformat(),
-                    entry.entry_type.title(),
-                    _spreadsheet_safe(entry.client.display_name),
-                    _spreadsheet_safe(entry.project.name),
-                    _spreadsheet_safe(entry.invoice.number),
-                    entry.invoice_kind_label,
-                    entry.method_label,
-                    _spreadsheet_safe(entry.reference),
-                    f"{entry.gross:.2f}",
-                    "" if entry.fee_pending else f"{entry.fee:.2f}",
-                    f"{entry.fee_adjustment:.2f}",
-                    (
-                        "Pending"
-                        if entry.fee_pending
-                        else ("Confirmed" if entry.entry_type == "payment" else "")
-                    ),
-                    (
-                        timezone.localtime(entry.fee_attempted_at).isoformat()
-                        if entry.fee_attempted_at
-                        else ""
-                    ),
-                    entry.fee_attempt_status,
-                    _spreadsheet_safe(entry.fee_attempt_message),
-                    f"{entry.adjustment:.2f}",
-                    "" if entry.fee_pending else f"{entry.net:.2f}",
-                    _spreadsheet_safe(entry.payment.stripe_payment_intent_id),
-                    _spreadsheet_safe(
-                        entry.provider_id if entry.entry_type == "adjustment" else ""
-                    ),
-                    entry.record_id,
-                ]
-            )
-        return response
-
-
-class RevenueFeeReconcileView(LoginRequiredMixin, View):
-    def post(self, request):
-        filters = parse_revenue_filters(request.POST)
-        pending = Payment.objects.filter(
-            document__company=request.user.company,
-            method=Payment.Method.STRIPE,
-            fee_pending=True,
-            received_at__range=(filters.start_date, filters.end_date),
-        )
-        if filters.method and filters.method != Payment.Method.STRIPE:
-            pending = pending.none()
-        pending_count = pending.count()
-        pending = list(
-            pending.order_by("received_at", "pk")[
-                : settings.STRIPE_FEE_RECONCILIATION_BATCH_SIZE
-            ]
-        )
-        reconciled = 0
-        still_pending = 0
-        for payment in pending:
-            if reconcile_pending_payment_fee(payment=payment):
-                reconciled += 1
-            else:
-                still_pending += 1
-        if reconciled:
-            messages.success(
-                request,
-                f"Reconciled {reconciled} Stripe fee{'' if reconciled == 1 else 's'}.",
-            )
-        if still_pending:
-            messages.warning(
-                request,
-                f"{still_pending} Stripe fee{'' if still_pending == 1 else 's'} "
-                "are still unavailable from Stripe.",
-            )
-        not_attempted = pending_count - len(pending)
-        if not_attempted:
-            messages.info(
-                request,
-                f"{not_attempted} additional pending Stripe fee"
-                f"{'' if not_attempted == 1 else 's'} remain. Run reconciliation "
-                "again to process the next batch.",
-            )
-        return redirect(f"{reverse('core:revenue')}?{filters.query_string}")
 
 
 class DraftDocumentListView(LoginRequiredMixin, ListView):
@@ -241,9 +95,6 @@ class HealthView(View):
             with connection.cursor() as cursor:
                 cursor.execute("SELECT 1")
                 cursor.fetchone()
-            cache.set("ez360pm:readiness", "ok", timeout=10)
-            if cache.get("ez360pm:readiness") != "ok":
-                raise RuntimeError("Cache readiness value could not be read back.")
         except Exception:
             return JsonResponse({"status": "unavailable"}, status=503)
         return JsonResponse({"status": "ok"})

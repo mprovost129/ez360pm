@@ -13,10 +13,7 @@ from .models import Document
 from .pdf import build_invoice_pdf, build_proposal_pdf
 from .proposal_forms import AcceptanceForm
 from .proposal_services import accept_proposal, decline_proposal
-from .public_security import (
-    PublicActionRateLimitUnavailable,
-    public_action_rate_limited,
-)
+from .public_security import public_action_rate_limited
 from .services import record_public_view
 from .stripe_services import stripe_configuration_status
 
@@ -71,16 +68,7 @@ class PublicDocumentView(View):
 
 @require_POST
 def public_proposal_accept(request, token):
-    try:
-        limited = public_action_rate_limited(
-            request=request, token=token, action="accept"
-        )
-    except PublicActionRateLimitUnavailable:
-        return HttpResponse(
-            "This action is temporarily unavailable. Please try again shortly.",
-            status=503,
-        )
-    if limited:
+    if public_action_rate_limited(request=request, token=token, action="accept"):
         return HttpResponse("Too many attempts. Please wait and try again.", status=429)
     proposal = public_document(token)
     if proposal.doc_type != Document.Type.PROPOSAL:
@@ -115,16 +103,7 @@ def public_proposal_accept(request, token):
 
 @require_POST
 def public_proposal_decline(request, token):
-    try:
-        limited = public_action_rate_limited(
-            request=request, token=token, action="decline"
-        )
-    except PublicActionRateLimitUnavailable:
-        return HttpResponse(
-            "This action is temporarily unavailable. Please try again shortly.",
-            status=503,
-        )
-    if limited:
+    if public_action_rate_limited(request=request, token=token, action="decline"):
         return HttpResponse("Too many attempts. Please wait and try again.", status=429)
     proposal = public_document(token)
     if proposal.doc_type == Document.Type.PROPOSAL:

@@ -24,8 +24,6 @@ erDiagram
     Project ||--o{ Document : has
     Document ||--o{ LineItem : contains
     Document ||--o{ Payment : receives
-    Payment ||--o{ PaymentAdjustment : adjusts
-    Payment ||--o{ PaymentFeeReconciliationAttempt : audits_fee_lookup
     Document ||--o{ DocumentDelivery : delivers
     LineItem ||--o{ TimeEntry : bills
 
@@ -45,8 +43,6 @@ duplicated company columns that could disagree:
 | `Contact` | `client.company` |
 | `LineItem` | `document.company` |
 | `Payment` | `document.company` |
-| `PaymentAdjustment` | direct `company`; must match `payment.document.company` |
-| `PaymentFeeReconciliationAttempt` | direct `company`; must match `payment.document.company` |
 | `InvoiceCredit` | `source_invoice.company` and `destination_invoice.company` must match |
 | `DocumentDelivery` | `document.company` |
 
@@ -81,9 +77,7 @@ Blank text fields store `""`; optional relationships/dates use `NULL`.
 | TimeEntry | conditional unique running entry per user; end after start | user/project/company match; invoiced entries locked |
 | Document | unique `(company, doc_type, number)`; unique public token | type-specific fields/status; project/company match |
 | LineItem | nonnegative quantity/rate/tax; unique `(document, order)` | document must be editable draft |
-| Payment | positive amount; nonnegative fee fields; unique nonblank Stripe Payment Intent ID | document is invoice; amount does not unintentionally overpay; normal users cannot rewrite a closed period |
-| PaymentAdjustment | nonzero signed amount; unique nonblank provider ID per company | append-only; payment/company match; refund/dispute signs, fee classification, and invoice-balance behavior validated |
-| PaymentFeeReconciliationAttempt | provider observation fields; company ownership | append-only; payment/company match; latest attempt is surfaced for unresolved fees |
+| Payment | positive amount; unique nonblank Stripe Payment Intent ID | document is invoice; amount does not unintentionally overpay |
 | InvoiceCredit | positive amount; source/destination pair rules | paid retainer -> final invoice, same project/company, within availability |
 | Note | none beyond ownership FKs | optional prospect identity; selected project determines client; unrelated client rejected |
 
@@ -96,9 +90,6 @@ Useful query indexes:
 - Document: `(company, doc_type, status)`, `(company, project, doc_type)`, and
   `(company, due_date)`
 - Payment: `(document, received_at)`
-- PaymentAdjustment: `(company, effective_at)` and `(payment, effective_at)`
-- PaymentFeeReconciliationAttempt: `(company, status, attempted_at)` and
-  `(payment, attempted_at)`
 
 PostgreSQL constraints should be named explicitly so migrations and integrity
 errors remain diagnosable.
@@ -165,33 +156,10 @@ PDFs, and dashboards use the same definitions.
 | Tax total | sum of rounded per-line tax |
 | Credit total | sum of valid destination InvoiceCredits |
 | Document total | subtotal + tax total - credit total, never below zero |
-| Amount paid | sum of Payment amounts plus balance-affecting PaymentAdjustments for the invoice, never below zero |
+| Amount paid | sum of Payment amounts for the invoice |
 | Outstanding balance | max(document total - amount paid, 0) |
 | Overdue | non-void invoice with balance > 0 and due date before local today |
-| Gross received revenue | sum of Payment amounts in the selected received-date period |
-| Processing fees | sum of confirmed `Payment.fee_amount` in the selected received-date period |
-| Processing-fee adjustments | signed fee refunds/additional fees in the selected adjustment-effective-date period; they also keep `Payment.fee_current_amount` aligned with Stripe |
-| Net processing fees | original processing fees - signed processing-fee adjustments |
-| Refunds/other adjustments | signed non-fee PaymentAdjustments in the selected effective-date period |
-| Net received | gross received - net processing fees + refunds/other adjustments |
-
-
-
-### Closed financial periods
-
-`Company.books_closed_through` protects accepted year-end history. Manual
-payments and adjustments dated on or before the lock cannot be created, edited,
-or deleted through the application. The settings form refuses to close a period
-that still contains a pending Stripe fee. Stripe remains authoritative for provider
-events: a late refund or dispute is imported on its provider-effective date, and
-a newly resolved fee for a closed receipt is posted as an open-period adjustment
-instead of modifying the original fee. Every Stripe fee lookup or retry is
-recorded in an append-only `PaymentFeeReconciliationAttempt` history so an
-unresolved fee has a visible last-attempt result instead of an unexplained blank.
-Verified Stripe refund, dispute, and fee-related webhook failures are summarized
-in `StripeWebhookFailure`. The queue stores provider identifiers and safe error
-categories rather than raw payloads. Repeated delivery of one event increments
-its attempt count, and a successful replay resolves the existing entry.
+| Received revenue | sum of Payment amounts in the selected received-date period |
 
 ## Implementation staging
 
@@ -244,12 +212,9 @@ the stable public link without claiming email delivery. Phase 5 added:
 | Field | Purpose |
 | --- | --- |
 | `document` | parent proposal/invoice |
-| `purpose` | client document, client follow-up, or internal notification |
-| `follow_up_kind` | proposal, retainer, invoice, or overdue-invoice reminder when purpose is follow-up |
+| `purpose` | client document or internal acceptance notification |
 | `recipient_name` | snapshot at send time |
 | `recipient_email` | snapshot at send time |
-| `subject` | exact subject used for this attempt |
-| `message` | optional reviewed client-facing note used for this attempt |
 | `status` | pending, sent, or failed |
 | `provider_message_id` | optional delivery-provider reference |
 | `error_code` | safe diagnostic category, no credentials/body |
@@ -258,10 +223,7 @@ the stable public link without claiming email delivery. Phase 5 added:
 Each recipient attempt creates a delivery row. `Document.sent_at` records when
 the public document was issued; `DocumentDelivery.sent_at` records confirmed
 email delivery. Failures remain in history with a safe error category and can be
-retried without fabricating a successful send. Resends reuse the preserved subject and
-message unless the user prepares a new reviewed delivery. V1.14 distinguishes
-manual AI follow-ups from initial document delivery and stores the follow-up kind
-for evidence reporting.
+retried without fabricating a successful send.
 
 ## Deletion behavior
 
@@ -278,122 +240,3 @@ for evidence reporting.
 Foreign-key `on_delete` choices should favor `PROTECT` across financial and
 project history. Cascades are appropriate only for unsent draft-owned content
 whose parent deletion is itself allowed.
-
-## AICompanySettings
-
-One company-owned policy row controls whether the optional OpenAI assistant is
-available and which action categories it may expose. It stores the allowlisted
-model override, low-risk/structured/draft/external capability flags, proactive
-alert preference, company monthly request and estimated-cost limits, read-only
-interaction retention, redacted-summary preference, and privacy-notice
-acknowledgement.
-
-This record never stores an API key. Provider credentials and platform hard limits
-remain deployment settings. The policy can only narrow platform capability; it
-cannot enable a tool the application does not register.
-
-
-## AIEvent
-
-Stores minimal operational refinement events such as ambiguity, requested
-revision, cancellation, tool failure, fixed-suggestion use, and alert dismissal.
-It stores safe metadata only and may optionally reference an interaction or action
-attempt.
-
-## AIInsightDismissal
-
-Stores a user/company-scoped stable alert key and `dismissed_until` timestamp.
-It changes only whether the local alert appears; it does not mutate the underlying
-business record.
-
-
-## AI evaluation records
-
-`AIEvaluationRun` records a contract or live run, suite, model, status, case counts, token use, estimated cost, and timestamps. Live runs belong to one Company and User. Platform contract runs may have no company because they inspect only code/tool contracts.
-
-`AIEvaluationCaseResult` records the case identifier, category, expected and actual tool names, forbidden risk levels, pending-action count, status, tokens, cost, latency, and a short operational result. It deliberately does not store provider tool output or business-response content.
-
-
-## AI evaluation configuration fingerprint
-
-`AIEvaluationRun.configuration_fingerprint` stores a SHA-256 digest of the
-selected model, system instructions, registered provider-tool definitions,
-write-intent mapping, and guarded OpenAI Responses request implementation. The
-controlled-use readiness report rejects passing evaluations created against a
-different fingerprint. No prompt, business record, API key, or provider response
-content is included in the fingerprint.
-
-## AI pilot operations records
-
-### AIUserAccess
-
-One row per user stores whether that user is included when a company's AI access
-mode is `selected_users`. The row repeats the Company relationship only for
-explicit tenant filtering and validates that the User belongs to the same Company.
-Staff-only and all-user modes ignore the selected flag.
-
-### AIFeedback
-
-Stores one helpful/not-helpful rating per User and AIInteraction, an optional
-bounded comment, and a non-sensitive feedback category. Both Company and User must
-match the referenced interaction. It does not store a second copy of the prompt or
-response.
-
-### AIIncident
-
-Stores a company-scoped pilot issue with severity, category, short summary,
-optional details, and resolution history. It may reference the relevant
-AIInteraction or AIActionAttempt. A critical report suspends the Company AI policy;
-resolving the incident does not automatically resume the assistant.
-
-### AICompanySettings pilot fields
-
-`access_mode` selects all users, staff only, or selected users.
-`auto_pause_on_failures`, `failure_threshold`, and `failure_window_minutes` control
-the rolling request/action failure circuit breaker. `suspended_at` and `suspension_reason` are a
-fail-closed operational state separate from the Company's intentional `enabled`
-preference. `failure_count_reset_at` prevents old failures from immediately
-retripping the breaker after a reviewed manual resume.
-
-## AI document draft quality metadata
-
-`AIDocumentDraftReview` is one-to-one with the confirmed `AIActionAttempt` that
-created an AI proposal/invoice draft or first applied an AI revision to a manual draft. It keeps company/user ownership directly
-and references the resulting `Document` with `SET_NULL` so a deleted draft can
-still be counted as abandoned.
-
-For AI-created drafts, the initial snapshot is taken at creation. For a manually
-created draft first revised through V1.13, it is taken immediately before the
-confirmed revision. The initial and latest snapshots contain only hashes and
-structural/financial metadata: dates, payment setting, totals, section/line counts and hashes, line
-amounts, and time-entry counts. The model records changed field categories,
-revision count, first/last revision, issue, first successful delivery, deletion,
-and one outcome: active, used as-is, edited then used, or abandoned. It does not
-retain readable proposal sections, terms, notes, or line-item descriptions.
-
-## AI conversation and current-page metadata
-
-V1.15 adds four operational fields to `AIInteraction`:
-
-- `conversation_id`: a random browser-session conversation identifier;
-- `context_turn_count`: the number of prior redacted turns reused;
-- `page_context_type`: the server-resolved record type, when supported;
-- `page_context_object_id`: the company-scoped object identifier.
-
-No additional readable customer content is stored for conversation support. The
-assistant reuses only the existing redacted prompt and response summaries and only
-when company summary retention remains enabled.
-
-Pending `AIActionAttempt` rows are exposed through the user-scoped Action Center.
-Expired pending rows are changed to `expired` before display; they cannot be
-confirmed later.
-
-
-### AIInteraction provider request diagnostics (V1.16)
-
-`provider_request_ids` stores request IDs returned by OpenAI.
-`provider_client_request_ids` stores the unique UUIDs EZ360PM sent through
-`X-Client-Request-Id` before each logical provider call. Both fields are metadata
-only and can contain more than one value because a single assistant turn may use
-several tool rounds. The client-generated ID is still available when a timeout or
-connection failure prevents a provider request ID from returning.

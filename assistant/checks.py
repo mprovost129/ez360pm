@@ -12,6 +12,31 @@ def model_looks_snapshot_pinned(model):
 def assistant_settings_check(app_configs, **kwargs):
     del app_configs, kwargs
     messages = []
+    enabled = bool(getattr(settings, "AI_ASSISTANT_ENABLED", False))
+    configuration_errors = tuple(
+        getattr(settings, "AI_CONFIGURATION_ERRORS", ()) or ()
+    )
+    for message in configuration_errors:
+        check_class = Error if enabled else Warning
+        check_id = "assistant.E028" if enabled else "assistant.W007"
+        messages.append(
+            check_class(
+                f"Invalid optional AI environment setting: {message}",
+                hint=(
+                    "Correct the environment value before enabling the AI assistant."
+                    if not enabled
+                    else "Correct the environment value before deploying with AI enabled."
+                ),
+                id=check_id,
+            )
+        )
+
+    # The assistant is optional. When globally disabled, malformed or out-of-range
+    # AI-only settings must not make the rest of EZ360PM fail deployment checks.
+    # Syntax problems are reported above as warnings so they can be corrected before
+    # the feature is enabled.
+    if not enabled:
+        return messages
 
     if getattr(settings, "AI_PROACTIVE_MAX_ITEMS", 0) < 1:
         messages.append(
@@ -152,9 +177,6 @@ def assistant_settings_check(app_configs, **kwargs):
             )
         )
 
-    if not getattr(settings, "AI_ASSISTANT_ENABLED", False):
-        return messages
-
     if getattr(settings, "AI_WARN_ON_UNPINNED_MODEL", True):
         unpinned = [
             model
@@ -186,6 +208,13 @@ def assistant_settings_check(app_configs, **kwargs):
         )
 
     provider = getattr(settings, "AI_PROVIDER", "openai")
+    if provider != "openai":
+        messages.append(
+            Error(
+                "AI_PROVIDER must be 'openai'.",
+                id="assistant.E029",
+            )
+        )
     if provider == "openai" and not getattr(settings, "OPENAI_API_KEY", ""):
         messages.append(
             Error(

@@ -17,6 +17,7 @@ from assistant.models import (
     AIUserAccess,
 )
 from assistant.providers import ProviderError, ProviderResponse
+from assistant.policies import get_company_policy
 from assistant.services import AssistantUnavailable, run_assistant
 
 
@@ -85,7 +86,13 @@ class AIPilotOperationsTests(TestCase):
             company=self.other_company,
             is_staff=True,
         )
-        policy = self.company.ai_settings
+        policy = get_company_policy(self.company)
+        AIUserAccess.objects.create(
+            company=self.company,
+            user=self.user,
+            enabled=True,
+            granted_by=self.user,
+        )
         policy.enabled = True
         policy.privacy_notice_acknowledged_at = timezone.now()
         policy.privacy_notice_version = "2026-07-27"

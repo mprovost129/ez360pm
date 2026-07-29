@@ -9,6 +9,7 @@ from django.utils import timezone
 from accounts.models import Company, User
 from assistant.models import AIActionAttempt, AICompanySettings, AIInteraction
 from assistant.providers import ProviderResponse
+from assistant.policies import get_company_policy
 from assistant.services import AssistantUnavailable, run_assistant
 
 
@@ -64,9 +65,11 @@ class AICompanyControlTests(TestCase):
             "Strong-Test-Password-483!",
             company=self.other_company,
         )
+        self.policy = get_company_policy(self.company)
+        self.other_policy = get_company_policy(self.other_company)
 
-    def test_new_company_receives_enabled_acknowledged_policy_in_personal_mode(self):
-        policy = AICompanySettings.objects.get(company=self.company)
+    def test_first_explicit_policy_provision_uses_personal_mode_defaults(self):
+        policy = self.policy
         self.assertTrue(policy.enabled)
         self.assertTrue(policy.allow_external_commits)
         self.assertIsNotNone(policy.privacy_notice_acknowledged_at)

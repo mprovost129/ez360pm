@@ -15,6 +15,31 @@ def check_custom_user_model(app_configs, **kwargs):
 
 
 @checks.register(checks.Tags.security, deploy=True)
+def check_runtime_server_configuration(app_configs, **kwargs):
+    del app_configs, kwargs
+    issues = []
+    for message in tuple(getattr(settings, "RUNTIME_CONFIGURATION_ERRORS", ()) or ()):
+        issues.append(
+            checks.Warning(
+                f"Invalid runtime environment setting: {message}",
+                hint="EZ360PM is using a safe fallback. Correct the environment value before the next deployment.",
+                id="ez360pm.W006",
+            )
+        )
+
+    timeout = getattr(settings, "GUNICORN_TIMEOUT_SECONDS", 0)
+    if timeout < 30:
+        issues.append(
+            checks.Error(
+                "GUNICORN_TIMEOUT_SECONDS must be at least 30 seconds.",
+                hint="Use 180 seconds when the AI assistant is enabled, or at least 30 seconds otherwise.",
+                id="ez360pm.E002",
+            )
+        )
+    return issues
+
+
+@checks.register(checks.Tags.security, deploy=True)
 def check_production_email_identity(app_configs, **kwargs):
     issues = []
     if not settings.DEBUG and settings.DEFAULT_FROM_EMAIL == "webmaster@localhost":

@@ -1,13 +1,10 @@
 <article class="invoice-document proposal-document" id="document-preview">
     <header class="invoice-document__header">
-        <div class="document-company-identity">
-            {% if proposal.company.logo %}<img class="document-company-logo" src="{{ proposal.company.logo.url }}" alt="{{ proposal.company.name }} logo">{% endif %}
-            <div>
+        <div>
             <h2>{{ proposal.company.name }}</h2>
             {% if proposal.company.address_1 %}<address>{{ proposal.company.address_1 }}<br>{% if proposal.company.address_2 %}{{ proposal.company.address_2 }}<br>{% endif %}{{ proposal.company.city }}{% if proposal.company.state %}, {{ proposal.company.state }}{% endif %} {{ proposal.company.postal_code }}</address>{% endif %}
             {% if proposal.company.phone %}<div>{{ proposal.company.phone }}</div>{% endif %}
             {% if proposal.company.email %}<div>{{ proposal.company.email }}</div>{% endif %}
-            </div>
         </div>
         <div class="invoice-identity"><span>Proposal</span><strong>{{ proposal.number }}</strong><small>{{ proposal.get_status_display }}</small></div>
     </header>

@@ -3,19 +3,6 @@
 This is the operational handoff for the personal MVP. Secrets belong in the
 deployment environment, never in source control or Django admin fields.
 
-## Production secret key
-
-Generate a unique Django secret key locally, then save only the generated value
-as `SECRET_KEY` in the Render service's Environment settings:
-
-```powershell
-python -c "import secrets; print(secrets.token_urlsafe(64))"
-```
-
-Do not copy the blank `SECRET_KEY` entry from `.env.example` as-is, reuse a CI
-value, or commit the generated value. Django's production startup gate rejects
-short, predictable, and `django-insecure-` keys before the service starts.
-
 ## Create the first owner
 
 For a new installation, create the Company and owner together with the
@@ -39,13 +26,13 @@ Run these after installing dependencies and before serving traffic:
 .\.venv\Scripts\python.exe manage.py migrate
 .\.venv\Scripts\python.exe manage.py collectstatic --noinput
 .\.venv\Scripts\python.exe manage.py deployment_check
-.\.venv\Scripts\python.exe manage.py data_audit
+.\.venv\Scripts\python.exe manage.py data_audit --fail-on-warning
 ```
 
-For production, set `DJANGO_SETTINGS_MODULE=config.Settings.prod`. Both the
-Docker command and the Render `Procfile` call `bin/start.sh`. That single startup
-gate runs migrations, Django's deployment security checks, the database/cache
-check, and the read-only data audit before Gunicorn can receive traffic.
+For production, set `DJANGO_SETTINGS_MODULE=config.Settings.prod`. The release
+process in `Procfile` runs migrations, Django's deployment security checks, the
+database/cache check, and the read-only data audit before the new web process is
+promoted.
 
 Set `PUBLIC_BASE_URL` to the public HTTPS origin with no trailing slash. Public
 document links in email and Stripe redirects are built from this value.
@@ -55,15 +42,9 @@ document links in email and Stripe redirects are built from this value.
 The production image collects static assets with nonsecret build-only settings,
 runs as the unprivileged `ez360pm` user, applies pending migrations before each
 container start, writes Gunicorn logs to stdout/stderr, honors the platform's
-`PORT`, `WEB_CONCURRENCY`, and `GUNICORN_TIMEOUT_SECONDS` values, and exposes a
-Docker health check against `/health/`. The worker timeout defaults to 180 seconds
-so a four-round assistant request can complete when each OpenAI call has a
-30-second timeout. It must remain at least `AI_PROVIDER_TIMEOUT_SECONDS` multiplied
-by `AI_MAX_TOOL_ROUNDS`, plus 15 seconds of shutdown headroom. The browser-side `AI_BROWSER_REQUEST_TIMEOUT_SECONDS` must exceed `GUNICORN_TIMEOUT_SECONDS` by at least five seconds so the browser does not abandon a request before the worker does. If migration fails,
-Gunicorn does not start and the deployment is
-not promoted to receive traffic. Data-audit integrity errors also block startup;
-operational warnings remain in the deploy log for recovery and are failures in
-the scheduled strict audit. `EZ360PM_OWNER_PASSWORD` is strictly a one-time
+`PORT` and `WEB_CONCURRENCY` values, and exposes a Docker health check against
+`/health/`. If migration fails, Gunicorn does not start and the deployment is
+not promoted to receive traffic. `EZ360PM_OWNER_PASSWORD` is strictly a one-time
 bootstrap value and must not remain in the deployment environment afterward.
 
 `.dockerignore` excludes `.env`, repository metadata, local virtualenvs, logs,
@@ -113,22 +94,7 @@ before Gunicorn terminates the worker.
 The Company email is used as Reply-To. Development may retain the console email
 backend. Every client-document or internal-acceptance attempt creates a
 `DocumentDelivery` row before contacting the backend; success or a safe failure
-category is then recorded without storing credentials or message bodies. Failed
-client, proposal-response, and payment notifications can be retried from the
-document's delivery history without rewriting the original attempt.
-
-For Stripe Checkout completion, the verified payment and a pending notification
-are committed before the webhook acknowledgement. Fee lookup and notification
-delivery run as best-effort post-response work so provider latency does not delay
-Stripe's `2xx`; if the process is interrupted, the pending fee remains available
-to Revenue reconciliation and the pending notification remains sendable from
-the invoice delivery history. A separate task worker remains optional for a
-future paid deployment rather than a requirement for the current free instance.
-
-The login page exposes Django's email-based password reset flow, and an
-authenticated owner can change their password from Company settings. Keep the
-company/owner email deliverable so shell access is not required for routine
-account recovery. Django Administration is intentionally limited to superusers.
+category is then recorded without storing credentials or message bodies.
 
 ## Stripe Checkout
 
@@ -150,21 +116,6 @@ Subscribe it to:
 - `checkout.session.completed`
 - `checkout.session.async_payment_succeeded`
 
-Also subscribe to `refund.created`, `refund.updated`, `charge.refunded`,
-`charge.succeeded`, `charge.updated`, `charge.dispute.created`, and
-`charge.dispute.closed` for fee, refund, and dispute reporting. Failed financial
-adjustment imports appear under **Administration → Stripe webhook failures**.
-The queue stores safe identifiers and error categories, never raw webhook
-payloads. Stripe retries increase the attempt count; a successful replay marks
-the item resolved automatically.
-- `charge.succeeded`
-- `charge.updated`
-- `refund.created`
-- `refund.updated`
-- `charge.refunded`
-- `charge.dispute.created`
-- `charge.dispute.closed`
-
 The installed Stripe Python SDK is `14.4.0`, pinned to API version
 `2026-02-25.clover`. Configure the webhook endpoint to the same API version.
 Checkout is shown only when both secrets are present and the issued invoice has
@@ -174,33 +125,12 @@ The server reloads and locks the invoice, calculates the current outstanding
 balance, and creates the hosted Session. The webhook verifies Stripe's signature
 against the raw request body and passes the resulting payment through the same
 transactional service as manual payments. The unique Payment Intent ID makes
-payment replay idempotent. Refunds, disputes, reversals, and later fee changes
-are imported as append-only adjustments using unique Stripe provider IDs.
+webhook replay idempotent.
 
 After configuration, confirm the Integrations screen reports Email and Stripe as
 configured. Use a Stripe test-mode invoice first, replay its successful webhook,
 and verify that only one Stripe Payment row exists and the invoice balance is
 zero.
-
-
-## Revenue & Fees release migration
-
-Before serving the V1.1 code, apply the new account and document migrations:
-
-```powershell
-.\.venv\Scripts\python.exe manage.py migrate
-.\.venv\Scripts\python.exe manage.py collectstatic --noinput
-.\.venv\Scripts\python.exe manage.py check
-.\.venv\Scripts\python.exe manage.py test
-```
-
-The migrations add `Company.books_closed_through`, the append-only
-`PaymentAdjustment` ledger, current Stripe fee tracking, and append-only fee
-reconciliation attempt history. Review the Revenue & Fees report and resolve
-all pending fees before setting a year-end lock; the settings form also enforces
-that prerequisite.
-The report is payment-level net reporting; it does not reconcile Stripe payout
-batches to individual bank deposits.
 
 ## Monitoring and data audit
 
@@ -215,9 +145,8 @@ Run the read-only integrity audit after each release and on a daily schedule:
 ```
 
 The command checks stored line/document totals, payment-derived invoice status,
-retainer-credit relationships, invoiced-time relationships, payment/adjustment
-and fee-attempt company boundaries, and document deliveries left pending for
-more than 15 minutes. Use
+retainer-credit relationships, invoiced-time relationships, company boundaries,
+and document deliveries left pending for more than 15 minutes. Use
 `--company-id <id>` to isolate one company or `--pending-minutes <minutes>` to
 change the delivery threshold. A nonzero result should alert the operator. The
 audit never modifies records; investigate against a backup before making a
@@ -268,193 +197,39 @@ Record workflow friction in [the real-use issue log](REAL_USE_LOG.md), excluding
 client or payment-sensitive information. Phase 7 changes should cite a repeated
 issue, an operational failure, or a measured accessibility/performance problem.
 
-## AI assistant (optional)
+## Optional AI isolation
 
-The assistant is disabled by default. Before enabling it, follow
-`docs/AI_ASSISTANT_SETUP.md`, configure the provider and cost variables, migrate,
-collect static files, run deployment checks, and run the assistant plus full test
-suites. Ordinary EZ360PM workflows do not require an AI provider.
-
-## V1.5 AI controlled-delivery deployment
-
-V1.5 adds `documents.0007_documentdelivery_subject_message`. Run migrations before enabling the assistant. Then run:
-
-```bash
-python manage.py migrate
-python manage.py makemigrations --check
-python manage.py collectstatic --noinput
-python manage.py check --deploy
-python manage.py test assistant documents projects
-python manage.py test
-```
-
-Verify the configured email backend with a test document. Confirm that a failed send leaves the document issued and creates a failed `DocumentDelivery` record.
+With `AI_ASSISTANT_ENABLED=false`, authenticated page rendering, Company/User creation, and ordinary document-change signals do not query or create assistant policy, access, or draft-quality records. This lets ordinary EZ360PM workflows remain independent of the optional assistant. Even when the platform flag is enabled, company policy and selected-user access remain lazily provisioned. When enabling AI, run all assistant migrations before serving requests and review Company Settings → AI Settings.
 
 
-## AI V1.6 migration
+### Optional AI environment parsing
 
-Run `python manage.py migrate` to apply
-`assistant.0003_aievent_aiinsightdismissal`, then run `collectstatic` so the
-refinement drawer and usage screen use the current JavaScript and CSS.
+The optional assistant must not make the core application unavailable because of a
+malformed AI-only environment value. With `AI_ASSISTANT_ENABLED=false`, invalid AI
+booleans, integers, decimals, or pricing JSON fall back to safe defaults during
+settings import and appear as `assistant.W007` warnings in `check --deploy`.
 
+With AI enabled, the same issues are `assistant.E028` errors and deployment should
+stop until they are corrected. `AI_PROVIDER` must be `openai` (`assistant.E029`).
+Always run `python manage.py check --deploy` after editing AI environment values.
 
-## AI V1.8 company-controls migration
+## Gunicorn and AI request timeouts
 
-Run `python manage.py migrate` to apply
-`assistant.0004_aicompanysettings`. Existing companies retain the prior enabled
-capabilities; new-company defaults are controlled by the `AI_COMPANY_DEFAULT_*`
-environment variables.
-
-Before enabling production AI, visit `/assistant/settings/`, acknowledge the
-privacy notice, select an allowlisted model, set request/cost limits, and review
-each action category. Schedule `python manage.py purge_ai_history` at an
-appropriate cadence so each company's configured read-only retention is enforced.
-
-
-## AI evaluation gate
-
-After deployment and before enabling or changing the OpenAI model:
-
-```bash
-python manage.py evaluate_ai_assistant
-python manage.py evaluate_ai_assistant --live --user owner@example.com --suite all
-```
-
-Require the contract suite and live core/security suites to pass. Review the company-scoped Evaluation History screen and compare token use, estimated cost, and latency with the prior approved baseline. Live built-in cases are read-only and automatically cancel any unexpected prepared action.
-
-## AI V1.10 controlled-use readiness gate
-
-Run migrations to apply
-`assistant.0006_aievaluationrun_configuration_fingerprint`. Then establish a
-current fingerprinted baseline and require the readiness command to pass:
-
-```bash
-python manage.py migrate
-python manage.py makemigrations --check
-python manage.py check --deploy
-python manage.py test assistant
-python manage.py evaluate_ai_assistant
-python manage.py evaluate_ai_assistant --live --user owner@example.com --suite all --output var/ai-evaluation.json
-python manage.py check_ai_readiness --user owner@example.com --output var/ai-readiness.json
-python manage.py test
-```
-
-The OpenAI connection test is available from `/assistant/readiness/`. It is
-minimal and tool-free, but still counts against the company request and estimated
-cost allowances. Preserve the evaluation and readiness JSON files with the
-release record. A passing AI readiness result does not replace the full
-application, financial, email, Stripe, and backup/restore validation.
-
-## AI V1.13 controlled draft revisions
-
-V1.13 adds no database migration or environment variable. Deploy the code and run:
-
-```bash
-python manage.py makemigrations --check
-python manage.py check --deploy
-python manage.py test assistant.tests.test_phase13_document_revisions
-python manage.py test assistant
-python manage.py test
-```
-
-Before enabling the revision tools in production, verify that company AI settings
-allow Financial Draft actions. Test one proposal and one hourly invoice. Confirm
-that invoice descriptions can change while totals and linked time entries remain
-unchanged.
-
-
-## AI V1.15 conversation and Action Center migration
-
-Run migrations to apply `assistant.0009_ai_conversation_and_page_context`:
-
-```bash
-python manage.py migrate
-python manage.py makemigrations --check
-python manage.py collectstatic --noinput
-python manage.py check --deploy
-python manage.py test assistant.tests.test_phase15_context_and_action_center
-python manage.py test assistant
-python manage.py test
-```
-
-Review `AI_CONVERSATION_CONTEXT_TURNS` and
-`AI_CONVERSATION_CONTEXT_MINUTES`. Set context turns to `0` when conversation
-carry-over is not desired. Confirm that the Action Center is reachable at
-`/assistant/actions/` and that cross-company page URLs provide no context.
-
-
-## AI V1.16 OpenAI request observability migration
-
-Run migrations to apply `assistant.0010_aiinteraction_provider_client_request_ids`:
-
-```bash
-python manage.py migrate
-python manage.py makemigrations --check
-python manage.py check --deploy
-python manage.py test assistant.tests.test_openai_provider
-python manage.py test assistant.tests.test_assistant
-python manage.py evaluate_ai_assistant
-python manage.py test assistant
-python manage.py test
-```
-
-Optionally set `OPENAI_ORG_ID` and `OPENAI_PROJECT_ID` to make the SDK scope
-explicit. Every logical Responses API call now sends a unique
-`X-Client-Request-Id`; both that value and any OpenAI response request ID appear in
-the metadata-only AI audit export. `AI_WARN_ON_UNPINNED_MODEL=true` adds an
-informational deployment message and readiness warning for mutable aliases. It
-does not block startup, but a model alias change invalidates the evaluation
-fingerprint and requires a new live baseline.
-
-
-## AI V1.17 focused-action settings
-
-No migration is required. Configure a small registered-tool budget:
+EZ360PM resolves `GUNICORN_TIMEOUT_SECONDS` through its defensive settings parser and
+passes the resolved value to Gunicorn. The recommended value with the AI assistant is:
 
 ```env
-AI_MAX_TOOL_CALLS=4
+GUNICORN_TIMEOUT_SECONDS=180
+AI_BROWSER_REQUEST_TIMEOUT_SECONDS=195
 ```
 
-After deployment, run the assistant tests and manually verify that a complete
-create-client command prepares one confirmation in one OpenAI request.
+`AI_BROWSER_REQUEST_TIMEOUT_SECONDS` must remain longer than the Gunicorn timeout.
+The assistant deployment check also confirms that the worker timeout can accommodate
+the configured provider timeout and maximum tool rounds.
 
-## AI V1.24 confirmation-validation migration
-
-Run migrations to apply `assistant.0011_aiactionattempt_blocked_status`:
-
-```bash
-python manage.py migrate
-python manage.py makemigrations --check
-python manage.py collectstatic --noinput
-python manage.py check --deploy
-python manage.py test assistant.tests.test_phase24_confirmation_validation
-python manage.py test assistant
-python manage.py test
-```
-
-The migration converts legacy AI action rows with `status=failed` and
-`error_code=domain_validation` to the new **Needs correction** status. These rows
-remain auditable but no longer count as operational failures or contribute to the
-company AI circuit breaker.
-
-## AI V1.25 request-boundary and local-intake settings
-
-No database migration is required. Add or review:
+Deployment checks fail on errors by default while still printing warnings. To make
+warnings block a deliberately strict deployment, set:
 
 ```env
-AI_RATE_LIMIT_REQUESTS=10
-AI_LOCAL_ACTION_RATE_LIMIT_REQUESTS=30
-AI_RATE_LIMIT_WINDOW_SECONDS=60
+DJANGO_DEPLOY_CHECK_FAIL_LEVEL=WARNING
 ```
-
-OpenAI-backed requests and deterministic local client-template submissions use
-separate rate-limit buckets. Run:
-
-```bash
-python manage.py makemigrations --check
-python manage.py check --deploy
-python manage.py test assistant.tests.test_phase25_request_boundary
-python manage.py test assistant
-python manage.py test
-```
-

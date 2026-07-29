@@ -5,7 +5,8 @@ from clients.models import Client
 from core.forms import CompanyScopedModelForm
 
 from .models import Project
-from .services import create_project, update_project_details
+from .services import create_project
+from .workflow import change_project_status
 
 
 class ProjectForm(CompanyScopedModelForm):
@@ -103,20 +104,15 @@ class ProjectForm(CompanyScopedModelForm):
     def save(self, commit=True):
         if not commit:
             raise ValueError("ProjectForm must be saved with commit=True.")
+        if self.instance.pk:
+            return super().save(commit=True)
+
         client = self.cleaned_data["client"]
         data = {
             field: self.cleaned_data[field]
             for field in self.Meta.fields
             if field != "client"
         }
-        if self.instance.pk:
-            self.instance = update_project_details(
-                project=self.instance,
-                client=client,
-                project_data=data,
-            )
-            return self.instance
-
         self.instance = create_project(
             company=self.company,
             client=client,
@@ -125,18 +121,59 @@ class ProjectForm(CompanyScopedModelForm):
         return self.instance
 
 
-class ProjectStatusForm(forms.Form):
+class ProjectEditForm(ProjectForm):
     status = forms.ChoiceField(
         choices=Project.Status.choices,
         label="Project status",
         help_text=(
-            "Changing status does not alter proposals, invoices, payments, or time records."
+            "Status normally advances through proposals and payments. A manual change "
+            "does not alter invoices, proposals, payments, or recorded time."
         ),
-        widget=forms.Select(attrs={"aria-label": "Project status"}),
+    )
+    confirm_status_change = forms.BooleanField(
+        required=False,
+        label="Confirm this manual status change",
+        help_text="Required only when selecting a different status.",
+    )
+    field_groups = (
+        ProjectForm.field_groups[0],
+        ("Workflow", ("status", "confirm_status_change")),
+        *ProjectForm.field_groups[1:],
     )
 
-    def __init__(self, *args, project=None, **kwargs):
+    def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.project = project
-        if project is not None:
-            self.fields["status"].initial = project.status
+        self.original_status = self.instance.status
+        self.fields["status"].initial = self.original_status
+
+    def clean(self):
+        cleaned = super().clean()
+        status = cleaned.get("status")
+        if status and status != self.original_status:
+            if not cleaned.get("confirm_status_change"):
+                self.add_error(
+                    "confirm_status_change",
+                    "Confirm the manual status change before saving.",
+                )
+            if status in {
+                Project.Status.ON_HOLD,
+                Project.Status.COMPLETED,
+                Project.Status.CANCELED,
+            } and self.instance.time_entries.filter(end_time__isnull=True).exists():
+                self.add_error(
+                    "status",
+                    "Stop the running timer before placing this project on hold or closing it.",
+                )
+        return cleaned
+
+    @transaction.atomic
+    def save(self, commit=True):
+        if not commit:
+            raise ValueError("ProjectEditForm must be saved with commit=True.")
+        requested_status = self.cleaned_data["status"]
+        project = super().save(commit=True)
+        self.instance = change_project_status(
+            project=project,
+            status=requested_status,
+        )
+        return self.instance

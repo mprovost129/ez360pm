@@ -9,7 +9,6 @@ urlpatterns = [
     path("new/", views.ProjectCreateView.as_view(), name="create"),
     path("<int:pk>/", views.ProjectDetailView.as_view(), name="detail"),
     path("<int:pk>/edit/", views.ProjectUpdateView.as_view(), name="update"),
-    path("<int:pk>/status/", views.project_change_status, name="change-status"),
     path("<int:pk>/delete/", views.ProjectDeleteView.as_view(), name="delete"),
     path("<int:pk>/start-without-retainer/", views.project_start_without_retainer, name="start-without-retainer"),
     path("<int:pk>/complete/", views.project_complete, name="complete"),

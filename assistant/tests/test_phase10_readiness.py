@@ -13,6 +13,7 @@ from assistant.models import (
     AIInteraction,
 )
 from assistant.providers import ProviderResponse
+from assistant.policies import get_company_policy
 from assistant.readiness import build_readiness_report
 
 
@@ -68,7 +69,7 @@ class AIReadinessTests(TestCase):
             "Strong-Test-Password-483!",
             company=self.other_company,
         )
-        policy = self.company.ai_settings
+        policy = get_company_policy(self.company)
         policy.enabled = True
         policy.privacy_notice_acknowledged_at = timezone.now()
         policy.privacy_notice_version = "2026-07-27"

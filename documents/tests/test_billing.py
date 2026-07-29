@@ -1,18 +1,14 @@
-import tempfile
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
-from io import BytesIO
 
 from django.core.exceptions import ValidationError
-from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
-from PIL import Image as PillowImage
 
 from accounts.models import Company, User
 from clients.tests.test_clients import create_client
-from documents.models import Document, Payment, PaymentAdjustment
+from documents.models import Document, Payment
 from documents.pdf import build_invoice_pdf
 from documents.services import (
     attach_time_to_invoice,
@@ -23,7 +19,6 @@ from documents.services import (
     issue_document,
     move_line_item,
     record_payment,
-    record_payment_adjustment,
     record_public_view,
     release_void_invoice_time,
     save_line_item,
@@ -216,190 +211,6 @@ class BillingServiceTests(TestCase):
         self.assertEqual(invoice.status, Document.Status.PARTIALLY_PAID)
         self.assertEqual(invoice.amount_paid, first.amount)
 
-
-    def test_payment_adjustments_are_append_only_and_recalculate_balance(self):
-        invoice = self.make_hourly_invoice()
-        self.add_line(invoice)
-        issue_document(document=invoice)
-        payment = record_payment(
-            invoice=invoice,
-            payment_data={
-                "amount": Decimal("100.00"),
-                "method": Payment.Method.CHECK,
-                "received_at": date(2026, 7, 22),
-                "reference": "1001",
-            },
-        )
-
-        adjustment = record_payment_adjustment(
-            payment=payment,
-            adjustment_data={
-                "adjustment_type": PaymentAdjustment.Type.REFUND,
-                "amount": Decimal("-20.00"),
-                "effective_at": date(2026, 8, 1),
-                "affects_invoice_balance": True,
-                "reference": "Partial refund",
-            },
-        )
-        invoice.refresh_from_db()
-
-        self.assertEqual(invoice.amount_paid, Decimal("80.00"))
-        self.assertEqual(invoice.outstanding_balance, Decimal("20.00"))
-        self.assertEqual(invoice.status, Document.Status.PARTIALLY_PAID)
-        adjustment.reference = "Changed"
-        with self.assertRaises(ValidationError):
-            adjustment.save()
-        with self.assertRaises(ValidationError):
-            adjustment.delete()
-
-    def test_manual_adjustment_cannot_refund_more_than_received(self):
-        invoice = self.make_hourly_invoice()
-        self.add_line(invoice)
-        issue_document(document=invoice)
-        payment = record_payment(
-            invoice=invoice,
-            payment_data={
-                "amount": Decimal("40.00"),
-                "method": Payment.Method.CHECK,
-                "received_at": date(2026, 7, 22),
-                "reference": "1001",
-            },
-        )
-
-        with self.assertRaises(ValidationError):
-            record_payment_adjustment(
-                payment=payment,
-                adjustment_data={
-                    "adjustment_type": PaymentAdjustment.Type.REFUND,
-                    "amount": Decimal("-50.00"),
-                    "effective_at": date(2026, 8, 1),
-                    "affects_invoice_balance": True,
-                    "reference": "Entry error",
-                },
-            )
-
-    def test_processing_fee_refund_changes_revenue_not_invoice_balance(self):
-        invoice = self.make_hourly_invoice()
-        self.add_line(invoice)
-        issue_document(document=invoice)
-        payment = record_payment(
-            invoice=invoice,
-            payment_data={
-                "amount": Decimal("100.00"),
-                "fee_amount": Decimal("3.20"),
-                "fee_current_amount": Decimal("3.20"),
-                "method": Payment.Method.STRIPE,
-                "received_at": date(2026, 7, 22),
-                "reference": "Stripe",
-                "stripe_payment_intent_id": "pi_fee_refund",
-            },
-        )
-        adjustment = record_payment_adjustment(
-            payment=payment,
-            adjustment_data={
-                "adjustment_type": PaymentAdjustment.Type.FEE_REFUND,
-                "amount": Decimal("0.30"),
-                "effective_at": date(2026, 8, 1),
-                "affects_invoice_balance": False,
-                "reference": "Fee correction",
-            },
-        )
-        invoice.refresh_from_db()
-        payment.refresh_from_db()
-
-        self.assertEqual(invoice.amount_paid, Decimal("100.00"))
-        self.assertEqual(invoice.outstanding_balance, Decimal("0.00"))
-        self.assertEqual(invoice.status, Document.Status.PAID)
-        self.assertEqual(payment.net_amount, Decimal("97.10"))
-        self.assertEqual(payment.fee_current_amount, Decimal("2.90"))
-        self.assertTrue(adjustment.affects_processing_fees)
-
-    def test_processing_fee_refund_cannot_exceed_current_stripe_fee(self):
-        invoice = self.make_hourly_invoice()
-        self.add_line(invoice)
-        issue_document(document=invoice)
-        payment = record_payment(
-            invoice=invoice,
-            payment_data={
-                "amount": Decimal("100.00"),
-                "fee_amount": Decimal("3.20"),
-                "fee_current_amount": Decimal("3.20"),
-                "method": Payment.Method.STRIPE,
-                "received_at": date(2026, 7, 22),
-                "reference": "Stripe",
-                "stripe_payment_intent_id": "pi_fee_refund_limit",
-            },
-        )
-
-        with self.assertRaises(ValidationError):
-            record_payment_adjustment(
-                payment=payment,
-                adjustment_data={
-                    "adjustment_type": PaymentAdjustment.Type.FEE_REFUND,
-                    "amount": Decimal("3.21"),
-                    "effective_at": date(2026, 8, 1),
-                    "affects_invoice_balance": False,
-                    "reference": "Impossible fee refund",
-                },
-            )
-
-    def test_closed_financial_period_blocks_manual_changes_but_not_provider_imports(self):
-        invoice = self.make_hourly_invoice()
-        self.add_line(invoice)
-        issue_document(document=invoice)
-        self.company.books_closed_through = date(2026, 12, 31)
-        self.company.save(update_fields=["books_closed_through"])
-
-        with self.assertRaises(ValidationError):
-            record_payment(
-                invoice=invoice,
-                payment_data={
-                    "amount": Decimal("100.00"),
-                    "method": Payment.Method.CHECK,
-                    "received_at": date(2026, 12, 31),
-                    "reference": "Locked year",
-                },
-            )
-
-        payment = record_payment(
-            invoice=invoice,
-            payment_data={
-                "amount": Decimal("100.00"),
-                "method": Payment.Method.STRIPE,
-                "received_at": date(2026, 12, 31),
-                "reference": "Provider import",
-                "stripe_payment_intent_id": "pi_closed_period",
-            },
-            allow_closed_period=True,
-        )
-        with self.assertRaises(ValidationError):
-            delete_payment(payment=payment)
-        with self.assertRaises(ValidationError):
-            record_payment_adjustment(
-                payment=payment,
-                adjustment_data={
-                    "adjustment_type": PaymentAdjustment.Type.REFUND,
-                    "amount": Decimal("-10.00"),
-                    "effective_at": date(2026, 12, 31),
-                    "affects_invoice_balance": True,
-                    "reference": "Locked refund",
-                },
-            )
-
-        adjustment = record_payment_adjustment(
-            payment=payment,
-            adjustment_data={
-                "adjustment_type": PaymentAdjustment.Type.REFUND,
-                "amount": Decimal("-10.00"),
-                "effective_at": date(2026, 12, 31),
-                "affects_invoice_balance": True,
-                "reference": "Provider refund",
-            },
-            allow_closed_period=True,
-            allow_balance_exception=True,
-        )
-        self.assertEqual(adjustment.amount, Decimal("-10.00"))
-
     def test_overpayment_is_rejected(self):
         invoice = self.make_hourly_invoice()
         self.add_line(invoice)
@@ -558,49 +369,6 @@ class InvoiceViewTests(TestCase):
         )
         invoice.refresh_from_db()
         self.assertEqual(invoice.total, Decimal("250.00"))
-
-    def test_flat_fee_pricing_check_uses_project_fee_and_cumulative_finals(self):
-        flat_project = create_project(
-            company=self.company,
-            client=self.project.client,
-            project_data=project_data(
-                number="VIEW-FLAT",
-                billing_type=Project.BillingType.FLAT_FEE,
-                hourly_rate=None,
-                fixed_fee=Decimal("2500.00"),
-            ),
-        )
-        first = create_invoice(
-            company=self.company,
-            project=flat_project,
-            invoice_data=invoice_data(),
-        )
-
-        first_response = self.client.get(
-            reverse("documents:invoice-detail", args=(first.pk,))
-        )
-
-        self.assertFalse(first_response.context["pricing_differs_from_reference"])
-        self.assertEqual(
-            first_response.context["pricing_reference_label"], "project fixed fee"
-        )
-
-        second = create_invoice(
-            company=self.company,
-            project=flat_project,
-            invoice_data=invoice_data(),
-        )
-        second_response = self.client.get(
-            reverse("documents:invoice-detail", args=(second.pk,))
-        )
-
-        self.assertTrue(second_response.context["pricing_differs_from_reference"])
-        self.assertEqual(
-            second_response.context["cumulative_final_invoice_total"],
-            Decimal("5000.00"),
-        )
-        self.assertContains(second_response, "other non-void final invoices total")
-        self.assertContains(second_response, "project fixed fee")
 
     def test_invoice_authoring_defaults_and_locks_project_context(self):
         self.company.default_invoice_due_days = 14
@@ -862,33 +630,6 @@ class InvoiceViewTests(TestCase):
             )
         invoice.refresh_from_db()
         self.assertEqual(invoice.status, Document.Status.VIEWED)
-
-    def test_company_logo_appears_on_customer_invoice_and_pdf(self):
-        invoice = self.make_invoice()
-        issue_document(document=invoice)
-        image_buffer = BytesIO()
-        PillowImage.new("RGB", (120, 40), color="white").save(
-            image_buffer, format="PNG"
-        )
-
-        with tempfile.TemporaryDirectory() as media_root, self.settings(
-            MEDIA_ROOT=media_root
-        ):
-            self.company.logo = SimpleUploadedFile(
-                "company-logo.png",
-                image_buffer.getvalue(),
-                content_type="image/png",
-            )
-            self.company.save(update_fields=["logo"])
-            invoice.refresh_from_db()
-            response = self.client.get(
-                reverse("public-documents:view", args=(invoice.public_token,))
-            )
-            pdf = build_invoice_pdf(invoice)
-
-        self.assertContains(response, "company-logo.png")
-        self.assertContains(response, f'alt="{self.company.name} logo"')
-        self.assertTrue(pdf.startswith(b"%PDF"))
 
     def test_draft_public_token_returns_not_found(self):
         invoice = self.make_invoice()

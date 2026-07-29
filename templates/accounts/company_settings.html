@@ -3,7 +3,7 @@
 {% block title %}Company settings | EZ360PM{% endblock %}
 
 {% block content %}
-<div class="page-heading"><div><p class="eyebrow">Settings</p><h1>Company</h1></div><div class="page-actions"><a class="btn btn-light" href="{% url 'accounts:password-change' %}">Change password</a><a class="btn btn-light" href="{% url 'assistant:readiness' %}">AI readiness</a><a class="btn btn-light" href="{% url 'assistant:settings' %}">AI settings</a><a class="btn btn-light" href="{% url 'accounts:integrations' %}">Integration status</a></div></div>
+<div class="page-heading"><div><p class="eyebrow">Settings</p><h1>Company</h1></div><div class="page-actions">{% if ai_assistant_enabled %}<a class="btn btn-light" href="{% url 'assistant:readiness' %}">AI readiness</a><a class="btn btn-light" href="{% url 'assistant:settings' %}">AI settings</a>{% endif %}<a class="btn btn-light" href="{% url 'accounts:integrations' %}">Integration status</a></div></div>
 <form method="post" enctype="multipart/form-data" class="content-card structured-form" novalidate>
     {% csrf_token %}
     {% if form.errors %}<div class="form-error-summary" role="alert" tabindex="-1"><strong>Please correct the highlighted fields.</strong>{{ form.non_field_errors }}</div>{% endif %}
@@ -26,9 +26,6 @@
         {% include 'shared/_form_field.html' with field=form.default_tax_rate %}
         {% include 'shared/_form_field.html' with field=form.default_invoice_due_days %}
         {% include 'shared/_form_field.html' with field=form.accept_payments_default %}
-    </fieldset>
-    <fieldset class="form-section form-grid"><legend>Financial controls</legend>
-        {% include 'shared/_form_field.html' with field=form.books_closed_through %}
     </fieldset>
     <fieldset class="form-section form-grid"><legend>Document terms</legend>
         {% include 'shared/_form_field.html' with field=form.default_proposal_terms %}

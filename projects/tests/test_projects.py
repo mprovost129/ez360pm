@@ -361,108 +361,76 @@ class ProjectViewTests(TestCase):
         self.assertContains(response, 'href="#project-invoices"')
         self.assertContains(response, 'id="project-invoices"')
 
-    def test_status_is_managed_on_project_dashboard_not_edit_form(self):
+    def test_status_is_managed_on_edit_but_new_projects_still_start_as_leads(self):
         project = create_project(
             company=self.company,
             client=self.client_record,
-            project_data=project_data(number="STATUS-DASHBOARD"),
+            project_data=project_data(number="STATUS-EDIT"),
         )
 
         create_response = self.client.get(reverse("projects:create"))
         edit_response = self.client.get(reverse("projects:update", args=(project.pk,)))
-        detail_response = self.client.get(reverse("projects:detail", args=(project.pk,)))
 
         self.assertNotIn("status", create_response.context["form"].fields)
-        self.assertNotIn("status", edit_response.context["form"].fields)
-        self.assertIn("project_status_form", detail_response.context)
-        self.assertContains(detail_response, "Project status")
-        self.assertContains(detail_response, "Update status")
-        self.assertContains(
-            detail_response,
-            reverse("projects:change-status", args=(project.pk,)),
-        )
-        self.assertContains(detail_response, "Edit project details")
+        self.assertIn("status", edit_response.context["form"].fields)
+        self.assertContains(edit_response, "Project status")
+        self.assertContains(edit_response, "Confirm this manual status change")
 
-    def test_project_dashboard_status_action_can_activate_lead(self):
+    def test_manual_status_change_requires_confirmation_and_can_activate_lead(self):
         project = create_project(
             company=self.company,
             client=self.client_record,
             project_data=project_data(number="STATUS-ACTIVE"),
         )
-
-        response = self.client.post(
-            reverse("projects:change-status", args=(project.pk,)),
-            {"status": Project.Status.ACTIVE},
+        data = project_data(number=project.number)
+        data.update(
+            client=self.client_record.pk,
+            fixed_fee="",
+            status=Project.Status.ACTIVE,
         )
 
+        unconfirmed = self.client.post(
+            reverse("projects:update", args=(project.pk,)),
+            data,
+        )
+        project.refresh_from_db()
+        self.assertEqual(unconfirmed.status_code, 200)
+        self.assertContains(unconfirmed, "Confirm the manual status change")
+        self.assertEqual(project.status, Project.Status.LEAD)
+
+        data["confirm_status_change"] = "on"
+        confirmed = self.client.post(
+            reverse("projects:update", args=(project.pk,)),
+            data,
+        )
         project.refresh_from_db()
         self.assertRedirects(
-            response,
+            confirmed,
             reverse("projects:detail", args=(project.pk,)),
         )
         self.assertEqual(project.status, Project.Status.ACTIVE)
 
-    def test_project_dashboard_status_action_rejects_invalid_status(self):
-        project = create_project(
-            company=self.company,
-            client=self.client_record,
-            project_data=project_data(number="STATUS-INVALID"),
-        )
-
-        response = self.client.post(
-            reverse("projects:change-status", args=(project.pk,)),
-            {"status": "not-a-status"},
-            follow=True,
-        )
-
-        project.refresh_from_db()
-        self.assertContains(response, "Choose a valid project status")
-        self.assertEqual(project.status, Project.Status.LEAD)
-
-    def test_project_dashboard_status_action_cannot_close_running_project(self):
+    def test_manual_status_change_cannot_close_project_with_running_timer(self):
         project = create_project(
             company=self.company,
             client=self.client_record,
             project_data=project_data(number="STATUS-RUNNING"),
         )
         start_timer(user=self.user, project=project)
+        data = project_data(number=project.number)
+        data.update(
+            client=self.client_record.pk,
+            fixed_fee="",
+            status=Project.Status.CANCELED,
+            confirm_status_change="on",
+        )
 
         response = self.client.post(
-            reverse("projects:change-status", args=(project.pk,)),
-            {"status": Project.Status.CANCELED},
-            follow=True,
+            reverse("projects:update", args=(project.pk,)),
+            data,
         )
 
         project.refresh_from_db()
+        self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Stop the running timer")
         self.assertEqual(project.status, Project.Status.LEAD)
-
-    def test_project_dashboard_status_action_is_company_scoped(self):
-        other_client = create_client(self.other_company)
-        other_project = create_project(
-            company=self.other_company,
-            client=other_client,
-            project_data=project_data(number="OTHER-STATUS"),
-        )
-
-        response = self.client.post(
-            reverse("projects:change-status", args=(other_project.pk,)),
-            {"status": Project.Status.ACTIVE},
-        )
-
-        other_project.refresh_from_db()
-        self.assertEqual(response.status_code, 404)
-        self.assertEqual(other_project.status, Project.Status.LEAD)
-
-    def test_project_dashboard_status_action_requires_post(self):
-        project = create_project(
-            company=self.company,
-            client=self.client_record,
-            project_data=project_data(number="STATUS-POST"),
-        )
-
-        response = self.client.get(
-            reverse("projects:change-status", args=(project.pk,))
-        )
-
-        self.assertEqual(response.status_code, 405)

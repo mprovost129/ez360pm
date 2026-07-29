@@ -520,37 +520,13 @@ class TimeEntryViewTests(TestCase):
             f"{reverse('projects:time-create')}?project={self.project.pk}",
         )
 
-    def test_project_timer_controls_submit_current_project_without_leaving(self):
+    def test_header_start_timer_link_defaults_to_project_being_viewed(self):
         response = self.client.get(reverse("projects:detail", args=(self.project.pk,)))
-        project_url = reverse("projects:detail", args=(self.project.pk,))
-        timer_url = reverse("projects:timer-start")
 
-        # The header and "More project actions" both start directly. Lead
-        # projects keep proposal preparation as their primary workflow action.
-        self.assertContains(response, f'action="{timer_url}"', count=2)
         self.assertContains(
-            response, f'name="project" value="{self.project.pk}"', count=2
+            response,
+            f"{reverse('projects:timer-start')}?project={self.project.pk}",
         )
-        self.assertContains(response, f'name="next" value="{project_url}"')
-        self.assertNotContains(response, f"{timer_url}?project={self.project.pk}")
-
-        start_response = self.client.post(
-            timer_url,
-            {
-                "project": self.project.pk,
-                "billable": "on",
-                "next": project_url,
-            },
-        )
-
-        self.assertRedirects(start_response, project_url)
-        entry = TimeEntry.objects.get(user=self.user, end_time__isnull=True)
-        self.assertEqual(entry.project, self.project)
-        self.assertTrue(entry.billable)
-
-        project_response = self.client.get(project_url)
-        self.assertContains(project_response, "data-running-timer")
-        self.assertContains(project_response, self.project.number)
 
     def test_other_company_entry_cannot_be_edited(self):
         hidden = TimeEntry.objects.create(

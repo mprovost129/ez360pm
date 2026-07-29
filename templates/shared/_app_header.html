@@ -7,22 +7,18 @@
                 <img class="product-logo" src="{% static 'images/ez360pm_logo.svg' %}" alt="EZ360PM">
             </picture>
         </a>
-        <div class="company-identity">
+        <div class="company-identity" title="{{ user.company.name }}">
             {% if user.company.logo %}
-            <img class="company-logo" src="{{ user.company.logo.url }}" alt="{% if user.company.name %}{{ user.company.name }} logo{% elif user.get_full_name %}{{ user.get_full_name }} logo{% else %}Company logo{% endif %}">
-            {% elif user.company.name %}
-            <span class="company-name">{{ user.company.name }}</span>
-            {% else %}
-            <span class="company-name">{{ user.get_full_name }}</span>
+            <img class="company-logo" src="{{ user.company.logo.url }}" alt="">
             {% endif %}
+            <span class="company-name">{{ user.company.name }}</span>
         </div>
     </div>
     {% include 'shared/_running_timer.html' %}
-    <div class="d-flex align-items-center gap-2 gap-sm-3">
+    <div class="d-flex align-items-center gap-3">
         {% if ai_assistant_enabled %}
         <button class="btn btn-sm btn-outline-primary assistant-open-button" type="button" data-bs-toggle="offcanvas" data-bs-target="#assistantDrawer" aria-controls="assistantDrawer">
-            <i class="bi bi-stars" aria-hidden="true"></i>
-            <span class="d-none d-md-inline">Assistant</span>
+            <i class="bi bi-stars" aria-hidden="true"></i> <span class="d-none d-md-inline">Assistant</span>
         </button>
         {% endif %}
         <span class="text-secondary small d-none d-sm-inline">{{ user.get_short_name|default:user.email }}</span>

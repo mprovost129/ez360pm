@@ -1,13 +1,6 @@
 from django import forms
-from django.contrib.auth.forms import AuthenticationForm
-from django.utils import timezone
 
 from .models import Company
-
-
-class EmailAuthenticationForm(AuthenticationForm):
-    def clean_username(self):
-        return self.cleaned_data["username"].strip().lower()
 
 
 class CompanySettingsForm(forms.ModelForm):
@@ -30,7 +23,6 @@ class CompanySettingsForm(forms.ModelForm):
             "default_invoice_terms",
             "default_invoice_due_days",
             "default_tax_rate",
-            "books_closed_through",
         )
         labels = {
             "accept_payments_default": "Allow Stripe payments by default",
@@ -38,37 +30,12 @@ class CompanySettingsForm(forms.ModelForm):
             "default_invoice_terms": "Default invoice terms",
             "default_invoice_due_days": "Default invoice payment period (days)",
             "default_tax_rate": "Default tax rate (%)",
-            "books_closed_through": "Financial records locked through",
         }
         widgets = {
             "default_proposal_terms": forms.Textarea(attrs={"rows": 4}),
             "default_invoice_terms": forms.Textarea(attrs={"rows": 4}),
             "default_tax_rate": forms.NumberInput(attrs={"step": "0.001", "min": "0"}),
-            "books_closed_through": forms.DateInput(attrs={"type": "date"}),
         }
-
-    def clean_books_closed_through(self):
-        close_date = self.cleaned_data.get("books_closed_through")
-        if close_date is None:
-            return close_date
-        if close_date > timezone.localdate():
-            raise forms.ValidationError("The financial lock date cannot be in the future.")
-        if self.instance.pk:
-            # Import here to avoid coupling the accounts model module to billing.
-            from documents.models import Payment
-
-            pending_fees = Payment.objects.filter(
-                document__company=self.instance,
-                method=Payment.Method.STRIPE,
-                fee_pending=True,
-                received_at__lte=close_date,
-            ).exists()
-            if pending_fees:
-                raise forms.ValidationError(
-                    "Resolve all pending Stripe fees through this date before "
-                    "locking the financial period."
-                )
-        return close_date
 
     def clean_logo(self):
         logo = self.cleaned_data.get("logo")

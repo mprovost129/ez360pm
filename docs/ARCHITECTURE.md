@@ -115,48 +115,10 @@ Services that allocate scarce values or change money use `transaction.atomic()`
 and `select_for_update()` on the affected rows. They are designed to be safe when
 the same request is repeated.
 
-## AI assistant boundary
-
-The assistant is an interpretation and orchestration layer, not a new source of
-business rules:
-
-```text
-command bar / conversation UI
-    -> company AI policy (enablement, model, capability and usage limits)
-    -> provider-neutral model adapter
-    -> registered typed tools with server-owned user/company context
-    -> dry-run and confirmation policy
-    -> existing transactional domain services
-    -> PostgreSQL
-```
-
-The model receives no direct ORM/database capability and cannot choose a Company
-ID. Before the provider call, the company AI policy must be enabled, acknowledged,
-within its request/cost allowance, and limited to an allowlisted model. Disabled
-risk categories are omitted from the provider tool list and rechecked when a
-pending confirmation executes. Read tools return minimal company-scoped projections. Write tools call the
-same services used by normal views, use idempotency keys, and create an auditable
-action attempt. Financial totals remain deterministic. Proposal, retainer, and final-invoice
-drafts call the existing document services and remain Draft until reviewed in the
-normal editor. V1.5 registers issue/send, proposal withdrawal, unpaid-invoice voiding,
-verified manual payment, project status, void-invoice time-release, and one-at-a-time
-client follow-up actions behind a fresh external-commit confirmation. Follow-up
-delivery uses the current public document link, enforces a configurable repeat
-interval, and records proposal/retainer/invoice reminder purpose for evidence.
-Execution re-locks and revalidates the selected records. Refunds, paid-invoice
-changes, deletion of financial history, scheduled reminders, and money movement
-remain outside the assistant.
-
-See [AI Assistant Roadmap](AI_ASSISTANT_ROADMAP.md) for phased TODOs and exit
-gates.
-Operational configuration and retention are documented in [AI Assistant Setup and Operations](AI_ASSISTANT_SETUP.md).
-
 ## State machines
 
-Transitions are explicit service actions. Project detail also exposes a guarded
-manual status override that calls `change_project_status`, confirms the change,
-preserves all history, and blocks closing states while a timer is running.
-Document lifecycle states are never changed through a generic dropdown.
+Transitions are explicit service actions; arbitrary status dropdown edits are not
+allowed once a record has left draft/lead state.
 
 ### Project
 
@@ -224,12 +186,9 @@ drifting. Proposal rich text is sanitized on input or before persistence and is
 treated as already-sanitized at rendering time.
 
 `DocumentDelivery` is a small supporting model needed by the specified “send
-history” screen. It records recipients, exact subject/optional message, and the result of every delivery attempt;
+history” screen. It records recipients and the result of every delivery attempt;
 `Document.sent_at` records public issue; `DocumentDelivery.sent_at` records a
-confirmed email delivery. AI delivery can only select a contact belonging to the
-document client, and stale document or recipient snapshots fail closed. Manual
-AI follow-ups are stored as a distinct delivery purpose and kind so later response
-or payment timing can be reviewed without treating correlation as causation.
+confirmed email delivery.
 
 PDF generation sits behind an adapter so the HTML-to-PDF library can be selected
 after a deployment-compatibility spike. Generated PDFs do not become the source
@@ -284,108 +243,6 @@ Payment Intent ID is the revenue-duplication guard required by the brief.
 PostgreSQL is required in tests that exercise database-specific constraints;
 SQLite is not an equivalent test backend for this application.
 
-## AI real-use refinement boundary
+## Optional AI rendering boundary
 
-V1.6 adds two local assistant support paths that do not call the model provider:
-
-- `assistant.insights.proactive_insights()` builds a bounded set of current-user,
-  company-scoped workflow conditions and applies user-specific dismissals.
-- `assistant.insights.usage_metrics()` aggregates the assistant's redacted
-  interaction, action-attempt, and operational-event records.
-
-The browser loads these values from authenticated JSON endpoints. They cannot
-execute a domain action. Suggestions are selected from a fixed server-owned
-library and only become an AI request after the user clicks one.
-
-
-## AI evaluation boundary
-
-V1.9 adds a separate evaluation layer around the existing assistant service. Contract checks inspect the registered tool definitions and provider adapter without calling OpenAI or reading company records. Live suites call the ordinary `run_assistant()` path for a controlled company user, record only tool names and operational metrics, and never confirm a write. An unexpected pending action is canceled and fails the case. Evaluation history is tenant-scoped; platform contract runs contain no company data.
-
-
-## AI controlled-use readiness
-
-V1.10 derives a company-scoped readiness report from deployment settings, the
-company AI policy, monthly usage, static contract runs, tool-free OpenAI
-connection runs, full read-only live baselines, recent interaction outcomes, and
-pending-confirmation hygiene. The readiness page never executes a business tool.
-The connection test calls the existing OpenAI provider adapter with an empty tool
-list and records its result through the existing evaluation and interaction
-models. Evaluation runs include a configuration fingerprint so current readiness
-cannot be satisfied by a passing result from an older model/tool/provider
-contract. No readiness result bypasses ordinary capability controls or action
-confirmation.
-
-## AI controlled-pilot boundary
-
-The optional assistant has a separate operational gate above the provider/tool
-layer:
-
-1. The deployment feature flag and Company AI policy must be enabled.
-2. The authenticated User must pass the Company's access mode: all users, staff
-   only, or an enabled `AIUserAccess` row.
-3. The Company must not be suspended by the manual or automatic circuit breaker.
-4. Request/cost limits and the existing tool-risk policy are checked.
-5. OpenAI receives only the registered tools allowed by the Company policy.
-6. Every write still uses the existing preview and confirmation boundary.
-
-A suspension cancels pending `AIActionAttempt` confirmations and blocks provider
-calls. It never disables the ordinary CRM, timer, document, payment, or reporting
-interfaces. Feedback and incident records are scoped to the same Company and exact
-interaction; critical incidents trip the same suspension mechanism.
-
-## AI draft-quality instrumentation
-
-Confirmed AI document-draft actions return an internal document identifier that is
-removed before the browser response is sent. The assistant creates a metadata-only
-`AIDocumentDraftReview` baseline after the business transaction succeeds. Signals
-observe the ordinary `Document`, `LineItem`, `InvoiceCredit`, and
-`DocumentDelivery` lifecycle and schedule post-commit snapshot comparisons. This
-keeps tracking independent of whether the user edits through a standard form, a
-domain service, or a later AI action. Tracking failures never roll back or report
-a successfully created business document as failed.
-
-## AI contextual usability boundary
-
-V1.15 adds bounded conversation and page context without widening model authority:
-
-1. The browser creates a random conversation UUID in session storage.
-2. The server fetches only recent completed `AIInteraction` summaries matching
-   the authenticated Company, User, and conversation UUID.
-3. Earlier summaries are labeled as redacted context and never satisfy explicit
-   current-message write intent.
-4. The browser may send its current URL path. Django resolves the path and
-   re-queries the referenced object through `request.user.company`.
-5. Only a minimal record type, ID, and label become context. Unsupported or
-   cross-company paths resolve to nothing.
-6. Pending confirmations remain ordinary `AIActionAttempt` rows and can be
-   resumed from the Action Center; the model is not called to restore them.
-
-
-## OpenAI request observability (V1.16)
-
-Each logical Responses API call is assigned a UUID before the network request and
-sent as `X-Client-Request-Id`. The related `AIInteraction` stores the ordered list
-of client-generated IDs and any request IDs returned by OpenAI. This keeps timeout
-and retry investigations possible without storing prompts or tool outputs in the
-diagnostic fields. Optional organization/project identifiers are deployment
-settings passed only to the official SDK.
-
-Mutable model aliases remain supported, but the readiness report warns that their
-behavior can change. Configuration fingerprints still force a new baseline after
-any model, instruction, tool, schema, SDK, or provider-path change.
-
-
-## Focused action orchestration (V1.17)
-
-Before an OpenAI request, the server compares the current message with the same
-explicit-write-intent rules used at tool execution. An unambiguous ordinary write
-receives a minimal registered-tool catalog and a one-call budget. The model cannot
-select a tool omitted from that request; the server verifies the returned tool name
-before invocation.
-
-The domain tool still prepares an ordinary `AIActionAttempt`. Once that pending
-action exists, orchestration stops and returns a deterministic review message. No
-second provider round is required. Ambiguous and multi-part requests keep the
-normal policy-filtered catalog. This optimization changes neither tenant scope nor
-confirmation authority.
+The assistant context processor is read-only. When the platform AI flag is disabled it does not query assistant policy tables. When AI is enabled but a company has no saved `AICompanySettings`, page rendering evaluates an unsaved policy built from deployment defaults. Creating a Company or User never provisions assistant rows automatically. Persistent policy creation occurs only through AI settings or an AI request, and selected-user access rows are created only through an explicit staff grant. When the platform flag is off, ordinary document signals also skip AI draft-quality tracking before any assistant query is scheduled.

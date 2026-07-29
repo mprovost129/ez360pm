@@ -6,7 +6,7 @@ The authenticated application uses one persistent shell:
 
 - **Top bar:** company identity, current timer, user menu
 - **Sidebar:** Quick note, Dashboard, Clients, Projects, Proposals, Invoices,
-  Time, Revenue & Fees, Settings
+  Time, Revenue, Settings
 - **Main region:** page title, primary action, filters/attention summary, content
 - **Narrow screens:** sidebar collapses; quick note and timer remain one-tap
   actions
@@ -61,7 +61,7 @@ UUID token.
 | Proposal detail | prepare and manage agreement | preview/send | edit draft, accept history, withdraw |
 | Invoice detail | issue and reconcile a bill | preview/send or record payment | apply credit, void, release time |
 | Public document | let client review/respond/pay | accept or pay | decline proposal, download PDF |
-| Revenue & Fees | reconcile annual cash receipts, Stripe fees, and adjustments | choose period/method/fee status or export CSV | filter to pending fees, inspect latest retry result, retry fees, print, open invoice source |
+| Revenue | verify received cash | choose period | open payment/invoice source |
 | Settings | maintain document identity/defaults | save company settings | verify integrations |
 
 ## Core workflow map
@@ -83,10 +83,8 @@ flowchart LR
     M --> N[Explicit project completion]
 ```
 
-The Project detail page is the workflow hub. A compact, guarded status selector
-is visible in the page heading beside Edit project details; status is not part of
-the project-detail edit form. Its primary workflow button changes with state
-rather than presenting every possible action at once:
+The Project detail page is the workflow hub. Its primary button changes with
+state rather than presenting every possible action at once:
 
 | Project condition | Primary next action |
 | --- | --- |
@@ -219,146 +217,3 @@ never offer another Checkout Session.
 - Timer controls and quick capture meet touch-target sizing.
 - Public documents use semantic headings and print without authenticated shell UI.
 - Confirmation dialogs return focus to the triggering control when canceled.
-
-## AI-assisted document drafting
-
-The assistant may gather company-scoped project context and prepare a financial
-**draft** only after a visible confirmation card.
-
-### Proposal draft
-
-1. Resolve one project and gather company defaults.
-2. Present the proposed scope sections, pricing lines, dates, and calculated
-   totals.
-3. Confirm creates a normal Draft proposal through the existing services.
-4. The browser opens the standard proposal editor for review.
-5. No issue, public access, recipient selection, or delivery attempt occurs.
-
-### Retainer draft
-
-1. Resolve one accepted proposal.
-2. Show accepted total, existing retainers, proposed percentage/fixed amount,
-   dates, and payment setting.
-3. Confirm creates a normal Draft retainer through the accepted-proposal service.
-4. The standard invoice editor remains the only place to review and later issue.
-
-### Final invoice draft
-
-1. Resolve one project and eligible unbilled time.
-2. For hourly projects, show selected entries, grouping, hours, and client-facing
-   descriptions. Original TimeEntry descriptions remain unchanged.
-3. For fixed-fee projects, use the stored project fee.
-4. Show each paid retainer credit and the resulting draft balance.
-5. Confirm calls the existing time-attachment and credit services, then opens the
-   standard invoice editor.
-
-### Revise an existing draft
-
-1. The user explicitly asks to revise a proposal or invoice and identifies the
-   draft by document number or an unambiguous project/client reference.
-2. The assistant reads only a company-owned document with `status=draft` and
-   returns the current editable fields and safe line identifiers.
-3. Proposal revisions may replace sanitized scope sections and pricing lines. The
-   confirmation shows the prior and proposed total.
-4. Invoice revisions may change issue/due dates, terms, internal notes, online
-   payment setting, and selected client-facing line descriptions. Rates,
-   quantities, taxes, credits, time-entry links, and totals are preserved.
-5. Confirmation rechecks a metadata snapshot. Any intervening normal-UI edit
-   invalidates the action.
-6. A successful revision remains Draft and opens the normal editor. It is not
-   issued, made public, or emailed.
-
-V1.5 can prepare issue, issue-and-send, and resend actions after the user identifies
-a reviewed document and an eligible client contact. The assistant renders a final
-confirmation showing the recipient, amounts, dates, payment availability, email
-wording, and resulting state. The confirmation is invalidated by any document or
-recipient change. Refunds and paid-invoice modifications remain unavailable.
-
-## Assistant refinement screens
-
-### Assistant drawer alerts
-
-1. Opening the drawer requests local workflow alerts and fixed command suggestions.
-2. Alerts link to the normal EZ360PM record and can be dismissed temporarily.
-3. Dismissal does not change the client, project, timer, document, or payment.
-4. Clicking a command sends its fixed prompt through the ordinary assistant path.
-
-### AI usage and reliability
-
-The drawer links to a scoped report showing request volume, completion/failure,
-estimated provider cost, latency, action outcomes, refinement events, and
-capability-level prepared/completed/canceled/failed counts.
-
-
-### AI company settings
-
-1. Company settings links to the dedicated AI settings screen.
-2. The owner selects an allowlisted OpenAI model, action categories, proactive
-   alerts, request/cost allowances, and read-only retention behavior.
-3. Enabling AI requires acknowledging the in-app data-processing notice.
-4. Saving a disabled action category removes those tools from future OpenAI calls.
-5. A pending confirmation in a newly disabled category is blocked before execution.
-6. The usage screen shows current-month company allowances and exports a
-   metadata-only audit CSV.
-
-
-## AI evaluation history
-
-The AI Evaluation History screen is read-only. It shows the latest platform contract result plus the signed-in company’s live OpenAI evaluation runs. Each case displays the tools selected, pass/fail status, and latency. Running evaluations remains a deployment/management-command action so an ordinary browser request cannot trigger a long or costly suite.
-
-## AI controlled pilot operations
-
-1. A staff user opens **AI Pilot Operations** from AI Settings, Readiness, or Usage.
-2. The screen shows the current suspension state, rolling failure count, feedback,
-   open incidents, and each company user's selected/effective access.
-3. In Selected users mode, staff can grant or revoke one user at a time. Every
-   update is company-scoped.
-4. Any staff user can emergency-pause AI with a reason. This blocks new assistant
-   calls, cancels every pending confirmation, and leaves ordinary EZ360PM screens available.
-5. A user can rate an assistant response or report an issue from the drawer.
-6. Critical incidents pause AI immediately. Staff review and resolve the incident,
-   then separately resume AI after deciding it is safe.
-7. The readiness screen fails while AI is suspended, the signed-in user lacks
-   access, or a high/critical incident remains open. Limited feedback remains a
-   warning rather than a false readiness pass.
-
-## AI draft quality
-
-The assistant drawer and AI usage screen link to a company-scoped Draft Quality
-report. It shows AI-draft adoption, used-as-is rate, average revision events,
-average time to issue, stale active drafts, frequently changed field categories,
-and recent document outcomes. Users may open surviving documents or export a
-metadata-only CSV. Deleted drafts remain as non-content audit rows.
-
-
-## AI manual client follow-ups
-
-1. The user asks the assistant to follow up on a specific open proposal, retainer,
-   invoice, or overdue invoice.
-2. A read tool returns current status, balance/due date, last activity, previous
-   follow-ups, and only contacts belonging to the document client.
-3. The assistant prepares one subject and client-facing message.
-4. The external-commit card shows the exact document, recipient, wording, timing,
-   and follow-up kind. A recent successful follow-up inside the configured interval
-   blocks preparation.
-5. Confirmation rechecks the complete document/delivery snapshot and recipient.
-6. Email delivery occurs through the ordinary delivery service and preserves a
-   Client follow-up record whether it succeeds or fails. No schedule or repeating
-   task is created.
-7. The AI Follow-up Evidence screen reports delivery and later proposal-response or
-   payment timing for the company. The report explicitly avoids causal claims.
-
-## AI conversation, current page, and Action Center
-
-1. The assistant drawer maintains one browser-session conversation identifier.
-2. Follow-up questions can use a bounded set of recent redacted summaries from
-   that same user/company conversation.
-3. **New conversation** clears the visible transcript and starts a new identifier.
-4. When the user says “this project,” “this client,” “this proposal,” or “this
-   invoice,” EZ360PM resolves the current route and verifies the record through
-   the company boundary before adding minimal context.
-5. Prepared confirmations are reloaded whenever the drawer opens.
-6. **Action Center** lists the user's pending confirmations and recent outcomes so
-   closing the drawer or navigating does not lose the review step.
-7. Expired actions are closed automatically. External commits still require the
-   final-review checkbox.

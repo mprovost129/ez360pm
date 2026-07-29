@@ -75,6 +75,17 @@ def default_policy_values():
     }
 
 
+def default_policy_for_company(company):
+    """Return an unsaved policy using the deployment defaults.
+
+    This is intended for read-only UI decisions such as whether to render the
+    assistant drawer. It avoids creating an ``AICompanySettings`` row merely
+    because an ordinary authenticated page was displayed.
+    """
+
+    return AICompanySettings(company=company, **default_policy_values())
+
+
 def get_company_policy(company, *, create=True):
     if hasattr(company, "ai_settings"):
         try:

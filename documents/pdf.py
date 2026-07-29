@@ -8,7 +8,6 @@ from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import inch
 from reportlab.platypus import (
-    Image,
     Paragraph,
     SimpleDocTemplate,
     Spacer,
@@ -28,59 +27,6 @@ def _pdf_rich_text(value):
     return escape(strip_tags(value)).replace("\n", "<br/>")
 
 
-def _company_logo(company, *, max_width=1.35 * inch, max_height=0.7 * inch):
-    if not company.logo:
-        return None
-    try:
-        company.logo.open("rb")
-        image_data = BytesIO(company.logo.read())
-    except (OSError, ValueError):
-        return None
-    finally:
-        try:
-            company.logo.close()
-        except (OSError, ValueError):
-            pass
-    try:
-        image = Image(image_data)
-        scale = min(
-            max_width / image.imageWidth,
-            max_height / image.imageHeight,
-            1,
-        )
-        image.drawWidth = image.imageWidth * scale
-        image.drawHeight = image.imageHeight * scale
-        return image
-    except (OSError, ValueError):
-        return None
-
-
-def _company_pdf_identity(company, styles):
-    company_lines = [company.name]
-    company_lines.extend(
-        value
-        for value in (
-            company.address_1,
-            company.address_2,
-            " ".join(
-                part
-                for part in (company.city, company.state, company.postal_code)
-                if part
-            ),
-            company.phone,
-            company.email,
-        )
-        if value
-    )
-    details = Paragraph(
-        "<br/>".join(escape(line) for line in company_lines), styles["Normal"]
-    )
-    logo = _company_logo(company)
-    if logo is None:
-        return details
-    return Table([[logo, details]], colWidths=[1.5 * inch, 3.15 * inch])
-
-
 def build_invoice_pdf(invoice):
     buffer = BytesIO()
     document = SimpleDocTemplate(
@@ -97,10 +43,30 @@ def build_invoice_pdf(invoice):
     right = ParagraphStyle("Right", parent=styles["Normal"], alignment=TA_RIGHT)
     story = []
 
+    company_lines = [invoice.company.name]
+    company_lines.extend(
+        value
+        for value in (
+            invoice.company.address_1,
+            invoice.company.address_2,
+            " ".join(
+                part
+                for part in (
+                    invoice.company.city,
+                    invoice.company.state,
+                    invoice.company.postal_code,
+                )
+                if part
+            ),
+            invoice.company.phone,
+            invoice.company.email,
+        )
+        if value
+    )
     header = Table(
         [
             [
-                _company_pdf_identity(invoice.company, styles),
+                Paragraph("<br/>".join(escape(line) for line in company_lines), styles["Normal"]),
                 Paragraph(f"<b>INVOICE</b><br/>{escape(invoice.number)}", right),
             ]
         ],
@@ -206,8 +172,14 @@ def build_invoice_pdf(invoice):
                 Paragraph(escape(invoice.terms).replace("\n", "<br/>"), styles["Normal"]),
             ]
         )
-    # ``Document.notes`` is explicitly an internal-only authoring field. It
-    # must never be rendered into the customer PDF.
+    if invoice.notes:
+        story.extend(
+            [
+                Spacer(1, 0.2 * inch),
+                Paragraph("<b>Notes</b>", styles["Normal"]),
+                Paragraph(escape(invoice.notes).replace("\n", "<br/>"), styles["Normal"]),
+            ]
+        )
     document.build(story)
     return buffer.getvalue()
 
@@ -230,7 +202,7 @@ def build_proposal_pdf(proposal):
         Table(
             [
                 [
-                    _company_pdf_identity(proposal.company, styles),
+                    Paragraph(f"<b>{escape(proposal.company.name)}</b>", styles["Title"]),
                     Paragraph(f"<b>PROPOSAL</b><br/>{escape(proposal.number)}", right),
                 ]
             ],

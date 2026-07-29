@@ -323,9 +323,12 @@ from being forwarded to the provider. Keep
 
 ## V1.8 company controls and privacy
 
-The platform feature flag remains the outer boundary. Each company also has an
-`AICompanySettings` record. The assistant is available only when both levels are
-enabled and the company has acknowledged the in-app data-processing notice.
+The platform feature flag remains the outer boundary. Each company may have an
+`AICompanySettings` record, provisioned lazily by the AI settings screen or the first
+assistant request. Creating a Company or User does not create assistant records.
+Selected-user access rows are created only through an explicit staff grant. The
+assistant is available only when both platform and company levels are enabled and
+the company has acknowledged the in-app data-processing notice.
 
 The company settings screen controls:
 
@@ -456,3 +459,16 @@ Set the browser timeout longer than the worker timeout:
 ```env
 AI_BROWSER_REQUEST_TIMEOUT_SECONDS=195
 ```
+
+
+## Optional AI configuration safety
+
+AI-only environment values are parsed defensively. A malformed number, decimal,
+boolean, or `AI_MODEL_PRICING_JSON` value no longer prevents Django from importing
+settings while the assistant is globally disabled. `python manage.py check --deploy`
+reports those inactive values as `assistant.W007` warnings.
+
+When `AI_ASSISTANT_ENABLED=true`, the same parse problems are deployment-blocking
+`assistant.E028` errors. The assistant continues to fail closed until the environment
+values are corrected. Only `AI_PROVIDER=openai` is supported; any other provider is
+reported as `assistant.E029`.

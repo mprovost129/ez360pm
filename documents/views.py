@@ -20,7 +20,6 @@ from .forms import (
     InvoiceEditForm,
     InvoiceFilterForm,
     LineItemForm,
-    PaymentAdjustmentForm,
     PaymentForm,
     TimeAttachmentForm,
     VoidInvoiceForm,
@@ -135,7 +134,7 @@ class InvoiceDetailView(LoginRequiredMixin, CompanyScopedQuerysetMixin, DetailVi
             .prefetch_related(
                 "project__client__contacts",
                 "line_items__time_entries",
-                "payments__adjustments",
+                "payments",
                 "credits_received__source_invoice",
                 "deliveries",
             )
@@ -144,10 +143,6 @@ class InvoiceDetailView(LoginRequiredMixin, CompanyScopedQuerysetMixin, DetailVi
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context["show_internal_notes"] = True
-        context["ai_draft_review"] = (
-            self.object.status == Document.Status.DRAFT
-            and self.request.GET.get("ai_draft") == "1"
-        )
         if self.object.status == Document.Status.DRAFT:
             context["details_form"] = InvoiceEditForm(
                 company=self.request.user.company,
@@ -187,52 +182,11 @@ class InvoiceDetailView(LoginRequiredMixin, CompanyScopedQuerysetMixin, DetailVi
                 context["invoice_charge_total"] = (
                     self.object.subtotal + self.object.tax_total
                 )
-                other_final_invoices = (
-                    Document.objects.for_company(self.request.user.company)
-                    .filter(
-                        project=self.object.project,
-                        doc_type=Document.Type.INVOICE,
-                        invoice_kind=Document.InvoiceKind.FINAL,
-                    )
-                    .exclude(pk=self.object.pk)
-                    .exclude(status=Document.Status.VOID)
+                context["pricing_differs_from_proposal"] = bool(
+                    accepted_proposal
+                    and accepted_proposal.accepted_total
+                    != context["invoice_charge_total"]
                 )
-                context["other_final_invoice_total"] = sum(
-                    (
-                        invoice.subtotal + invoice.tax_total
-                        for invoice in other_final_invoices
-                    ),
-                    Decimal("0.00"),
-                )
-                context["cumulative_final_invoice_total"] = (
-                    context["invoice_charge_total"]
-                    + context["other_final_invoice_total"]
-                )
-                if accepted_proposal:
-                    context["pricing_reference_total"] = accepted_proposal.accepted_total
-                    context["pricing_reference_label"] = (
-                        f"accepted proposal {accepted_proposal.number}"
-                    )
-                elif (
-                    self.object.project.billing_type
-                    == self.object.project.BillingType.FLAT_FEE
-                    and self.object.project.fixed_fee is not None
-                ):
-                    context["pricing_reference_total"] = self.object.project.fixed_fee
-                    context["pricing_reference_label"] = "project fixed fee"
-                else:
-                    context["pricing_reference_total"] = None
-                    context["pricing_reference_label"] = ""
-                context["pricing_differs_from_reference"] = bool(
-                    context["pricing_reference_total"] is not None
-                    and context["pricing_reference_total"]
-                    != context["cumulative_final_invoice_total"]
-                )
-                # Retain the previous context key for saved template
-                # customizations while broadening the check beyond proposals.
-                context["pricing_differs_from_proposal"] = context[
-                    "pricing_differs_from_reference"
-                ]
         return context
 
 
@@ -495,60 +449,19 @@ class PaymentUpdateView(PaymentViewMixin, UpdateView):
     extra_context = {"page_title": "Edit payment", "submit_label": "Save payment"}
 
     def get_queryset(self):
-        return self.invoice.payments.exclude(method=Payment.Method.STRIPE).filter(adjustments__isnull=True)
+        return self.invoice.payments.exclude(method=Payment.Method.STRIPE)
 
 
 class PaymentDeleteView(LoginRequiredMixin, View):
     def post(self, request, invoice_pk, payment_pk):
         invoice = scoped_invoice(request, invoice_pk)
         payment = get_object_or_404(
-            invoice.payments.exclude(method=Payment.Method.STRIPE).filter(adjustments__isnull=True),
+            invoice.payments.exclude(method=Payment.Method.STRIPE),
             pk=payment_pk,
         )
-        try:
-            delete_payment(payment=payment)
-        except ValidationError as exc:
-            messages.error(request, "; ".join(exc.messages))
-        else:
-            messages.success(request, "Payment removed and invoice status recalculated.")
+        delete_payment(payment=payment)
+        messages.success(request, "Payment removed and invoice status recalculated.")
         return redirect("documents:invoice-detail", pk=invoice.pk)
-
-
-class PaymentAdjustmentCreateView(LoginRequiredMixin, CreateView):
-    form_class = PaymentAdjustmentForm
-    template_name = "shared/form.html"
-    payment = None
-    invoice = None
-    extra_context = {
-        "page_title": "Record refund or adjustment",
-        "submit_label": "Record adjustment",
-    }
-
-    def dispatch(self, request, *args, **kwargs):
-        self.invoice = scoped_invoice(request, kwargs["invoice_pk"])
-        self.payment = get_object_or_404(
-            self.invoice.payments.select_related("document"),
-            pk=kwargs["payment_pk"],
-        )
-        return super().dispatch(request, *args, **kwargs)
-
-    def get_form_kwargs(self):
-        kwargs = super().get_form_kwargs()
-        kwargs["payment"] = self.payment
-        return kwargs
-
-    def form_valid(self, form):
-        try:
-            form.save()
-        except ValidationError as exc:
-            form.add_error(None, "; ".join(exc.messages))
-            return self.form_invalid(form)
-        messages.success(
-            self.request,
-            "Adjustment recorded. The original payment remains unchanged.",
-        )
-        return redirect("documents:invoice-detail", pk=self.invoice.pk)
-
 
 
 class InvoiceCreditCreateView(LoginRequiredMixin, FormView):

@@ -148,23 +148,7 @@ class TimerStartView(LoginRequiredMixin, FormView):
             form.add_error(None, exc.message)
             return self.form_invalid(form)
         messages.success(self.request, "Timer started.")
-        return redirect(_safe_next(self.request))
-
-    def form_invalid(self, form):
-        # Project pages submit a compact timer form and should remain in context
-        # even if a race or validation error prevents the timer from starting.
-        if self.request.POST.get("next"):
-            errors = [
-                str(message)
-                for messages_for_field in form.errors.values()
-                for message in messages_for_field
-            ]
-            messages.error(
-                self.request,
-                errors[0] if errors else "The timer could not be started.",
-            )
-            return redirect(_safe_next(self.request))
-        return super().form_invalid(form)
+        return redirect("projects:time-list")
 
 
 @login_required

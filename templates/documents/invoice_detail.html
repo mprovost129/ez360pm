@@ -1,5 +1,4 @@
 {% extends 'base.html' %}
-{% load core_extras %}
 
 {% block title %}{{ invoice.number }} | EZ360PM{% endblock %}
 
@@ -14,9 +13,6 @@
     </div>
 </div>
 
-{% if ai_draft_review %}
-<div class="workflow-warning" role="status"><strong>AI-prepared draft:</strong> Review the customer wording, pricing, dates, terms, time, and credits before issuing. The assistant has not activated a public link or sent this document.</div>
-{% endif %}
 {% if invoice.status != 'draft' %}<div class="public-link"><strong>Public link:</strong> <a href="{% url 'public-documents:view' invoice.public_token %}" target="_blank">{{ request.scheme }}://{{ request.get_host }}{% url 'public-documents:view' invoice.public_token %}</a></div>{% endif %}
 {% if invoice.viewed_at %}<p class="access-note"><strong>Link first opened:</strong> {{ invoice.viewed_at|date:'M j, Y g:i a' }}. Email security scanners can open links; payment is the confirmed customer action.</p>{% endif %}
 
@@ -38,7 +34,7 @@
 {% include 'documents/_draft_details_editor.html' with editor_action=details_action editor_heading='Invoice settings' %}
 {% endif %}
 
-{% if pricing_differs_from_reference %}<div class="workflow-warning" role="status"><strong>Pricing check:</strong> {% if other_final_invoice_total %}This invoice and other non-void final invoices total ${{ cumulative_final_invoice_total }} including tax{% else %}This invoice has ${{ invoice_charge_total }} in charges including tax{% endif %}; {{ pricing_reference_label }} is ${{ pricing_reference_total }}. Review the difference before issuing.</div>{% endif %}
+{% if pricing_differs_from_proposal %}<div class="workflow-warning" role="status"><strong>Pricing check:</strong> This invoice has ${{ invoice_charge_total }} in charges including tax; accepted proposal {{ accepted_proposal.number }} was ${{ accepted_proposal.accepted_total }}. Review the difference before issuing.</div>{% endif %}
 
 {% include 'documents/_invoice_document.html' %}
 
@@ -57,7 +53,7 @@
 </section>
 {% endif %}
 
-{% if invoice.deliveries.all %}<section class="content-card invoice-panel"><h2>Delivery history</h2>{% for delivery in invoice.deliveries.all %}<div class="detail-row"><span><strong>{{ delivery.recipient_email }}</strong><small>{{ delivery.get_purpose_display }}{% if delivery.follow_up_kind %} · {{ delivery.get_follow_up_kind_display }}{% endif %} · {{ delivery.created_at|date:'M j, Y g:i a' }}</small></span><span>{{ delivery.get_status_display }}{% if delivery.error_code %}<small>{{ delivery.failure_message }}</small>{% endif %}{% if delivery.purpose == 'client_document' or delivery.purpose == 'client_follow_up' or delivery.status == 'failed' or delivery.status == 'pending' %}<form class="inline-form" method="post" action="{% url 'documents:delivery-resend' invoice.pk delivery.pk %}" data-confirm="{% if delivery.status == 'failed' %}Retry{% elif delivery.status == 'pending' %}Send{% else %}Resend{% endif %} this email to {{ delivery.recipient_email }}?">{% csrf_token %}<button class="link-button" type="submit">{% if delivery.status == 'failed' %}Retry{% elif delivery.status == 'pending' %}Send{% else %}Resend{% endif %}</button></form>{% endif %}</span></div>{% endfor %}</section>{% endif %}
+{% if invoice.deliveries.all %}<section class="content-card invoice-panel"><h2>Delivery history</h2>{% for delivery in invoice.deliveries.all %}<div class="detail-row"><span><strong>{{ delivery.recipient_email }}</strong><small>{{ delivery.get_purpose_display }} · {{ delivery.created_at|date:'M j, Y g:i a' }}</small></span><span>{{ delivery.get_status_display }}{% if delivery.error_code %}<small>{{ delivery.failure_message }}</small>{% endif %}{% if delivery.purpose == 'client_document' %}<form class="inline-form" method="post" action="{% url 'documents:delivery-resend' invoice.pk delivery.pk %}" data-confirm="{% if delivery.status == 'failed' %}Retry{% else %}Resend{% endif %} this invoice email to {{ delivery.recipient_email }}?">{% csrf_token %}<button class="link-button" type="submit">{% if delivery.status == 'failed' %}Retry{% else %}Resend{% endif %}</button></form>{% endif %}</span></div>{% endfor %}</section>{% endif %}
 
 {% if invoice.credits_received.all or credit_form %}
 <section class="content-card invoice-panel">
@@ -69,26 +65,7 @@
 
 <section class="content-card invoice-panel">
     <div class="section-heading"><h2>Payments</h2></div>
-    {% for payment in invoice.payments.all %}
-    <div class="payment-history">
-        <div class="detail-row">
-            <span>
-                <strong>${{ payment.amount }} · {{ payment.get_method_display }}</strong>
-                <small>{{ payment.received_at|date:'M j, Y' }}{% if payment.reference %} · {{ payment.reference }}{% endif %}{% if payment.fee_pending %} · Stripe fee awaiting provider{% else %} · ${{ payment.fee_amount }} fee · ${{ payment.net_amount }} net after adjustments{% endif %}</small>
-            </span>
-            <span>
-                <a href="{% url 'documents:payment-adjustment-create' invoice.pk payment.pk %}">Refund / adjust</a>
-                {% if payment.method != 'stripe' and not payment.has_adjustments %} · <a href="{% url 'documents:payment-update' invoice.pk payment.pk %}">Edit</a> · <form class="inline-form" method="post" action="{% url 'documents:payment-delete' invoice.pk payment.pk %}" data-confirm="Remove this ${{ payment.amount }} payment? Revenue and the invoice balance will be recalculated.">{% csrf_token %}<button class="link-button" type="submit">Remove</button></form>{% endif %}
-            </span>
-        </div>
-        {% for adjustment in payment.adjustments.all %}
-        <div class="payment-adjustment">
-            <span><strong>{{ adjustment.get_adjustment_type_display }} · {{ adjustment.amount|signed_money }}</strong><small>{{ adjustment.effective_at|date:'M j, Y' }}{% if adjustment.reference %} · {{ adjustment.reference }}{% endif %}{% if adjustment.affects_processing_fees %} · Processing fee only{% elif not adjustment.affects_invoice_balance %} · Revenue only{% endif %}</small></span>
-            <span class="status-badge">Recorded</span>
-        </div>
-        {% endfor %}
-    </div>
-    {% empty %}<p class="muted">No payments recorded.</p>{% endfor %}
+    {% for payment in invoice.payments.all %}<div class="detail-row"><span><strong>${{ payment.amount }} · {{ payment.get_method_display }}</strong><small>{{ payment.received_at|date:'M j, Y' }}{% if payment.reference %} · {{ payment.reference }}{% endif %}{% if payment.fee_pending %} · Stripe fee awaiting provider{% elif payment.fee_amount %} · ${{ payment.fee_amount }} fee · ${{ payment.net_amount }} net{% endif %}</small></span>{% if payment.method != 'stripe' %}<span><a href="{% url 'documents:payment-update' invoice.pk payment.pk %}">Edit</a> · <form class="inline-form" method="post" action="{% url 'documents:payment-delete' invoice.pk payment.pk %}" data-confirm="Remove this ${{ payment.amount }} payment? Revenue and the invoice balance will be recalculated.">{% csrf_token %}<button class="link-button" type="submit">Remove</button></form></span>{% endif %}</div>{% empty %}<p class="muted">No payments recorded.</p>{% endfor %}
 </section>
 
 {% if invoice.status == 'void' %}<section class="content-card invoice-panel warning-panel"><h2>Void invoice</h2><p>{{ invoice.void_reason|default:'No reason recorded.' }}</p><p>Time remains invoiced to avoid accidental double billing.</p><form method="post" action="{% url 'documents:invoice-release-time' invoice.pk %}" data-confirm="Release all attached time for rebilling? The entries will become available to add to another invoice.">{% csrf_token %}<button class="btn btn-warning" type="submit">Release time for rebilling</button></form></section>{% endif %}

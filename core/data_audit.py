@@ -2,17 +2,10 @@ from dataclasses import asdict, dataclass
 from datetime import timedelta
 from decimal import Decimal
 
-from django.db.models import QuerySet, Sum
+from django.db.models import QuerySet
 from django.utils import timezone
 
-from documents.models import (
-    Document,
-    DocumentDelivery,
-    InvoiceCredit,
-    Payment,
-    PaymentAdjustment,
-    PaymentFeeReconciliationAttempt,
-)
+from documents.models import Document, DocumentDelivery, InvoiceCredit
 from documents.services import money
 from projects.models import TimeEntry
 
@@ -118,7 +111,9 @@ def _document_issues(document):
             )
 
     if document.doc_type == Document.Type.INVOICE:
-        amount_paid = money(document.amount_paid)
+        amount_paid = money(
+            sum((payment.amount for payment in document.payments.all()), Decimal("0"))
+        )
         if amount_paid > document.total:
             issues.append(
                 AuditIssue(
@@ -126,7 +121,7 @@ def _document_issues(document):
                     "invoice_overpaid",
                     "Document",
                     document.pk,
-                    f"Net customer payments total {amount_paid}; invoice total is {document.total}.",
+                    f"Payments total {amount_paid}; invoice total is {document.total}.",
                 )
             )
         if document.status != Document.Status.VOID:
@@ -269,138 +264,6 @@ def _time_entry_issues(company_id=None):
     return issues
 
 
-def _payment_and_adjustment_issues(company_id=None):
-    payments = Payment.objects.select_related("document")
-    adjustments = PaymentAdjustment.objects.select_related(
-        "payment",
-        "payment__document",
-    )
-    fee_attempts = PaymentFeeReconciliationAttempt.objects.select_related(
-        "payment",
-        "payment__document",
-    )
-    if company_id is not None:
-        payments = payments.filter(document__company_id=company_id)
-        adjustments = adjustments.filter(company_id=company_id)
-        fee_attempts = fee_attempts.filter(company_id=company_id)
-    issues = []
-    for payment in payments:
-        if payment.document.doc_type != Document.Type.INVOICE:
-            issues.append(
-                AuditIssue(
-                    "error",
-                    "payment_document_type",
-                    "Payment",
-                    payment.pk,
-                    "Payment is attached to a non-invoice document.",
-                )
-            )
-        if payment.method == Payment.Method.STRIPE and not payment.stripe_payment_intent_id:
-            issues.append(
-                AuditIssue(
-                    "error",
-                    "stripe_payment_intent",
-                    "Payment",
-                    payment.pk,
-                    "Stripe payment has no Payment Intent ID.",
-                )
-            )
-        if payment.fee_pending:
-            issues.append(
-                AuditIssue(
-                    "warning",
-                    "stripe_fee_pending",
-                    "Payment",
-                    payment.pk,
-                    "Stripe processing fee is still awaiting reconciliation.",
-                )
-            )
-        if payment.fee_current_amount < 0 or payment.fee_amount < 0:
-            issues.append(
-                AuditIssue(
-                    "error",
-                    "payment_fee_negative",
-                    "Payment",
-                    payment.pk,
-                    "Stored processing fee cannot be negative.",
-                )
-            )
-        fee_change_total = payment.adjustments.filter(
-            affects_processing_fees=True
-        ).aggregate(value=Sum("amount"))["value"] or Decimal("0.00")
-        expected_current_fee = money(payment.fee_amount - fee_change_total)
-        if payment.fee_current_amount != expected_current_fee:
-            issues.append(
-                AuditIssue(
-                    "error",
-                    "payment_fee_marker",
-                    "Payment",
-                    payment.pk,
-                    "Current Stripe fee does not reconcile to the fee adjustment ledger.",
-                )
-            )
-    for adjustment in adjustments:
-        if adjustment.payment.document.company_id != adjustment.company_id:
-            issues.append(
-                AuditIssue(
-                    "error",
-                    "adjustment_company",
-                    "PaymentAdjustment",
-                    adjustment.pk,
-                    "Adjustment and payment do not share a company.",
-                )
-            )
-        if adjustment.amount == 0:
-            issues.append(
-                AuditIssue(
-                    "error",
-                    "adjustment_zero",
-                    "PaymentAdjustment",
-                    adjustment.pk,
-                    "Adjustment amount is zero.",
-                )
-            )
-        fee_types = {
-            PaymentAdjustment.Type.FEE_REFUND,
-            PaymentAdjustment.Type.FEE_ADJUSTMENT,
-        }
-        if (adjustment.adjustment_type in fee_types) != adjustment.affects_processing_fees:
-            issues.append(
-                AuditIssue(
-                    "error",
-                    "adjustment_fee_classification",
-                    "PaymentAdjustment",
-                    adjustment.pk,
-                    "Processing-fee classification does not match the adjustment type.",
-                )
-            )
-    for attempt in fee_attempts:
-        if attempt.payment.document.company_id != attempt.company_id:
-            issues.append(
-                AuditIssue(
-                    "error",
-                    "fee_attempt_company",
-                    "PaymentFeeReconciliationAttempt",
-                    attempt.pk,
-                    "Fee reconciliation attempt and payment do not share a company.",
-                )
-            )
-        if (
-            attempt.status == PaymentFeeReconciliationAttempt.Status.RESOLVED
-            and attempt.observed_fee is None
-        ):
-            issues.append(
-                AuditIssue(
-                    "error",
-                    "fee_attempt_missing_amount",
-                    "PaymentFeeReconciliationAttempt",
-                    attempt.pk,
-                    "Resolved fee reconciliation attempt has no observed fee.",
-                )
-            )
-    return issues
-
-
 def _delivery_issues(company_id=None, pending_minutes=15):
     cutoff = timezone.now() - timedelta(minutes=pending_minutes)
     queryset = DocumentDelivery.objects.filter(
@@ -427,7 +290,6 @@ def audit_data(*, company_id=None, pending_minutes=15):
         issues.extend(_document_issues(document))
     issues.extend(_credit_issues(company_id=company_id))
     issues.extend(_time_entry_issues(company_id=company_id))
-    issues.extend(_payment_and_adjustment_issues(company_id=company_id))
     issues.extend(
         _delivery_issues(company_id=company_id, pending_minutes=pending_minutes)
     )

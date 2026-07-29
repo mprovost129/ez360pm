@@ -4,13 +4,14 @@
     const input = document.querySelector("[data-assistant-input]");
     const submit = document.querySelector("[data-assistant-submit]");
     const drawer = document.getElementById("assistantDrawer");
-    const insightsContainer = document.querySelector("[data-assistant-insights]");
-    const suggestionsContainer = document.querySelector("[data-assistant-suggestions]");
-    const newConversation = document.querySelector("[data-assistant-new-conversation]");
-    const actionCenterLink = document.querySelector("[data-assistant-action-center-link]");
+    if (!form || !transcript || !input || !submit || !drawer) return;
+
+    const insightsContainer = drawer.querySelector("[data-assistant-insights]");
+    const suggestionsContainer = drawer.querySelector("[data-assistant-suggestions]");
+    const newConversation = drawer.querySelector("[data-assistant-new-conversation]");
+    const actionCenterLink = drawer.querySelector("[data-assistant-action-center-link]");
     const clientTemplateButton = drawer.querySelector("[data-assistant-client-template]");
     const clientTemplateSource = drawer.querySelector("[data-assistant-client-template-source]");
-    if (!form || !transcript || !input || !submit || !drawer) return;
 
     const csrfToken = form.querySelector('[name="csrfmiddlewaretoken"]')?.value || "";
     const initialTranscript = transcript.innerHTML;
