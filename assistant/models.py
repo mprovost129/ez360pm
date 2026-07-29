@@ -193,6 +193,7 @@ class AIActionAttempt(models.Model):
         COMPLETED = "completed", "Completed"
         CANCELED = "canceled", "Canceled"
         EXPIRED = "expired", "Expired"
+        BLOCKED = "blocked", "Needs correction"
         FAILED = "failed", "Failed"
 
     interaction = models.ForeignKey(

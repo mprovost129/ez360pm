@@ -1,6 +1,7 @@
 import re
 from dataclasses import dataclass
 
+from .local_actions import is_client_template_prompt
 from .security import matching_write_intents
 
 
@@ -50,7 +51,8 @@ def _create_client_identity_is_present(prompt):
 
     text = str(prompt or "").strip()
     if re.search(
-        r"\bcontact_first_name\s*:\s*\S+.{0,1200}\bcontact_last_name\s*:\s*\S+",
+        r"\bcontact(?:_|\s+)first(?:_|\s+)name\s*:\s*\S+.{0,1200}"
+        r"\bcontact(?:_|\s+)last(?:_|\s+)name\s*:\s*\S+",
         text,
         flags=re.I | re.S,
     ):
@@ -106,6 +108,13 @@ def select_tool_plan(prompt):
     can ask a question or select the correct workflow. The plan never expands company
     permissions; registry policy filtering still applies afterwards.
     """
+
+    # The explicit, server-owned client template is a routing boundary. Values in
+    # later fields are business data, not additional commands. Give the template
+    # precedence so an internal note such as "send the invoice next week" cannot
+    # expand the request into unrelated AI tools or send customer data to OpenAI.
+    if is_client_template_prompt(prompt):
+        return _single_action_plan("create_client", prompt=prompt)
 
     matches = set(matching_write_intents(prompt))
     if not matches:

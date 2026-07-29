@@ -63,12 +63,12 @@
         <div class="card-header"><h2 class="h5 mb-0">Actions by capability</h2></div>
         <div class="table-responsive">
             <table class="table mb-0 align-middle">
-                <thead><tr><th>Capability</th><th class="text-end">Prepared</th><th class="text-end">Completed</th><th class="text-end">Canceled</th><th class="text-end">Failed</th></tr></thead>
+                <thead><tr><th>Capability</th><th class="text-end">Prepared</th><th class="text-end">Completed</th><th class="text-end">Canceled</th><th class="text-end">Needs correction</th><th class="text-end">Failed</th></tr></thead>
                 <tbody>
                 {% for row in metrics.capabilities %}
-                    <tr><td><code>{{ row.tool_name }}</code></td><td class="text-end">{{ row.prepared }}</td><td class="text-end">{{ row.completed }}</td><td class="text-end">{{ row.canceled }}</td><td class="text-end">{{ row.failed }}</td></tr>
+                    <tr><td><code>{{ row.tool_name }}</code></td><td class="text-end">{{ row.prepared }}</td><td class="text-end">{{ row.completed }}</td><td class="text-end">{{ row.canceled }}</td><td class="text-end">{{ row.blocked }}</td><td class="text-end">{{ row.failed }}</td></tr>
                 {% empty %}
-                    <tr><td colspan="5" class="text-secondary py-4 text-center">No confirmed or prepared actions in this period.</td></tr>
+                    <tr><td colspan="6" class="text-secondary py-4 text-center">No confirmed or prepared actions in this period.</td></tr>
                 {% endfor %}
                 </tbody>
             </table>

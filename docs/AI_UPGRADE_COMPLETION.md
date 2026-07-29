@@ -107,3 +107,35 @@ The zero-token client path is now directly available from the assistant composer
 uses one server-owned template across parsing, instructions, and UI, and resolves
 action routes through Django rather than assuming a root URL. These are final
 usability and deployment-safety refinements; the AI authority boundary is unchanged.
+
+## V1.23 local validation and provider setup safety
+
+Incomplete structured client templates now remain entirely local and return a
+required-field correction without calling OpenAI or retaining submitted customer
+values in AI summaries. Provider construction also occurs inside the assistant's
+safe execution boundary, so missing credentials and provider setup failures cannot
+surface as unhandled server errors. These are reliability corrections only; the AI
+authority boundary is unchanged.
+
+## V1.24 confirmation validation consistency
+
+Ordinary business-rule changes discovered after the user clicks Confirm are now
+classified consistently with preparation-time validation. They appear as **Needs
+correction**, use correction or ambiguity events, and do not contribute to the AI
+circuit breaker. Validation messages are also rendered as normal sentences rather
+than Django/Python list representations. No assistant authority was added.
+
+## V1.26 local client-template routing correction
+
+The exact server-rendered `Create this client:` template now passes the explicit
+write-intent and focused-tool routing layers before reaching the deterministic local
+parser. Complete templates therefore remain zero-token local actions, while
+incomplete templates remain local correction requests. Both spaced UI labels and
+underscore-style labels are supported. No assistant authority was added.
+
+## V1.27 client-template payload isolation
+
+The explicit `Create this client:` prefix now takes precedence over broad assistant
+intent matching. Command-like wording inside client fields—especially internal notes—
+is treated strictly as client data and cannot expand the OpenAI tool catalog or move
+the request off the zero-token local path. No assistant authority was added.

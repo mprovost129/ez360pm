@@ -18,7 +18,8 @@ from . import document_tools as registered_document_tools  # noqa: F401
 from . import tools as registered_tools  # noqa: F401
 from . import write_tools as registered_write_tools  # noqa: F401
 from .action_center import serialize_action
-from .local_actions import CLIENT_TEMPLATE_TEXT, local_action_for_prompt
+from .errors import validation_error_message
+from .local_actions import CLIENT_TEMPLATE_TEXT, local_action_decision_for_prompt
 from .models import AIActionAttempt, AIInteraction
 from .page_context import resolve_page_context
 from .policies import (
@@ -108,24 +109,24 @@ def _redacted_summary(text, limit):
     return text[:limit]
 
 
-def _stored_prompt_summary(*, prompt, policy, local_action):
+def _stored_prompt_summary(*, prompt, policy, local_action_name=""):
     if not policy.retain_interaction_summaries:
         return "[summary retention disabled]"
-    if local_action is not None:
+    if local_action_name:
         # Deterministic local templates do not need their customer fields copied
-        # into AI interaction history. The confirmed action already carries the
-        # minimum payload needed for execution and audit.
+        # into AI interaction history. This applies to both complete templates and
+        # locally blocked templates that need a required field corrected.
         return (
-            f"Local {local_action.tool_name.replace('_', ' ')} request; "
+            f"Local {local_action_name.replace('_', ' ')} request; "
             "field values omitted."
         )
     return _redacted_summary(prompt, 500)
 
 
-def _stored_response_summary(*, text, policy, local_action, status):
+def _stored_response_summary(*, text, policy, local_action_name="", status):
     if not policy.retain_interaction_summaries:
         return "[summary retention disabled]"
-    if local_action is not None:
+    if local_action_name:
         labels = {
             AIInteraction.Status.COMPLETED: "prepared or completed",
             AIInteraction.Status.BLOCKED: "needs correction",
@@ -133,23 +134,39 @@ def _stored_response_summary(*, text, policy, local_action, status):
         }
         outcome = labels.get(status, "finished")
         return (
-            f"Local {local_action.tool_name.replace('_', ' ')} action {outcome}; "
+            f"Local {local_action_name.replace('_', ' ')} action {outcome}; "
             "customer fields omitted."
         )
     return _redacted_summary(text, 1000)
 
 
-def _check_rate_limit(user):
-    window = max(settings.AI_RATE_LIMIT_WINDOW_SECONDS, 1)
-    key = f"ez360pm:assistant:rate:{user.pk}:{int(time.time() // window)}"
+def _check_rate_limit(user, *, local_action=False):
+    """Throttle provider-backed and deterministic local requests independently.
+
+    A burst of OpenAI-backed questions must not make the zero-token client template
+    unavailable, while local submissions still retain their own bounded abuse guard.
+    """
+
+    window = max(int(settings.AI_RATE_LIMIT_WINDOW_SECONDS), 1)
+    bucket = "local" if local_action else "provider"
+    limit = int(
+        getattr(settings, "AI_LOCAL_ACTION_RATE_LIMIT_REQUESTS", 30)
+        if local_action
+        else settings.AI_RATE_LIMIT_REQUESTS
+    )
+    key = (
+        f"ez360pm:assistant:rate:{bucket}:{user.pk}:"
+        f"{int(time.time() // window)}"
+    )
     try:
         count = cache.incr(key)
     except ValueError:
         cache.set(key, 1, timeout=window + 1)
         count = 1
-    if count > settings.AI_RATE_LIMIT_REQUESTS:
+    if count > limit:
+        label = "local assistant actions" if local_action else "AI requests"
         raise AssistantRateLimited(
-            "Too many AI requests were submitted. Wait a moment and try again."
+            f"Too many {label} were submitted. Wait a moment and try again."
         )
 
 
@@ -280,23 +297,23 @@ def run_assistant(*, user, prompt, provider=None, conversation_id=None, page_pat
         )
 
     tool_plan = select_tool_plan(prompt)
-    local_action = local_action_for_prompt(prompt, tool_plan)
+    local_decision = local_action_decision_for_prompt(prompt, tool_plan)
+    local_action = local_decision.action
+    local_request = local_decision.matched
+    selected_model = None
     try:
-        # Deterministic local actions still require company/user AI access and the
+        # Deterministic local requests still require company/user AI access and the
         # matching action-category permission, but they do not consume OpenAI
         # requests, tokens, or cost. Provider budgets therefore must not block them.
-        if local_action is not None:
+        if local_request:
             require_assistant_available(policy, user=user)
         else:
             require_usage_available(policy, user=user)
+            selected_model = effective_model(policy)
     except AIPolicyError as exc:
         raise AssistantUnavailable(" ".join(exc.messages)) from exc
 
-    _check_rate_limit(user)
-    selected_model = None if local_action is not None else effective_model(policy)
-    provider = provider or (
-        None if local_action is not None else get_provider(model=selected_model)
-    )
+    _check_rate_limit(user, local_action=local_request)
     tool_definitions = registry.definitions(
         policy=policy,
         names=tool_plan.tool_names,
@@ -325,19 +342,24 @@ def run_assistant(*, user, prompt, provider=None, conversation_id=None, page_pat
         if tool_plan.include_page_context
         else None
     )
+    local_action_name = local_decision.tool_name if local_request else ""
     interaction = AIInteraction.objects.create(
         company=user.company,
         user=user,
-        provider=("local" if local_action is not None else provider.name),
+        provider=(
+            "local"
+            if local_request
+            else getattr(provider, "name", str(settings.AI_PROVIDER).strip() or "openai")
+        ),
         model=(
             "deterministic-client-template-v1"
-            if local_action is not None
-            else getattr(provider, "model", settings.AI_MODEL)
+            if local_request
+            else getattr(provider, "model", selected_model or settings.AI_MODEL)
         ),
         prompt_summary=_stored_prompt_summary(
             prompt=prompt,
             policy=policy,
-            local_action=local_action,
+            local_action_name=local_action_name,
         ),
         conversation_id=conversation_id,
         context_turn_count=context_turn_count,
@@ -387,8 +409,14 @@ def run_assistant(*, user, prompt, provider=None, conversation_id=None, page_pat
     )
 
     try:
-        if local_action is not None:
-            active_tool_name = local_action.tool_name
+        if local_request:
+            active_tool_name = local_action_name
+            if local_decision.error:
+                raise ValidationError(local_decision.error)
+            if local_action is None:
+                raise ValidationError(
+                    "Complete the required client template fields and try again."
+                )
             tool = registry.get(active_tool_name)
             trace_entry = {
                 "name": active_tool_name,
@@ -418,6 +446,11 @@ def run_assistant(*, user, prompt, provider=None, conversation_id=None, page_pat
                 else "The local assistant action completed."
             )
         else:
+            if provider is None:
+                # Provider setup is inside the safe execution boundary so a missing
+                # key, unsupported provider, or SDK configuration problem becomes a
+                # recorded safe failure instead of an unhandled server error.
+                provider = get_provider(model=selected_model)
             for _round in range(max_tool_rounds):
                 client_request_id = (
                     str(uuid.uuid4())
@@ -531,7 +564,7 @@ def run_assistant(*, user, prompt, provider=None, conversation_id=None, page_pat
         interaction.response_summary = _stored_response_summary(
             text=final_text,
             policy=policy,
-            local_action=local_action,
+            local_action_name=local_action_name,
             status=interaction.status,
         )
     except (ProviderError, ToolInputError, ValidationError, ValueError) as exc:
@@ -546,8 +579,8 @@ def run_assistant(*, user, prompt, provider=None, conversation_id=None, page_pat
                 and exc.client_request_id not in provider_client_request_ids
             ):
                 provider_client_request_ids.append(exc.client_request_id)
+        message = validation_error_message(exc) if isinstance(exc, ValidationError) else str(exc)
         if isinstance(exc, ValidationError):
-            message = " ".join(exc.messages) if hasattr(exc, "messages") else str(exc)
             from .insights import record_event
             from .models import AIEvent
 
@@ -557,7 +590,7 @@ def run_assistant(*, user, prompt, provider=None, conversation_id=None, page_pat
                 event_type=(
                     AIEvent.Type.AMBIGUITY
                     if is_ambiguity
-                    else AIEvent.Type.TOOL_FAILURE
+                    else AIEvent.Type.CORRECTION_REQUESTED
                 ),
                 capability=active_tool_name or "record_resolution",
                 interaction=interaction,
@@ -577,12 +610,12 @@ def run_assistant(*, user, prompt, provider=None, conversation_id=None, page_pat
         )
         interaction.error_code = _safe_error_code(exc)
         interaction.response_summary = _stored_response_summary(
-            text=str(exc),
+            text=message,
             policy=policy,
-            local_action=local_action,
+            local_action_name=local_action_name,
             status=interaction.status,
         )
-        final_text = str(exc)
+        final_text = message
     except Exception:
         logger.exception("Unexpected EZ360PM assistant failure.")
         interaction.status = AIInteraction.Status.FAILED

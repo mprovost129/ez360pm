@@ -264,6 +264,9 @@ AI_REQUIRE_EXPLICIT_WRITE_INTENT = os.environ.get(
     "AI_REQUIRE_EXPLICIT_WRITE_INTENT", "true"
 ).lower() in {"1", "true", "yes", "on"}
 AI_RATE_LIMIT_REQUESTS = int(os.environ.get("AI_RATE_LIMIT_REQUESTS", 10))
+AI_LOCAL_ACTION_RATE_LIMIT_REQUESTS = int(
+    os.environ.get("AI_LOCAL_ACTION_RATE_LIMIT_REQUESTS", 30)
+)
 AI_RATE_LIMIT_WINDOW_SECONDS = int(os.environ.get("AI_RATE_LIMIT_WINDOW_SECONDS", 60))
 AI_MONTHLY_COST_LIMIT_USD = Decimal(
     os.environ.get("AI_MONTHLY_COST_LIMIT_USD", "25.00")

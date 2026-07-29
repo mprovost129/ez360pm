@@ -399,3 +399,12 @@ Before the assistant is enabled for customer companies:
 6. Add Phase 4 financial/document drafts.
 7. Add Phase 5 issue/send only after repeated successful draft use.
 8. Let evidence—not the desire for an AI label—determine Phase 6.
+
+### V1.27 local client-template precedence — complete
+
+- [x] Prioritize the explicit client-template prefix before broad write-intent matching.
+- [x] Treat all later template values as client data rather than assistant instructions.
+- [x] Preserve zero-token local validation and confirmation behavior.
+- [x] Add regression coverage for invoice/timer language inside internal notes.
+
+Release details: [AI Assistant V1.27](RELEASE_NOTES_AI_ASSISTANT_V1_27.md).

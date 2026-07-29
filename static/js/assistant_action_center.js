@@ -17,7 +17,12 @@
             body: JSON.stringify(body),
         });
         const data = await response.json().catch(() => ({ ok: false, error: "Unreadable server response." }));
-        if (!response.ok || !data.ok) throw new Error(data.error || "The action failed.");
+        if (!response.ok || !data.ok) {
+            const requestError = new Error(data.error || "The action failed.");
+            requestError.status = response.status;
+            requestError.payload = data;
+            throw requestError;
+        }
         return data;
     }
 
@@ -45,10 +50,19 @@
                 if (status) status.textContent = data.message || "Action completed.";
                 window.dispatchEvent(new CustomEvent("ez360pm:assistant-action-complete", { detail: data }));
             } catch (error) {
-                button.disabled = false;
+                if (error.payload?.remove_action) {
+                    card.classList.add("opacity-75");
+                    card.querySelectorAll("button, input").forEach((control) => {
+                        control.disabled = true;
+                    });
+                } else {
+                    button.disabled = false;
+                }
                 if (status) {
                     status.classList.add("text-danger");
-                    status.textContent = error.message;
+                    status.textContent = error.payload?.remove_action
+                        ? `${error.message} Prepare the corrected action again.`
+                        : error.message;
                 }
             }
         }

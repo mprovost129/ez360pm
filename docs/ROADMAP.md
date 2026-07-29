@@ -834,3 +834,54 @@ Release details: [AI Assistant V1.10](RELEASE_NOTES_AI_ASSISTANT_V1_10.md).
 - [x] Reuse identical unexpired pending confirmations across retries.
 - [x] Add long-request progress and browser-timeout guidance.
 - [x] Include routing and retry behavior in the AI evaluation fingerprint.
+
+### V1.23 local validation and provider setup safety — complete
+
+- [x] Keep incomplete structured client templates on the zero-token local path.
+- [x] Return precise required-field corrections without exposing customer data to OpenAI.
+- [x] Record local corrections as blocked workflow outcomes rather than operational failures.
+- [x] Move provider initialization inside the assistant safe-execution boundary.
+- [x] Convert invalid model configuration into a controlled assistant-unavailable response.
+- [x] Update AI fingerprinting, contract checks, regression coverage, and validation documentation.
+
+### V1.24 confirmation validation outcomes — complete
+
+- [x] Add a distinct **Needs correction** status for prepared actions that fail ordinary business validation at confirmation.
+- [x] Keep domain-validation actions out of circuit-breaker and pilot operational-failure counts.
+- [x] Reclassify legacy failed action rows with `domain_validation` during migration.
+- [x] Record confirmation validation as correction/ambiguity evidence rather than a tool failure.
+- [x] Flatten Django validation errors into clean user-facing sentences.
+- [x] Separate needs-correction and operational-failure totals in usage reporting.
+
+Release details: [AI Assistant V1.24](RELEASE_NOTES_AI_ASSISTANT_V1_24.md).
+
+### V1.25 request boundary and local intake resilience — complete
+
+- [x] Reject non-object JSON and invalid UTF-8 at the assistant request boundary without a server error.
+- [x] Separate OpenAI-backed and deterministic local-action rate-limit buckets.
+- [x] Keep the zero-token client template available during a provider-request burst.
+- [x] Preserve multiline internal notes submitted through the structured client template.
+- [x] Add deployment checks, regression coverage, and environment documentation.
+
+Release details: [AI Assistant V1.25](RELEASE_NOTES_AI_ASSISTANT_V1_25.md).
+
+
+### V1.26 local client-template routing — complete
+
+- [x] Make the exact `Create this client:` drawer prefix authorize the create-client workflow.
+- [x] Accept the human-readable spaced labels used by the shared template.
+- [x] Preserve underscore-style labels for compatibility.
+- [x] Route complete templates to the deterministic local preview.
+- [x] Route incomplete templates to the zero-token local correction path.
+- [x] Add integration-level routing regression coverage.
+
+Release details: [AI Assistant V1.26](RELEASE_NOTES_AI_ASSISTANT_V1_26.md).
+
+### V1.27 local client-template precedence — complete
+
+- [x] Treat the exact `Create this client:` prefix as a server-owned routing boundary.
+- [x] Prevent command-like text inside client fields from expanding the AI tool catalog.
+- [x] Keep complete and incomplete templates on the deterministic zero-token path.
+- [x] Add integration-level regression coverage for command-like internal notes.
+
+Release details: [AI Assistant V1.27](RELEASE_NOTES_AI_ASSISTANT_V1_27.md).

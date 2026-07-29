@@ -417,3 +417,44 @@ AI_MAX_TOOL_CALLS=4
 
 After deployment, run the assistant tests and manually verify that a complete
 create-client command prepares one confirmation in one OpenAI request.
+
+## AI V1.24 confirmation-validation migration
+
+Run migrations to apply `assistant.0011_aiactionattempt_blocked_status`:
+
+```bash
+python manage.py migrate
+python manage.py makemigrations --check
+python manage.py collectstatic --noinput
+python manage.py check --deploy
+python manage.py test assistant.tests.test_phase24_confirmation_validation
+python manage.py test assistant
+python manage.py test
+```
+
+The migration converts legacy AI action rows with `status=failed` and
+`error_code=domain_validation` to the new **Needs correction** status. These rows
+remain auditable but no longer count as operational failures or contribute to the
+company AI circuit breaker.
+
+## AI V1.25 request-boundary and local-intake settings
+
+No database migration is required. Add or review:
+
+```env
+AI_RATE_LIMIT_REQUESTS=10
+AI_LOCAL_ACTION_RATE_LIMIT_REQUESTS=30
+AI_RATE_LIMIT_WINDOW_SECONDS=60
+```
+
+OpenAI-backed requests and deterministic local client-template submissions use
+separate rate-limit buckets. Run:
+
+```bash
+python manage.py makemigrations --check
+python manage.py check --deploy
+python manage.py test assistant.tests.test_phase25_request_boundary
+python manage.py test assistant
+python manage.py test
+```
+

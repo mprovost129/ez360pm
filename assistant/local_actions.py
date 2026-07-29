@@ -31,7 +31,36 @@ class LocalAction:
     arguments: dict
 
 
-_CLIENT_TEMPLATE_PREFIX = re.compile(r"^\s*create\s+this\s+client\s*:\s*", re.I)
+@dataclass(frozen=True)
+class LocalActionDecision:
+    """Describe whether a prompt belongs to a deterministic local workflow.
+
+    ``matched`` stays true even when the template needs correction. This lets the
+    assistant return a local validation message without sending partially completed
+    customer data to OpenAI.
+    """
+
+    matched: bool
+    tool_name: str = ""
+    action: LocalAction | None = None
+    error: str = ""
+
+
+CLIENT_TEMPLATE_PREFIX_PATTERN = r"^\s*create\s+this\s+client\s*:\s*"
+_CLIENT_TEMPLATE_PREFIX = re.compile(CLIENT_TEMPLATE_PREFIX_PATTERN, re.I)
+
+
+def is_client_template_prompt(prompt):
+    """Return True when the current message explicitly uses the local client template.
+
+    The template prefix is a server-owned routing boundary. Once present, values in
+    later fields (especially ``Internal note``) must be treated as client data rather
+    than as additional assistant commands.
+    """
+
+    return bool(_CLIENT_TEMPLATE_PREFIX.match(str(prompt or "")))
+
+
 _LABEL_ALIASES = {
     "company": "company_name",
     "company name": "company_name",
@@ -88,42 +117,93 @@ def _normalized_label(value):
     return " ".join(str(value).strip().lower().replace("_", " ").split())
 
 
-def parse_client_template(prompt):
-    """Parse the assistant's exact copyable client template.
+def inspect_client_template(prompt):
+    """Inspect the exact copyable client template without calling OpenAI.
 
-    The parser is intentionally label-based and conservative. Free-form natural
-    language continues through OpenAI; only an explicit ``Create this client:``
-    template can use this zero-token path.
+    A prompt beginning with ``Create this client:`` is always treated as a local
+    workflow. Complete templates return a ``LocalAction``. Incomplete templates
+    return a concise local validation error so they cannot fall through to the
+    provider and consume tokens.
     """
 
     text = str(prompt or "")
     match = _CLIENT_TEMPLATE_PREFIX.match(text)
     if not match:
-        return None
+        return LocalActionDecision(matched=False)
 
     values = dict(_CLIENT_ARGUMENT_DEFAULTS)
     recognized = 0
+    current_field = ""
     for raw_line in text[match.end() :].splitlines():
         line = raw_line.strip()
-        if not line or ":" not in line:
+        if not line:
+            if current_field == "internal_note" and values[current_field]:
+                values[current_field] += "\n"
             continue
-        raw_label, raw_value = line.split(":", 1)
-        field = _LABEL_ALIASES.get(_normalized_label(raw_label))
-        if not field:
-            continue
-        values[field] = raw_value.strip()
-        recognized += 1
+        if ":" in line:
+            raw_label, raw_value = line.split(":", 1)
+            field = _LABEL_ALIASES.get(_normalized_label(raw_label))
+            if field:
+                values[field] = raw_value.strip()
+                current_field = field
+                recognized += 1
+                continue
+        # The note is the only intentionally free-form multiline template field.
+        # Preserve its continuation lines while ignoring unrecognized prose elsewhere.
+        if current_field == "internal_note":
+            separator = "\n" if values[current_field] else ""
+            values[current_field] += separator + raw_line.rstrip()
 
     if recognized == 0:
-        return None
-    if not values["contact_first_name"] or not values["contact_last_name"]:
-        return None
-    return LocalAction(tool_name="create_client", arguments=values)
+        return LocalActionDecision(
+            matched=True,
+            tool_name="create_client",
+            error=(
+                "Use the Client template fields shown in the assistant. "
+                "Contact first name and Contact last name are required."
+            ),
+        )
+
+    missing = []
+    if not values["contact_first_name"]:
+        missing.append("Contact first name")
+    if not values["contact_last_name"]:
+        missing.append("Contact last name")
+    if missing:
+        return LocalActionDecision(
+            matched=True,
+            tool_name="create_client",
+            error=(
+                "Complete the required client template field"
+                + ("s" if len(missing) > 1 else "")
+                + ": "
+                + ", ".join(missing)
+                + ". The other fields are optional."
+            ),
+        )
+
+    return LocalActionDecision(
+        matched=True,
+        tool_name="create_client",
+        action=LocalAction(tool_name="create_client", arguments=values),
+    )
+
+
+def parse_client_template(prompt):
+    """Return a complete local client action, preserving the original API."""
+
+    return inspect_client_template(prompt).action
+
+
+def local_action_decision_for_prompt(prompt, tool_plan):
+    """Return a deterministic decision only for an approved focused plan."""
+
+    if not tool_plan.focused or tool_plan.tool_names != ("create_client",):
+        return LocalActionDecision(matched=False)
+    return inspect_client_template(prompt)
 
 
 def local_action_for_prompt(prompt, tool_plan):
-    """Return a deterministic action only for an already focused server plan."""
+    """Backward-compatible helper returning only a complete local action."""
 
-    if not tool_plan.focused or tool_plan.tool_names != ("create_client",):
-        return None
-    return parse_client_template(prompt)
+    return local_action_decision_for_prompt(prompt, tool_plan).action

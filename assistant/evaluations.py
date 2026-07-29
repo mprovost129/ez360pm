@@ -14,7 +14,13 @@ from .models import (
     AIEvaluationRun,
     AIInteraction,
 )
-from .local_actions import CLIENT_TEMPLATE_TEXT, parse_client_template
+from .local_actions import (
+    CLIENT_TEMPLATE_PREFIX_PATTERN,
+    CLIENT_TEMPLATE_TEXT,
+    inspect_client_template,
+    is_client_template_prompt,
+    parse_client_template,
+)
 from .page_context import resolve_page_context
 from .policies import allowed_models, get_company_policy
 from .providers import OpenAIResponsesProvider, get_provider
@@ -137,6 +143,9 @@ def evaluation_fingerprint(model):
         "page_context": getsource(resolve_page_context),
         "tool_routing": getsource(select_tool_plan),
         "local_client_template": getsource(parse_client_template),
+        "local_client_template_inspection": getsource(inspect_client_template),
+        "local_client_template_routing": getsource(is_client_template_prompt),
+        "local_client_template_prefix": CLIENT_TEMPLATE_PREFIX_PATTERN,
         "local_client_template_text": CLIENT_TEMPLATE_TEXT,
         "action_preparation": getsource(ToolRegistry._prepare_action),
         "focused_max_output_tokens": getattr(settings, "AI_FOCUSED_MAX_OUTPUT_TOKENS", 600),
@@ -280,13 +289,22 @@ def contract_check_results():
         }
     )
 
-    local_parser_source = getsource(parse_client_template)
+    local_parser_source = getsource(inspect_client_template)
     local_template_path = all(
         marker in orchestration_source
-        for marker in ("local_action_for_prompt", "local_action is not None")
+        for marker in (
+            "local_action_decision_for_prompt",
+            "local_request",
+            "local_decision.error",
+        )
     ) and all(
         marker in local_parser_source
-        for marker in ("Create this client", "contact_first_name", "contact_last_name")
+        for marker in (
+            "Create this client",
+            "contact_first_name",
+            "contact_last_name",
+            "LocalActionDecision",
+        )
     )
     results.append(
         {

@@ -226,6 +226,20 @@ def assistant_settings_check(app_configs, **kwargs):
                 id="assistant.E025",
             )
         )
+    if getattr(settings, "AI_RATE_LIMIT_REQUESTS", 0) < 1:
+        messages.append(
+            Error(
+                "AI_RATE_LIMIT_REQUESTS must be at least 1.",
+                id="assistant.E026",
+            )
+        )
+    if getattr(settings, "AI_LOCAL_ACTION_RATE_LIMIT_REQUESTS", 0) < 1:
+        messages.append(
+            Error(
+                "AI_LOCAL_ACTION_RATE_LIMIT_REQUESTS must be at least 1.",
+                id="assistant.E027",
+            )
+        )
     if getattr(settings, "AI_MAX_TOOL_OUTPUT_CHARS", 0) < 1000:
         messages.append(
             Error(

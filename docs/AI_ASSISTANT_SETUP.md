@@ -98,6 +98,7 @@ AI_MAX_REQUEST_BYTES=12000
 AI_MAX_TOOL_OUTPUT_CHARS=40000
 AI_REQUIRE_EXPLICIT_WRITE_INTENT=true
 AI_RATE_LIMIT_REQUESTS=10
+AI_LOCAL_ACTION_RATE_LIMIT_REQUESTS=30
 AI_RATE_LIMIT_WINDOW_SECONDS=60
 AI_MONTHLY_COST_LIMIT_USD=25.00
 AI_COMPANY_DEFAULT_ENABLED=
@@ -121,6 +122,12 @@ AI_STALE_LEAD_DAYS=14
 AI_FORGOTTEN_TIMER_HOURS=8
 AI_READINESS_MAX_EVALUATION_AGE_DAYS=30
 ```
+
+`AI_RATE_LIMIT_REQUESTS` applies only to OpenAI-backed requests.
+`AI_LOCAL_ACTION_RATE_LIMIT_REQUESTS` separately limits deterministic zero-token
+workflows such as the structured client template, so an OpenAI burst does not block
+local intake while the local endpoint still has an abuse guard. Both use
+`AI_RATE_LIMIT_WINDOW_SECONDS`.
 
 Set the two per-million token rates to the current rates for the default model.
 When more than one model is allowlisted and their rates differ, configure

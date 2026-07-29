@@ -284,7 +284,10 @@
             };
         }
         if (!response.ok || !data.ok) {
-            throw new Error(data.error || "The assistant request failed.");
+            const requestError = new Error(data.error || "The assistant request failed.");
+            requestError.status = response.status;
+            requestError.payload = data;
+            throw requestError;
         }
         return data;
     }
@@ -504,7 +507,13 @@
                 window.setTimeout(() => window.location.reload(), 500);
             }
         } catch (error) {
-            card?.querySelectorAll("button").forEach((control) => { control.disabled = false; });
+            if (error.payload?.remove_action) {
+                card?.remove();
+                homeLoadedAt = 0;
+                loadAssistantHome();
+            } else {
+                card?.querySelectorAll("button").forEach((control) => { control.disabled = false; });
+            }
             appendMessage("error", error.message);
         }
     });

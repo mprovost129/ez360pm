@@ -35,11 +35,13 @@ WRITE_INTENT_PATTERNS = {
         r"\bstop\b.{0,60}\btracking\s+time\b",
     ),
     "create_client": (
-        r"\b(?:create|add|make|prepare)\s+(?:a\s+|an\s+|new\s+|the\s+)?(?:client|customer)\b",
+        r"\b(?:create|add|make|prepare)\s+(?:a\s+|an\s+|new\s+|the\s+|this\s+)?(?:client|customer)\b",
         r"\b(?:create|add|make)\b.{0,80}\bas\s+(?:a\s+|new\s+)?(?:client|customer)\b",
         # A filled template requested by the assistant is itself a direct
-        # current-turn submission. Final saving still requires confirmation.
-        r"\bcontact_first_name\s*:.{0,500}\bcontact_last_name\s*:",
+        # current-turn submission. Accept both JSON-style underscore labels and
+        # the human-readable spaced labels rendered by CLIENT_TEMPLATE_TEXT.
+        # Final saving still requires confirmation.
+        r"\bcontact(?:_|\s+)first(?:_|\s+)name\s*:.{0,500}\bcontact(?:_|\s+)last(?:_|\s+)name\s*:",
     ),
     "update_client": (
         r"\b(?:update|edit|change|correct)\b.{0,100}\b(?:client|billing address)\b",

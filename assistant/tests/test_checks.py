@@ -40,3 +40,14 @@ class AssistantDeploymentCheckTests(SimpleTestCase):
 
         self.assertIn("assistant.E025", {message.id for message in errors})
 
+    @override_settings(AI_RATE_LIMIT_REQUESTS=0)
+    def test_provider_rate_limit_must_be_positive(self):
+        errors = assistant_settings_check(None)
+
+        self.assertIn("assistant.E026", {message.id for message in errors})
+
+    @override_settings(AI_LOCAL_ACTION_RATE_LIMIT_REQUESTS=0)
+    def test_local_action_rate_limit_must_be_positive(self):
+        errors = assistant_settings_check(None)
+
+        self.assertIn("assistant.E027", {message.id for message in errors})

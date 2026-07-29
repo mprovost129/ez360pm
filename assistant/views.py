@@ -19,6 +19,7 @@ from django.views.generic import UpdateView
 from .action_center import expire_pending_actions, pending_actions_for_user
 from .draft_tracking import track_completed_draft_action
 from .followups import follow_up_metrics, follow_up_rows
+from .errors import validation_error_message
 from .forms import AICompanySettingsForm
 from .insights import (
     SUGGESTION_LIBRARY,
@@ -71,9 +72,12 @@ def _parse_json(request):
     if len(request.body) > settings.AI_MAX_REQUEST_BYTES:
         raise ValidationError("The assistant request is too large.")
     try:
-        return json.loads(request.body or b"{}")
-    except json.JSONDecodeError as exc:
+        payload = json.loads(request.body or b"{}")
+    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
         raise ValidationError("The assistant request was not valid JSON.") from exc
+    if not isinstance(payload, dict):
+        raise ValidationError("The assistant request must be a JSON object.")
+    return payload
 
 
 def _require_ai_admin(user):
@@ -324,11 +328,17 @@ def pilot_operations(request):
         .exclude(error_code="domain_validation")
         .count()
     )
-    recent_action_failures = AIActionAttempt.objects.filter(
-        company=company,
-        status=AIActionAttempt.Status.FAILED,
-        created_at__gte=window_start,
-    ).count()
+    recent_action_failures = (
+        AIActionAttempt.objects.filter(
+            company=company,
+            status=AIActionAttempt.Status.FAILED,
+            created_at__gte=window_start,
+        )
+        # Backward compatibility for pre-V1.24 rows where ordinary domain
+        # validation was recorded as failed instead of needs-correction.
+        .exclude(error_code="domain_validation")
+        .count()
+    )
     recent_failures = recent_interaction_failures + recent_action_failures
     users = list(company.users.order_by("email"))
     access_by_user = {
@@ -953,21 +963,34 @@ def confirm_action(request, token):
     try:
         result = registry.execute_attempt(attempt=attempt, policy=policy)
     except ValidationError as exc:
+        message = validation_error_message(exc)
+        is_ambiguity = "More than one" in message or "ambiguous" in message.lower()
         record_event(
             user=request.user,
-            event_type=AIEvent.Type.TOOL_FAILURE,
+            event_type=(
+                AIEvent.Type.AMBIGUITY
+                if is_ambiguity
+                else AIEvent.Type.CORRECTION_REQUESTED
+            ),
             capability=attempt.tool_name,
             interaction=attempt.interaction,
             action_attempt=attempt,
             metadata={"error_code": "domain_validation", "tool_name": attempt.tool_name},
         )
-        attempt.status = AIActionAttempt.Status.FAILED
+        attempt.status = AIActionAttempt.Status.BLOCKED
         attempt.error_code = "domain_validation"
-        attempt.result = {"message": " ".join(exc.messages)}
+        attempt.result = {"message": message}
         attempt.executed_at = timezone.now()
         attempt.save(update_fields=["status", "error_code", "result", "executed_at"])
-        evaluate_failure_circuit_breaker(policy, interaction=attempt.interaction)
-        return _error(attempt.result["message"], status=409)
+        return JsonResponse(
+            {
+                "ok": False,
+                "error": message,
+                "action_status": AIActionAttempt.Status.BLOCKED,
+                "remove_action": True,
+            },
+            status=409,
+        )
     except Exception:
         record_event(
             user=request.user,

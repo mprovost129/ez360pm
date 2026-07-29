@@ -293,11 +293,17 @@ def evaluate_failure_circuit_breaker(policy, *, interaction=None):
         .exclude(error_code="domain_validation")
         .count()
     )
-    action_failures = AIActionAttempt.objects.filter(
-        company=policy.company,
-        status=AIActionAttempt.Status.FAILED,
-        created_at__gte=window_start,
-    ).count()
+    action_failures = (
+        AIActionAttempt.objects.filter(
+            company=policy.company,
+            status=AIActionAttempt.Status.FAILED,
+            created_at__gte=window_start,
+        )
+        # Backward compatibility for pre-V1.24 rows where ordinary domain
+        # validation was recorded as a failed action.
+        .exclude(error_code="domain_validation")
+        .count()
+    )
     failures = interaction_failures + action_failures
     if failures < policy.failure_threshold:
         return False

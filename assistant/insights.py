@@ -350,7 +350,12 @@ def usage_metrics(user, days=30, policy=None):
             prepared=Count("id"),
             completed=Count("id", filter=Q(status=AIActionAttempt.Status.COMPLETED)),
             canceled=Count("id", filter=Q(status=AIActionAttempt.Status.CANCELED)),
-            failed=Count("id", filter=Q(status=AIActionAttempt.Status.FAILED)),
+            blocked=Count("id", filter=Q(status=AIActionAttempt.Status.BLOCKED)),
+            failed=Count(
+                "id",
+                filter=Q(status=AIActionAttempt.Status.FAILED)
+                & ~Q(error_code="domain_validation"),
+            ),
         )
         .order_by("-prepared", "tool_name")
     )
