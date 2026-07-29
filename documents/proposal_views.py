@@ -363,7 +363,10 @@ class RetainerCreateView(LoginRequiredMixin, FormView):
     form_class = RetainerInvoiceForm
     template_name = "shared/form.html"
     proposal = None
-    extra_context = {"page_title": "Create retainer invoice", "submit_label": "Create retainer"}
+    extra_context = {
+        "page_title": "Create deposit invoice",
+        "submit_label": "Create deposit invoice",
+    }
 
     def dispatch(self, request, *args, **kwargs):
         self.proposal = scoped_proposal(request, kwargs["pk"])

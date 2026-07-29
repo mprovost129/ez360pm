@@ -4,7 +4,7 @@ from decimal import Decimal, InvalidOperation
 
 from django.core.exceptions import ValidationError
 from django.db import transaction
-from django.db.models import Q, Sum
+from django.db.models import Q
 from django.urls import reverse
 from django.utils import timezone
 
@@ -424,26 +424,25 @@ def execute_proposal_draft(context, arguments):
 def preview_retainer_invoice_draft(context, arguments):
     proposal = _resolve_accepted_proposal(context.company, arguments["proposal_reference"])
     accepted_total = money(proposal.accepted_total or proposal.total)
-    value = _decimal(arguments["value"], "Retainer value", allow_zero=False)
+    value = _decimal(arguments["value"], "Deposit value", allow_zero=False)
     if arguments["mode"] == "percentage":
         if value > 100:
-            raise ValidationError("Retainer percentage cannot exceed 100.")
+            raise ValidationError("Deposit percentage cannot exceed 100.")
         amount = money(accepted_total * value / Decimal("100"))
     else:
         amount = money(value)
     if amount > accepted_total:
-        raise ValidationError("Retainer cannot exceed the accepted proposal total.")
-    existing = (
-        proposal.derived_invoices.filter(
-            doc_type=Document.Type.INVOICE,
-            invoice_kind=Document.InvoiceKind.RETAINER,
-        )
-        .exclude(status=Document.Status.VOID)
-        .aggregate(value=Sum("total"))["value"]
-        or Decimal("0")
+        raise ValidationError("Deposit cannot exceed the accepted proposal total.")
+    existing_invoices = proposal.derived_invoices.filter(
+        doc_type=Document.Type.INVOICE,
+        invoice_kind=Document.InvoiceKind.RETAINER,
+    ).exclude(status=Document.Status.VOID)
+    existing = sum(
+        (invoice.amount_due for invoice in existing_invoices),
+        Decimal("0.00"),
     )
     if money(existing + amount) > accepted_total:
-        raise ValidationError("Existing and proposed retainers would exceed the accepted total.")
+        raise ValidationError("Existing and proposed deposits would exceed the accepted total.")
     issue_date = _parse_date(
         arguments["issue_date"], default=timezone.localdate(), label="Issue date"
     )
@@ -466,19 +465,19 @@ def preview_retainer_invoice_draft(context, arguments):
         else arguments["accept_payments"]
     )
     return {
-        "title": "Create retainer invoice draft",
-        "summary": f"Prepare a retainer invoice from accepted proposal {proposal.number}.",
+        "title": "Create deposit invoice draft",
+        "summary": f"Prepare a deposit invoice from accepted proposal {proposal.number}.",
         "details": [
             f"Project: {proposal.project.number} — {proposal.project.name}",
             f"Client: {proposal.project.client.display_name}",
             f"Accepted proposal total: ${accepted_total:.2f}",
-            f"Retainer: ${amount:.2f}",
+            f"Deposit due now: ${amount:.2f}",
             f"Issue date: {issue_date.isoformat()}",
             f"Due date: {due_date.isoformat()}",
             f"Online payment: {'Enabled' if accept_payments else 'Disabled'}",
             "This creates a draft only. It will not be issued or emailed.",
         ],
-        "confirm_label": "Create retainer draft",
+        "confirm_label": "Create deposit draft",
         "_execution_arguments": {
             "proposal_id": proposal.pk,
             "expected_proposal_updated_at": proposal.updated_at.isoformat(),
@@ -526,7 +525,7 @@ def execute_retainer_invoice_draft(context, arguments):
         },
     )
     return {
-        "message": f"Draft retainer invoice {invoice.number} created.",
+        "message": f"Draft deposit invoice {invoice.number} created.",
         "_created_document_id": invoice.pk,
         "links": [_document_link(invoice)],
         "redirect_url": f'{reverse("documents:invoice-detail", kwargs={"pk": invoice.pk})}?ai_draft=1',

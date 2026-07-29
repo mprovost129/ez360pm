@@ -26,10 +26,11 @@
     <div class="invoice-summary">
         <div><span>Subtotal</span><strong>${{ invoice.subtotal }}</strong></div>
         <div><span>Tax</span><strong>${{ invoice.tax_total }}</strong></div>
-        {% if invoice.credit_total %}<div><span>Retainer credits</span><strong>-${{ invoice.credit_total }}</strong></div>{% endif %}
-        <div class="invoice-summary__total"><span>Total</span><strong>${{ invoice.total }}</strong></div>
+        {% if invoice.credit_total %}<div><span>Project total</span><strong>${{ invoice.gross_total }}</strong></div><div><span>Deposit paid</span><strong>-${{ invoice.credit_total }}</strong></div>{% endif %}
+        <div class="invoice-summary__total"><span>{% if invoice.credit_total %}Final amount{% else %}Total{% endif %}</span><strong>${{ invoice.total }}</strong></div>
+        {% if invoice.deposit_amount %}<div><span>Deposit requested</span><strong>${{ invoice.deposit_amount }}</strong></div>{% endif %}
         {% if invoice.amount_paid %}<div><span>Paid</span><strong>-${{ invoice.amount_paid }}</strong></div>{% endif %}
-        <div class="invoice-summary__balance"><span>Balance due</span><strong>${{ invoice.outstanding_balance }}</strong></div>
+        <div class="invoice-summary__balance"><span>{% if invoice.deposit_amount %}Due now{% else %}Balance due{% endif %}</span><strong>${{ invoice.outstanding_balance }}</strong></div>
     </div>
     {% if invoice.terms %}<section class="invoice-text"><h3>Terms</h3><p>{{ invoice.terms|linebreaksbr }}</p></section>{% endif %}
     {% if show_internal_notes and invoice.notes %}<section class="invoice-text"><h3>Internal notes</h3><p>{{ invoice.notes|linebreaksbr }}</p></section>{% endif %}

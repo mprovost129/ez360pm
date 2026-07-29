@@ -13,6 +13,7 @@ from documents.proposal_services import (
     accept_proposal,
     apply_retainer_credit,
     available_retainer_credit,
+    create_final_invoice_from_deposit,
     create_proposal,
     create_retainer_invoice,
     decline_proposal,
@@ -100,7 +101,7 @@ class ProposalWorkflowTests(TestCase):
         return record_payment(
             invoice=invoice,
             payment_data={
-                "amount": invoice.total,
+                "amount": invoice.amount_due,
                 "method": Payment.Method.CHECK,
                 "received_at": date(2026, 7, 22),
                 "reference": "retainer",
@@ -457,8 +458,11 @@ class ProposalWorkflowTests(TestCase):
         percentage = self.make_retainer(proposal, value="25.00")
         fixed = self.make_retainer(proposal, value="300.00", mode="amount")
 
-        self.assertEqual(percentage.total, Decimal("250.00"))
-        self.assertEqual(fixed.total, Decimal("300.00"))
+        self.assertEqual(percentage.total, Decimal("1000.00"))
+        self.assertEqual(percentage.deposit_amount, Decimal("250.00"))
+        self.assertEqual(percentage.outstanding_balance, Decimal("250.00"))
+        self.assertEqual(fixed.total, Decimal("1000.00"))
+        self.assertEqual(fixed.deposit_amount, Decimal("300.00"))
         self.assertEqual(percentage.source_proposal, proposal)
         with self.assertRaises(ValidationError):
             self.make_retainer(proposal, value="1000.01", mode="amount")
@@ -471,8 +475,123 @@ class ProposalWorkflowTests(TestCase):
 
         self.pay(retainer)
 
+        retainer.refresh_from_db()
         self.project.refresh_from_db()
+        self.assertEqual(retainer.status, Document.Status.PAID)
+        self.assertEqual(retainer.total, Decimal("1000.00"))
+        self.assertEqual(retainer.amount_paid, Decimal("500.00"))
+        self.assertEqual(retainer.outstanding_balance, Decimal("0.00"))
         self.assertEqual(self.project.status, Project.Status.ACTIVE)
+
+    def test_final_invoice_copies_scope_numbers_series_and_applies_deposit(self):
+        proposal = self.accept(self.make_proposal())
+        deposit = self.make_retainer(proposal, value="30.00")
+        self.pay(deposit)
+
+        final = create_final_invoice_from_deposit(source_invoice=deposit)
+
+        self.assertEqual(final.number, f"{deposit.number}-2")
+        self.assertEqual(final.source_invoice, deposit)
+        self.assertEqual(final.source_proposal, proposal)
+        self.assertEqual(final.invoice_kind, Document.InvoiceKind.FINAL)
+        self.assertEqual(final.status, Document.Status.DRAFT)
+        self.assertEqual(final.subtotal, Decimal("1000.00"))
+        self.assertEqual(final.credit_total, Decimal("300.00"))
+        self.assertEqual(final.total, Decimal("700.00"))
+        self.assertEqual(final.outstanding_balance, Decimal("700.00"))
+        self.assertEqual(
+            list(final.line_items.values_list("description", flat=True)),
+            ["Design services"],
+        )
+        self.assertEqual(deposit.payments.count(), 1)
+        self.assertFalse(final.payments.exists())
+
+        with self.assertRaises(ValidationError):
+            create_final_invoice_from_deposit(source_invoice=deposit)
+
+    def test_final_invoice_resolves_and_credits_every_deposit_in_series(self):
+        proposal = self.accept(self.make_proposal())
+        first = self.make_retainer(proposal, value="20.00")
+        second = self.make_retainer(proposal, value="300.00", mode="amount")
+        self.pay(first)
+
+        with self.assertRaisesMessage(ValidationError, "Pay or void every deposit"):
+            create_final_invoice_from_deposit(source_invoice=first)
+
+        self.pay(second)
+        final = create_final_invoice_from_deposit(source_invoice=first)
+
+        self.assertEqual(final.gross_total, Decimal("1000.00"))
+        self.assertEqual(final.credit_total, Decimal("500.00"))
+        self.assertEqual(final.total, Decimal("500.00"))
+        self.assertEqual(final.credits_received.count(), 2)
+
+    def test_final_invoice_action_requires_payment_and_opens_reviewable_draft(self):
+        proposal = self.accept(self.make_proposal())
+        deposit = self.make_retainer(proposal, value="300.00", mode="amount")
+        issue_document(document=deposit)
+
+        blocked = self.client.post(
+            reverse("documents:invoice-final-create", args=(deposit.pk,))
+        )
+        self.assertRedirects(
+            blocked,
+            reverse("documents:invoice-detail", args=(deposit.pk,)),
+        )
+        self.assertFalse(deposit.follow_up_invoices.exists())
+
+        deposit.refresh_from_db()
+        record_payment(
+            invoice=deposit,
+            payment_data={
+                "amount": deposit.amount_due,
+                "method": Payment.Method.CHECK,
+                "received_at": date(2026, 7, 22),
+                "reference": "deposit",
+            },
+        )
+        response = self.client.post(
+            reverse("documents:invoice-final-create", args=(deposit.pk,))
+        )
+        final = deposit.follow_up_invoices.get()
+        self.assertRedirects(
+            response,
+            reverse("documents:invoice-detail", args=(final.pk,)),
+        )
+        detail = self.client.get(reverse("documents:invoice-detail", args=(final.pk,)))
+        self.assertContains(detail, "Project total")
+        self.assertContains(detail, "Deposit paid")
+        self.assertContains(detail, "Final amount")
+
+    def test_deposit_invoice_shows_full_total_but_only_collects_deposit(self):
+        proposal = self.accept(self.make_proposal())
+        deposit = self.make_retainer(proposal, value="25.00")
+        issue_document(document=deposit)
+
+        with self.assertRaisesMessage(ValidationError, "outstanding balance"):
+            record_payment(
+                invoice=deposit,
+                payment_data={
+                    "amount": deposit.total,
+                    "method": Payment.Method.CHECK,
+                    "received_at": date(2026, 7, 22),
+                    "reference": "incorrect full amount",
+                },
+            )
+
+        detail = self.client.get(reverse("documents:invoice-detail", args=(deposit.pk,)))
+        public = self.client.get(
+            reverse("public-documents:view", args=(deposit.public_token,))
+        )
+        outstanding = self.client.get(reverse("documents:outstanding-list"))
+        self.assertContains(detail, "Total")
+        self.assertContains(detail, "$1000.00")
+        self.assertContains(detail, "Deposit requested")
+        self.assertContains(detail, "$250.00")
+        self.assertContains(detail, "Due now")
+        self.assertContains(public, "$1000.00")
+        self.assertContains(public, "$250.00")
+        self.assertContains(outstanding, "$250.00")
 
     def test_retainer_create_view_links_invoice_to_accepted_proposal(self):
         proposal = self.accept(self.make_proposal())
@@ -496,7 +615,9 @@ class ProposalWorkflowTests(TestCase):
             reverse("documents:invoice-detail", args=(retainer.pk,)),
         )
         self.assertEqual(retainer.invoice_kind, Document.InvoiceKind.RETAINER)
-        self.assertEqual(retainer.total, Decimal("300.00"))
+        self.assertEqual(retainer.total, Decimal("1000.00"))
+        self.assertEqual(retainer.deposit_amount, Decimal("300.00"))
+        self.assertEqual(retainer.outstanding_balance, Decimal("300.00"))
 
     def test_explicit_start_without_retainer_and_retainer_guard(self):
         self.accept(self.make_proposal())

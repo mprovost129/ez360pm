@@ -188,7 +188,9 @@ class AssistantPhaseFourDraftTests(TestCase):
         )
         self.assertEqual(invoice.status, Document.Status.DRAFT)
         self.assertEqual(invoice.source_proposal, proposal)
-        self.assertEqual(invoice.total, Decimal("1125.00"))
+        self.assertEqual(invoice.total, Decimal("4500.00"))
+        self.assertEqual(invoice.deposit_amount, Decimal("1125.00"))
+        self.assertEqual(invoice.outstanding_balance, Decimal("1125.00"))
         self.assertTrue(invoice.accept_payments)
         self.assertIn(str(invoice.pk), result["redirect_url"])
 
@@ -288,7 +290,7 @@ class AssistantPhaseFourDraftTests(TestCase):
         record_payment(
             invoice=retainer,
             payment_data={
-                "amount": retainer.total,
+                "amount": retainer.amount_due,
                 "method": Payment.Method.CHECK,
                 "received_at": date(2026, 7, 23),
                 "reference": "1001",
@@ -365,7 +367,7 @@ class AssistantPhaseFourDraftTests(TestCase):
         record_payment(
             invoice=retainer,
             payment_data={
-                "amount": retainer.total,
+                "amount": retainer.amount_due,
                 "method": Payment.Method.CHECK,
                 "received_at": date(2026, 7, 23),
                 "reference": "1002",

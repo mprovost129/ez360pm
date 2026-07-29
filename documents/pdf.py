@@ -145,12 +145,26 @@ def build_invoice_pdf(invoice):
         ["Tax", _money(invoice.tax_total)],
     ]
     if invoice.credit_total:
-        totals.append(["Retainer credits", f"-{_money(invoice.credit_total)}"])
+        totals.extend(
+            [
+                ["Project total", _money(invoice.gross_total)],
+                ["Deposit paid", f"-{_money(invoice.credit_total)}"],
+            ]
+        )
     totals.extend(
         [
-            ["Total", _money(invoice.total)],
+            ["Final amount" if invoice.credit_total else "Total", _money(invoice.total)],
+        ]
+    )
+    if invoice.deposit_amount is not None:
+        totals.append(["Deposit requested", _money(invoice.deposit_amount)])
+    totals.extend(
+        [
             ["Paid", _money(invoice.amount_paid)],
-            ["Balance due", _money(invoice.outstanding_balance)],
+            [
+                "Due now" if invoice.deposit_amount is not None else "Balance due",
+                _money(invoice.outstanding_balance),
+            ],
         ]
     )
     totals_table = Table(totals, colWidths=[1.4 * inch, 1.1 * inch], hAlign="RIGHT")

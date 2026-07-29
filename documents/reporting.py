@@ -1,6 +1,6 @@
 from decimal import Decimal
 
-from django.db.models import DecimalField, ExpressionWrapper, F, Sum, Value
+from django.db.models import Case, DecimalField, ExpressionWrapper, F, Sum, Value, When
 from django.db.models.functions import Coalesce
 
 from .models import Document
@@ -27,8 +27,19 @@ def outstanding_invoices(company):
             )
         )
         .annotate(
+            billing_amount_due=Case(
+                When(
+                    invoice_kind=Document.InvoiceKind.RETAINER,
+                    deposit_amount__isnull=False,
+                    then=F("deposit_amount"),
+                ),
+                default=F("total"),
+                output_field=MONEY_FIELD,
+            ),
+        )
+        .annotate(
             balance_amount=ExpressionWrapper(
-                F("total") - F("paid_amount"),
+                F("billing_amount_due") - F("paid_amount"),
                 output_field=MONEY_FIELD,
             )
         )

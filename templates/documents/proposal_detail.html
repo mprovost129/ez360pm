@@ -11,7 +11,7 @@
         {% if proposal.is_editable %}<a class="btn btn-light" href="#document-details">Edit details</a><a class="btn btn-light" href="#add-scope">Add scope section</a><form method="post" action="{% url 'proposals:issue' proposal.pk %}" data-confirm="Issue this proposal? Draft editing will end and its public link will become active.">{% csrf_token %}<button class="btn btn-success" type="submit" name="send_after_issue" value="1">Issue &amp; email</button><button class="btn btn-light" type="submit" name="send_after_issue" value="0">Issue only</button></form>{% endif %}
         {% if proposal.status == 'sent' or proposal.status == 'viewed' %}<a class="btn btn-success" href="{% url 'proposals:send' proposal.pk %}">Email proposal</a>{% endif %}
         {% if proposal.status == 'sent' or proposal.status == 'viewed' %}<form method="post" action="{% url 'proposals:withdraw' proposal.pk %}" data-confirm="Withdraw this proposal? The public page will show that it is no longer available for acceptance.">{% csrf_token %}<button class="btn btn-outline-danger" type="submit">Withdraw</button></form>{% endif %}
-        {% if proposal.status == 'accepted' %}<a class="btn btn-primary" href="{% url 'proposals:retainer-create' proposal.pk %}">Create retainer invoice</a>{% endif %}
+        {% if proposal.status == 'accepted' %}<a class="btn btn-primary" href="{% url 'proposals:retainer-create' proposal.pk %}">Create deposit invoice</a>{% endif %}
     </div>
 </div>
 {% if proposal.status != 'draft' %}<div class="public-link"><strong>Public link:</strong> <a href="{% url 'public-documents:view' proposal.public_token %}" target="_blank">{{ request.scheme }}://{{ request.get_host }}{% url 'public-documents:view' proposal.public_token %}</a></div>{% endif %}

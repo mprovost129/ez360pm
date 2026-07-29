@@ -114,18 +114,18 @@ def _document_issues(document):
         amount_paid = money(
             sum((payment.amount for payment in document.payments.all()), Decimal("0"))
         )
-        if amount_paid > document.total:
+        if amount_paid > document.amount_due:
             issues.append(
                 AuditIssue(
                     "error",
                     "invoice_overpaid",
                     "Document",
                     document.pk,
-                    f"Payments total {amount_paid}; invoice total is {document.total}.",
+                    f"Payments total {amount_paid}; amount due is {document.amount_due}.",
                 )
             )
         if document.status != Document.Status.VOID:
-            if amount_paid > 0 and amount_paid >= document.total:
+            if amount_paid > 0 and amount_paid >= document.amount_due:
                 expected_status = Document.Status.PAID
             elif amount_paid > 0:
                 expected_status = Document.Status.PARTIALLY_PAID

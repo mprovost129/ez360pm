@@ -130,10 +130,11 @@ class RetainerInvoiceForm(forms.Form):
         self.proposal = proposal
         super().__init__(*args, **kwargs)
         today = timezone.localdate()
-        self.fields["mode"].label = "Retainer calculation"
+        self.fields["mode"].label = "Deposit calculation"
         self.fields["value"].label = "Percentage or amount"
         self.fields["value"].help_text = (
-            "Enter a percentage when Percentage is selected, otherwise enter a dollar amount."
+            "Enter a percentage when Percentage is selected, otherwise enter a dollar amount. "
+            "The invoice will still show the full accepted project total."
         )
         self.fields["value"].widget.attrs["data-proposal-total"] = str(
             proposal.accepted_total or proposal.total

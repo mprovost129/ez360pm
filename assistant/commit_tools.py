@@ -180,6 +180,11 @@ def _document_snapshot(document):
         "tax_total": str(document.tax_total),
         "credit_total": str(document.credit_total),
         "total": str(document.total),
+        "deposit_amount": (
+            str(document.deposit_amount)
+            if document.deposit_amount is not None
+            else None
+        ),
         "accept_payments": document.accept_payments,
         "lines": lines,
         "payments": payments,

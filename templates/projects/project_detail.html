@@ -17,6 +17,7 @@
         {% elif project.status == 'lead' %}<h2>Prepare the customer proposal</h2><p>Confirm the scope and pricing, then send the estimate / proposal.</p>
         {% elif project.status == 'approved' and can_start_without_retainer %}<h2>Start the approved project</h2><p>No paid retainer is required for this project.</p>
         {% elif project.status == 'approved' %}<h2>Collect the required retainer</h2><p>Review the accepted proposal and retainer invoice before beginning work.</p>
+        {% elif final_invoice_source %}<h2>Prepare the final invoice</h2><p>The deposit is paid. Create the remaining-balance invoice from the original project total.</p>
         {% elif project.status == 'active' %}<h2>Record the next work session</h2><p>Keep project time current before preparing the next invoice.</p>
         {% else %}<h2>Review the completed project</h2><p>Project documents, payments, and time remain available below.</p>{% endif %}
     </div>
@@ -25,6 +26,7 @@
         {% elif project.status == 'lead' %}<a class="btn btn-primary" href="{% url 'proposals:create' %}?project={{ project.pk }}">New estimate / proposal</a>
         {% elif project.status == 'approved' and can_start_without_retainer %}<form method="post" action="{% url 'projects:start-without-retainer' project.pk %}" data-confirm="Start this project without recording a paid retainer?">{% csrf_token %}<button class="btn btn-success" type="submit">Start without retainer</button></form>
         {% elif project.status == 'approved' %}<a class="btn btn-primary" href="#project-invoices">Review retainer</a>
+        {% elif final_invoice_source %}<form method="post" action="{% url 'documents:invoice-final-create' final_invoice_source.pk %}" data-confirm="Create the final invoice and apply the paid deposit? You can review the draft before sending it.">{% csrf_token %}<button class="btn btn-success" type="submit">Create final invoice</button></form>
         {% elif project.accepts_time and not running_time_entry %}<a class="btn btn-success" href="{% url 'projects:timer-start' %}?project={{ project.pk }}">Start timer</a>
         {% elif project.accepts_time %}<a class="btn btn-primary" href="{% url 'projects:time-create' %}?project={{ project.pk }}">Add manual entry</a>{% endif %}
     </div>

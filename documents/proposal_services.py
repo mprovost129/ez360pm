@@ -1,3 +1,4 @@
+from datetime import timedelta
 from decimal import Decimal
 
 import bleach
@@ -183,50 +184,169 @@ def create_retainer_invoice(*, proposal, mode, value, invoice_data):
         pk=proposal.pk
     )
     if proposal.doc_type != Document.Type.PROPOSAL or proposal.status != Document.Status.ACCEPTED:
-        raise ValidationError("Retainers require an accepted proposal.")
+        raise ValidationError("Deposit invoices require an accepted proposal.")
     value = Decimal(value)
     if mode == "percentage":
         if value <= 0 or value > 100:
-            raise ValidationError("Retainer percentage must be between 0 and 100.")
+            raise ValidationError("Deposit percentage must be between 0 and 100.")
         amount = money(proposal.accepted_total * value / Decimal("100"))
     elif mode == "amount":
         amount = money(value)
     else:
-        raise ValidationError("Unknown retainer calculation mode.")
+        raise ValidationError("Unknown deposit calculation mode.")
     if amount <= 0 or amount > proposal.accepted_total:
-        raise ValidationError("Retainer must be positive and no more than the accepted total.")
-    existing_total = (
-        proposal.derived_invoices.filter(
-            doc_type=Document.Type.INVOICE,
-            invoice_kind=Document.InvoiceKind.RETAINER,
-        )
-        .exclude(status=Document.Status.VOID)
-        .aggregate(value=Sum("total"))["value"]
-        or Decimal("0")
+        raise ValidationError("Deposit must be positive and no more than the accepted total.")
+    existing_deposits = proposal.derived_invoices.filter(
+        doc_type=Document.Type.INVOICE,
+        invoice_kind=Document.InvoiceKind.RETAINER,
+    ).exclude(status=Document.Status.VOID)
+    existing_total = sum(
+        (invoice.amount_due for invoice in existing_deposits),
+        Decimal("0.00"),
     )
     if money(existing_total + amount) > proposal.accepted_total:
-        raise ValidationError("Retainers cannot exceed the accepted proposal total.")
+        raise ValidationError("Deposits cannot exceed the accepted proposal total.")
 
     data = dict(invoice_data)
     data.update(
         invoice_kind=Document.InvoiceKind.RETAINER,
         source_proposal=proposal,
+        deposit_amount=amount,
     )
     invoice = create_invoice(
         company=proposal.company,
         project=proposal.project,
         invoice_data=data,
     )
-    LineItem.objects.create(
-        document=invoice,
-        order=1,
-        description=f"Retainer for {proposal.project.name}",
-        rate=amount,
-        quantity=Decimal("1.00"),
-        tax_rate=Decimal("0"),
-        line_total=amount,
+    LineItem.objects.bulk_create(
+        [
+            LineItem(
+                document=invoice,
+                order=line.order,
+                description=line.description,
+                rate=line.rate,
+                quantity=line.quantity,
+                tax_rate=line.tax_rate,
+                line_total=line.line_total,
+            )
+            for line in proposal.line_items.all()
+        ]
     )
-    return recalculate_document_totals(document=invoice)
+    invoice = recalculate_document_totals(document=invoice)
+    if invoice.deposit_amount > invoice.total:
+        raise ValidationError("Deposit cannot exceed the copied proposal total.")
+    return invoice
+
+
+def _next_staged_invoice_number(source):
+    for sequence in range(2, 1000):
+        number = f"{source.number}-{sequence}"
+        if not Document.objects.filter(
+            company=source.company,
+            doc_type=Document.Type.INVOICE,
+            number=number,
+        ).exists():
+            return number
+    raise ValidationError("Unable to allocate the next invoice number in this billing series.")
+
+
+@transaction.atomic
+def create_final_invoice_from_deposit(*, source_invoice, at=None):
+    source = (
+        Document.objects.select_for_update()
+        .select_related("company", "project")
+        .prefetch_related("line_items")
+        .get(pk=source_invoice.pk)
+    )
+    if source.doc_type != Document.Type.INVOICE or source.invoice_kind != Document.InvoiceKind.RETAINER:
+        raise ValidationError("Final invoices must be created from a deposit / retainer invoice.")
+    if source.status != Document.Status.PAID:
+        raise ValidationError("Record the full deposit payment before creating the final invoice.")
+    if source.follow_up_invoices.exclude(status=Document.Status.VOID).exists():
+        raise ValidationError("This deposit invoice already has an active final invoice.")
+    if (
+        source.source_proposal_id
+        and source.source_proposal.derived_invoices.filter(
+            doc_type=Document.Type.INVOICE,
+            invoice_kind=Document.InvoiceKind.FINAL,
+        )
+        .exclude(status=Document.Status.VOID)
+        .exists()
+    ):
+        raise ValidationError("This proposal already has an active final invoice.")
+
+    related_deposits = Document.objects.select_for_update().filter(
+        company=source.company,
+        project=source.project,
+        doc_type=Document.Type.INVOICE,
+        invoice_kind=Document.InvoiceKind.RETAINER,
+    )
+    if source.source_proposal_id:
+        related_deposits = related_deposits.filter(
+            source_proposal_id=source.source_proposal_id
+        )
+    else:
+        related_deposits = related_deposits.filter(source_proposal__isnull=True)
+    related_deposits = list(
+        related_deposits.exclude(status=Document.Status.VOID).order_by("issue_date", "pk")
+    )
+    if any(deposit.status != Document.Status.PAID for deposit in related_deposits):
+        raise ValidationError(
+            "Pay or void every deposit invoice in this billing series before creating the final invoice."
+        )
+
+    issue_date = at or timezone.localdate()
+    final = create_invoice(
+        company=source.company,
+        project=source.project,
+        invoice_data={
+            "invoice_kind": Document.InvoiceKind.FINAL,
+            "source_proposal": source.source_proposal,
+            "source_invoice": source,
+            "number": _next_staged_invoice_number(source),
+            "issue_date": issue_date,
+            "due_date": issue_date
+            + timedelta(days=source.company.default_invoice_due_days),
+            "terms": source.terms,
+            "notes": source.notes,
+            "accept_payments": source.accept_payments,
+        },
+        populate_project_lines=False,
+    )
+    scope = source.source_proposal if source.source_proposal_id else source
+    LineItem.objects.bulk_create(
+        [
+            LineItem(
+                document=final,
+                order=line.order,
+                description=line.description,
+                rate=line.rate,
+                quantity=line.quantity,
+                tax_rate=line.tax_rate,
+                line_total=line.line_total,
+            )
+            for line in scope.line_items.all()
+        ]
+    )
+    final = recalculate_document_totals(document=final)
+    credit_plan = []
+    for deposit in related_deposits:
+        available = available_retainer_credit(deposit)
+        if available > 0:
+            credit_plan.append((deposit, available))
+    if not credit_plan:
+        raise ValidationError("The deposit invoice has no paid amount available to credit.")
+    for deposit, credit_amount in credit_plan:
+        if final.total <= 0:
+            break
+        apply_retainer_credit(
+            source_invoice=deposit,
+            destination_invoice=final,
+            amount=min(credit_amount, final.total),
+        )
+        final.refresh_from_db()
+    final.refresh_from_db()
+    return final
 
 
 def available_retainer_credit(retainer):

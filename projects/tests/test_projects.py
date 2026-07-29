@@ -361,6 +361,36 @@ class ProjectViewTests(TestCase):
         self.assertContains(response, 'href="#project-invoices"')
         self.assertContains(response, 'id="project-invoices"')
 
+    def test_paid_deposit_surfaces_final_invoice_action_on_project(self):
+        project = create_project(
+            company=self.company,
+            client=self.client_record,
+            project_data=project_data(number="FINAL-ACTION"),
+        )
+        project.status = Project.Status.ACTIVE
+        project.save(update_fields=["status", "updated_at"])
+        deposit = Document.objects.create(
+            company=self.company,
+            project=project,
+            doc_type=Document.Type.INVOICE,
+            invoice_kind=Document.InvoiceKind.RETAINER,
+            number="I-FINAL-ACTION",
+            due_date=date(2026, 8, 22),
+            deposit_amount=Decimal("250.00"),
+            total=Decimal("1000.00"),
+            status=Document.Status.PAID,
+        )
+
+        response = self.client.get(reverse("projects:detail", args=(project.pk,)))
+
+        self.assertEqual(response.context["final_invoice_source"], deposit)
+        self.assertContains(response, "Prepare the final invoice")
+        self.assertContains(response, "Create final invoice")
+        self.assertContains(
+            response,
+            reverse("documents:invoice-final-create", args=(deposit.pk,)),
+        )
+
     def test_status_is_managed_on_edit_but_new_projects_still_start_as_leads(self):
         project = create_project(
             company=self.company,

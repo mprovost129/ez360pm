@@ -41,6 +41,7 @@ TRACKED_FIELDS = (
     "tax_total",
     "credit_total",
     "total",
+    "deposit_amount",
 )
 
 
@@ -103,6 +104,11 @@ def document_snapshot(document):
         "tax_total": _money(document.tax_total),
         "credit_total": _money(document.credit_total),
         "total": _money(document.total),
+        "deposit_amount": (
+            _money(document.deposit_amount)
+            if document.deposit_amount is not None
+            else None
+        ),
     }
 
 

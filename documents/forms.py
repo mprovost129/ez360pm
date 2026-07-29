@@ -20,7 +20,17 @@ class InvoiceCreateForm(CompanyScopedModelForm):
     )
 
     field_groups = (
-        ("Invoice", ("project", "invoice_kind", "number", "issue_date", "due_date")),
+        (
+            "Invoice",
+            (
+                "project",
+                "invoice_kind",
+                "deposit_amount",
+                "number",
+                "issue_date",
+                "due_date",
+            ),
+        ),
         ("Customer settings", ("terms", "accept_payments")),
         ("Internal", ("notes",)),
     )
@@ -30,6 +40,7 @@ class InvoiceCreateForm(CompanyScopedModelForm):
         fields = (
             "project",
             "invoice_kind",
+            "deposit_amount",
             "number",
             "issue_date",
             "due_date",
@@ -45,12 +56,14 @@ class InvoiceCreateForm(CompanyScopedModelForm):
         }
         labels = {
             "invoice_kind": "Invoice type",
+            "deposit_amount": "Deposit due now",
             "terms": "Customer terms",
             "notes": "Internal notes",
             "accept_payments": "Allow online payment with Stripe",
         }
         help_texts = {
             "notes": "Only you can see these notes.",
+            "deposit_amount": "The invoice can show the full project value while collecting only this deposit.",
             "accept_payments": "Shows a Pay button on the customer invoice when Stripe is configured.",
         }
 
@@ -73,6 +86,16 @@ class InvoiceCreateForm(CompanyScopedModelForm):
                 self.fields["project"].disabled = True
                 self.fields["project"].help_text = "Selected from the project page."
 
+    def clean(self):
+        cleaned = super().clean()
+        kind = cleaned.get("invoice_kind")
+        deposit = cleaned.get("deposit_amount")
+        if kind == Document.InvoiceKind.RETAINER and deposit is None:
+            self.add_error("deposit_amount", "Enter the deposit amount due now.")
+        elif kind == Document.InvoiceKind.FINAL and deposit is not None:
+            self.add_error("deposit_amount", "Only deposit invoices can set a deposit amount.")
+        return cleaned
+
     def save(self, commit=True):
         if not commit:
             raise ValueError("InvoiceCreateForm must be saved with commit=True.")
@@ -92,14 +115,22 @@ class InvoiceCreateForm(CompanyScopedModelForm):
 
 class InvoiceEditForm(CompanyScopedModelForm):
     field_groups = (
-        ("Invoice", ("number", "issue_date", "due_date")),
+        ("Invoice", ("deposit_amount", "number", "issue_date", "due_date")),
         ("Customer settings", ("terms", "accept_payments")),
         ("Internal", ("notes",)),
     )
 
     class Meta:
         model = Document
-        fields = ("number", "issue_date", "due_date", "terms", "notes", "accept_payments")
+        fields = (
+            "deposit_amount",
+            "number",
+            "issue_date",
+            "due_date",
+            "terms",
+            "notes",
+            "accept_payments",
+        )
         widgets = {
             "issue_date": forms.DateInput(attrs={"type": "date"}),
             "due_date": forms.DateInput(attrs={"type": "date"}),
@@ -107,14 +138,25 @@ class InvoiceEditForm(CompanyScopedModelForm):
             "notes": forms.Textarea(attrs={"rows": 3}),
         }
         labels = {
+            "deposit_amount": "Deposit due now",
             "terms": "Customer terms",
             "notes": "Internal notes",
             "accept_payments": "Allow online payment with Stripe",
         }
         help_texts = {
+            "deposit_amount": "The customer owes this amount now while the invoice shows the full project total.",
             "notes": "Only you can see these notes.",
             "accept_payments": "Shows a Pay button on the customer invoice when Stripe is configured.",
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.instance.invoice_kind != Document.InvoiceKind.RETAINER:
+            self.fields.pop("deposit_amount", None)
+            self.field_groups = (
+                ("Invoice", ("number", "issue_date", "due_date")),
+                *self.field_groups[1:],
+            )
 
 
 class LineItemForm(forms.ModelForm):
@@ -225,8 +267,8 @@ class PaymentForm(forms.ModelForm):
         other_paid = self.invoice.amount_paid
         if self.instance.pk:
             other_paid -= self.instance.amount
-        if other_paid + amount > self.invoice.total:
-            raise forms.ValidationError("Payments cannot exceed the invoice total.")
+        if other_paid + amount > self.invoice.amount_due:
+            raise forms.ValidationError("Payments cannot exceed the amount due.")
         return amount
 
     def save(self, commit=True):

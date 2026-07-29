@@ -63,7 +63,7 @@ def recalculate_document_totals(*, document):
 
 
 @transaction.atomic
-def create_invoice(*, company, project, invoice_data):
+def create_invoice(*, company, project, invoice_data, populate_project_lines=True):
     try:
         project = Project.objects.for_company(company).get(pk=project.pk)
     except Project.DoesNotExist:
@@ -86,7 +86,8 @@ def create_invoice(*, company, project, invoice_data):
     invoice.save()
 
     if (
-        project.billing_type == Project.BillingType.FLAT_FEE
+        populate_project_lines
+        and project.billing_type == Project.BillingType.FLAT_FEE
         and invoice.invoice_kind == Document.InvoiceKind.FINAL
     ):
         LineItem.objects.create(
@@ -116,6 +117,8 @@ def duplicate_document(*, document):
     )
     if document.doc_type == Document.Type.INVOICE and not document.is_editable:
         raise ValidationError("Only draft invoices can be duplicated.")
+    if document.deposit_amount is not None or document.source_invoice_id:
+        raise ValidationError("Staged billing invoices must be created from their billing workflow.")
     if document.doc_type not in {Document.Type.INVOICE, Document.Type.PROPOSAL}:
         raise ValidationError("This document cannot be duplicated.")
 
@@ -312,6 +315,8 @@ def issue_document(*, document, at=None):
     document.refresh_from_db()
     if not document.line_items.exists() or document.total <= 0:
         raise ValidationError("Add positive pricing before issuing this document.")
+    if document.deposit_amount is not None and document.deposit_amount > document.total:
+        raise ValidationError("Deposit amount cannot exceed the invoice total.")
     document.status = Document.Status.SENT
     document.sent_at = at or timezone.now()
     document.full_clean()
@@ -362,7 +367,7 @@ def recalculate_payment_status(*, invoice):
     if invoice.status == Document.Status.VOID:
         return invoice
     amount_paid = invoice.payments.aggregate(value=Sum("amount"))["value"] or Decimal("0")
-    if amount_paid > 0 and amount_paid >= invoice.total:
+    if amount_paid > 0 and amount_paid >= invoice.amount_due:
         status = Document.Status.PAID
     elif amount_paid > 0:
         status = Document.Status.PARTIALLY_PAID
@@ -413,8 +418,8 @@ def update_payment(*, payment, payment_data):
     invoice = Document.objects.select_for_update().get(pk=payment.document_id)
     other_paid = invoice.payments.exclude(pk=payment.pk).aggregate(value=Sum("amount"))["value"] or Decimal("0")
     amount = money(payment_data["amount"])
-    if other_paid + amount > invoice.total:
-        raise ValidationError("Payments cannot exceed the invoice total.")
+    if other_paid + amount > invoice.amount_due:
+        raise ValidationError("Payments cannot exceed the amount due.")
     for field, value in payment_data.items():
         setattr(payment, field, value)
     payment.amount = amount

@@ -27,7 +27,7 @@ from .forms import (
 from .models import Document, InvoiceCredit, LineItem, Payment
 from .pdf import build_invoice_pdf
 from .proposal_forms import InvoiceCreditForm
-from .proposal_services import remove_retainer_credit
+from .proposal_services import create_final_invoice_from_deposit, remove_retainer_credit
 from .reporting import outstanding_invoices
 from .services import (
     attach_time_to_invoice,
@@ -136,6 +136,7 @@ class InvoiceDetailView(LoginRequiredMixin, CompanyScopedQuerysetMixin, DetailVi
                 "line_items__time_entries",
                 "payments",
                 "credits_received__source_invoice",
+                "follow_up_invoices",
                 "deliveries",
             )
         )
@@ -143,6 +144,25 @@ class InvoiceDetailView(LoginRequiredMixin, CompanyScopedQuerysetMixin, DetailVi
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context["show_internal_notes"] = True
+        active_follow_up = self.object.follow_up_invoices.exclude(
+            status=Document.Status.VOID
+        ).first()
+        context["follow_up_invoice"] = active_follow_up
+        proposal_has_final = bool(
+            self.object.source_proposal_id
+            and self.object.source_proposal.derived_invoices.filter(
+                doc_type=Document.Type.INVOICE,
+                invoice_kind=Document.InvoiceKind.FINAL,
+            )
+            .exclude(status=Document.Status.VOID)
+            .exists()
+        )
+        context["can_create_final_invoice"] = (
+            self.object.invoice_kind == Document.InvoiceKind.RETAINER
+            and self.object.status == Document.Status.PAID
+            and active_follow_up is None
+            and not proposal_has_final
+        )
         if self.object.status == Document.Status.DRAFT:
             context["details_form"] = InvoiceEditForm(
                 company=self.request.user.company,
@@ -274,6 +294,21 @@ class InvoiceDuplicateView(LoginRequiredMixin, View):
         duplicate = duplicate_document(document=invoice)
         messages.success(request, f"Created draft invoice {duplicate.number} from {invoice.number}.")
         return redirect("documents:invoice-detail", pk=duplicate.pk)
+
+
+class FinalInvoiceCreateView(LoginRequiredMixin, View):
+    def post(self, request, pk):
+        source = scoped_invoice(request, pk)
+        try:
+            final = create_final_invoice_from_deposit(source_invoice=source)
+        except ValidationError as exc:
+            messages.error(request, "; ".join(exc.messages))
+            return redirect("documents:invoice-detail", pk=source.pk)
+        messages.success(
+            request,
+            f"Draft final invoice {final.number} created with the paid deposit applied.",
+        )
+        return redirect("documents:invoice-detail", pk=final.pk)
 
 
 class InvoiceChildFormMixin(LoginRequiredMixin):

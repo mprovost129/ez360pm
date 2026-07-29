@@ -17,7 +17,7 @@ class Document(CompanyOwnedModel):
         INVOICE = "invoice", "Invoice"
 
     class InvoiceKind(models.TextChoices):
-        RETAINER = "retainer", "Retainer"
+        RETAINER = "retainer", "Deposit / retainer"
         FINAL = "final", "Final"
 
     class Status(models.TextChoices):
@@ -49,7 +49,15 @@ class Document(CompanyOwnedModel):
         blank=True,
         null=True,
     )
-    number = models.CharField(max_length=30, blank=True)
+    source_invoice = models.ForeignKey(
+        "self",
+        on_delete=models.PROTECT,
+        related_name="follow_up_invoices",
+        blank=True,
+        null=True,
+        help_text="Deposit invoice from which this final invoice was generated.",
+    )
+    number = models.CharField(max_length=50, blank=True)
     status = models.CharField(
         max_length=30,
         choices=Status.choices,
@@ -61,6 +69,14 @@ class Document(CompanyOwnedModel):
     tax_total = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     credit_total = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     total = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    deposit_amount = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        blank=True,
+        null=True,
+        validators=[MinValueValidator(Decimal("0.01"))],
+        help_text="Current amount due on a deposit invoice while total retains the full project value.",
+    )
     body_sections = models.JSONField(default=list, blank=True)
     terms = models.TextField(blank=True)
     notes = models.TextField(blank=True)
@@ -103,6 +119,17 @@ class Document(CompanyOwnedModel):
                     | Q(doc_type="proposal", invoice_kind="")
                 ),
                 name="documents_kind_matches_type",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    Q(deposit_amount__isnull=True)
+                    | Q(
+                        doc_type="invoice",
+                        invoice_kind="retainer",
+                        deposit_amount__gt=0,
+                    )
+                ),
+                name="documents_deposit_matches_retainer",
             ),
         ]
         indexes = [
@@ -163,6 +190,21 @@ class Document(CompanyOwnedModel):
                 errors["source_proposal"] = "Source document must be a proposal."
             elif self.source_proposal.project_id != self.project_id:
                 errors["source_proposal"] = "Source proposal must use the same project."
+        if self.source_invoice_id:
+            source = self.source_invoice
+            if self.doc_type != self.Type.INVOICE or self.invoice_kind != self.InvoiceKind.FINAL:
+                errors["source_invoice"] = "Only final invoices can reference a deposit invoice."
+            elif source.doc_type != self.Type.INVOICE or source.invoice_kind != self.InvoiceKind.RETAINER:
+                errors["source_invoice"] = "Source invoice must be a deposit / retainer invoice."
+            elif source.company_id != self.company_id or source.project_id != self.project_id:
+                errors["source_invoice"] = "Source invoice must use the same company and project."
+        if self.deposit_amount is not None:
+            if self.doc_type != self.Type.INVOICE or self.invoice_kind != self.InvoiceKind.RETAINER:
+                errors["deposit_amount"] = "A deposit amount requires a deposit / retainer invoice."
+            elif self.deposit_amount <= 0:
+                errors["deposit_amount"] = "Deposit amount must be positive."
+            elif self.total > 0 and self.deposit_amount > self.total:
+                errors["deposit_amount"] = "Deposit amount cannot exceed the invoice total."
         if errors:
             raise ValidationError(errors)
 
@@ -171,8 +213,18 @@ class Document(CompanyOwnedModel):
         return self.payments.aggregate(value=Sum("amount"))["value"] or Decimal("0.00")
 
     @property
+    def gross_total(self):
+        return self.subtotal + self.tax_total
+
+    @property
+    def amount_due(self):
+        if self.invoice_kind == self.InvoiceKind.RETAINER and self.deposit_amount is not None:
+            return self.deposit_amount
+        return self.total
+
+    @property
     def outstanding_balance(self):
-        return max(self.total - self.amount_paid, Decimal("0.00"))
+        return max(self.amount_due - self.amount_paid, Decimal("0.00"))
 
     @property
     def is_overdue(self):

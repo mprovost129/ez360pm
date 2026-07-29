@@ -5,7 +5,15 @@ from .models import Document, DocumentDelivery, DocumentNumberSequence
 
 @admin.register(Document)
 class DocumentAdmin(admin.ModelAdmin):
-    list_display = ("number", "doc_type", "invoice_kind", "project", "status", "total")
+    list_display = (
+        "number",
+        "doc_type",
+        "invoice_kind",
+        "project",
+        "status",
+        "total",
+        "deposit_amount",
+    )
     list_filter = ("company", "doc_type", "invoice_kind", "status")
     search_fields = ("number", "project__number", "project__name")
     readonly_fields = (

@@ -85,6 +85,22 @@ class ProjectDetailView(LoginRequiredMixin, CompanyScopedQuerysetMixin, DetailVi
         context["invoices"] = [
             document for document in documents if document.doc_type == "invoice"
         ]
+        active_final_exists = any(
+            invoice.invoice_kind == "final" and invoice.status != "void"
+            for invoice in context["invoices"]
+        )
+        context["final_invoice_source"] = None
+        if not active_final_exists:
+            context["final_invoice_source"] = next(
+                (
+                    invoice
+                    for invoice in context["invoices"]
+                    if invoice.invoice_kind == "retainer"
+                    and invoice.status == "paid"
+                    and not invoice.follow_up_invoices.exclude(status="void").exists()
+                ),
+                None,
+            )
         context["recent_time_entries"] = self.object.time_entries.filter(
             user=self.request.user
         )[:10]
