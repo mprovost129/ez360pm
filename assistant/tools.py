@@ -13,7 +13,7 @@ from documents.models import Document, Payment
 from documents.reporting import outstanding_invoices
 from intake.forms import QuickNoteForm
 from intake.models import Note
-from projects.models import Project, TimeEntry
+from projects.models import Project, ProjectClientForm, ProjectFormAnswer, TimeEntry
 from projects.time_services import pause_timer, resume_timer, start_timer, stop_timer
 
 from .models import AIActionAttempt
@@ -246,6 +246,39 @@ def project_summary(context, arguments):
             line_item__isnull=True,
         )
     )
+    specification_forms = []
+    submitted_forms = (
+        ProjectClientForm.objects.for_company(context.company)
+        .filter(project=project, status=ProjectClientForm.Status.SUBMITTED)
+        .prefetch_related("questions__answer")
+        .order_by("submitted_at", "pk")[:10]
+    )
+    for project_form in submitted_forms:
+        answers = []
+        for question in project_form.questions.all():
+            try:
+                value = question.answer.value
+            except ProjectFormAnswer.DoesNotExist:
+                continue
+            if value not in (None, "", []):
+                answers.append(
+                    {
+                        "section": question.section or "Project information",
+                        "question": question.label,
+                        "answer": value,
+                    }
+                )
+        specification_forms.append(
+            {
+                "form": project_form.title,
+                "submitted_at": (
+                    project_form.submitted_at.isoformat()
+                    if project_form.submitted_at
+                    else None
+                ),
+                "answers": answers,
+            }
+        )
     return {
         "project": {
             "number": project.number,
@@ -273,6 +306,7 @@ def project_summary(context, arguments):
             "entry_count": len(unbilled),
             "hours": _hours(sum((item.duration for item in unbilled), timedelta())),
         },
+        "specifications": {"forms": specification_forms},
         "links": [_project_link(project)]
         + [_document_link(item) for item in documents[:5]],
     }

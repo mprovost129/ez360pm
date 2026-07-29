@@ -1,0 +1,11 @@
+Hello {{ project_form.recipient_name }},
+
+{% if project_form.email_message %}{{ project_form.email_message }}
+
+{% endif %}Please complete {{ project_form.title }} for {{ project_form.project.name }}:
+{{ form_url }}
+
+You can save your progress and return using the same private link.
+
+{{ project_form.company.name }}
+{% if project_form.company.email %}{{ project_form.company.email }}{% endif %}

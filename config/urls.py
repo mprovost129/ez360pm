@@ -3,6 +3,8 @@ from django.conf.urls.static import static
 from django.contrib import admin
 from django.urls import include, path
 
+from projects.client_form_views import PublicProjectClientFormView
+
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('jet/', include('jet.urls', 'jet')),  # Django JET URLS
@@ -12,6 +14,7 @@ urlpatterns = [
     path('notes/', include('intake.urls')),
     path('clients/', include('clients.urls')),
     path('projects/', include('projects.urls')),
+    path('f/<uuid:token>/', PublicProjectClientFormView.as_view(), name='public-project-form'),
     path('proposals/', include('documents.proposal_urls')),
     path('invoices/', include('documents.urls')),
     path('d/', include('documents.public_urls')),

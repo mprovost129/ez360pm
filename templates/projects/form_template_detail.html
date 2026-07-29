@@ -1,0 +1,12 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ form_template.name }} | EZ360PM{% endblock %}
+
+{% block content %}
+<div class="page-heading"><div><p class="eyebrow">Client form template{% if not form_template.is_active %} · Inactive{% endif %}</p><h1>{{ form_template.name }}</h1></div><div class="button-group"><a class="btn btn-light" href="{% url 'projects:form-template-update' form_template.pk %}">Edit template</a><a class="btn btn-primary" href="{% url 'projects:form-question-create' form_template.pk %}">Add question</a></div></div>
+{% if form_template.description %}<section class="content-card"><h2>Internal description</h2><p>{{ form_template.description|linebreaksbr }}</p></section>{% endif %}
+{% if form_template.welcome_message %}<section class="content-card"><h2>Client welcome</h2><p>{{ form_template.welcome_message|linebreaksbr }}</p>{% if form_template.estimated_minutes %}<p class="muted">Estimated time: {{ form_template.estimated_minutes }} minutes</p>{% endif %}</section>{% endif %}
+<section class="content-card"><div class="section-heading"><h2>Questions</h2><span>{{ form_template.questions.count }} total</span></div>
+    {% for question in form_template.questions.all %}<div class="detail-row"><span><strong>{{ question.label }}{% if question.required %} *</strong>{% else %}</strong>{% endif %}<small>{{ question.section|default:'Project information' }} · {{ question.get_field_type_display }}{% if question.help_text %} · {{ question.help_text }}{% endif %}</small></span><span><form class="inline-form" method="post" action="{% url 'projects:form-question-move' form_template.pk question.pk 'up' %}">{% csrf_token %}<button class="link-button" type="submit" aria-label="Move {{ question.label }} up">↑</button></form> <form class="inline-form" method="post" action="{% url 'projects:form-question-move' form_template.pk question.pk 'down' %}">{% csrf_token %}<button class="link-button" type="submit" aria-label="Move {{ question.label }} down">↓</button></form> · <a href="{% url 'projects:form-question-update' form_template.pk question.pk %}">Edit</a> · <form class="inline-form" method="post" action="{% url 'projects:form-question-delete' form_template.pk question.pk %}" data-confirm="Remove this question from the template? Already-sent forms will not change.">{% csrf_token %}<button class="link-button" type="submit">Remove</button></form></span></div>{% empty %}<p class="muted">No questions. Add the first question before sending this form.</p>{% endfor %}
+</section>
+{% endblock %}

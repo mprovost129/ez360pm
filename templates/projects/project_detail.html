@@ -7,6 +7,8 @@
 <div class="page-heading">
     <div><p class="eyebrow">{{ project.number }} · {{ project.get_status_display }}</p><h1>{{ project.name }}</h1></div>
     <div class="button-group">
+        <a class="btn btn-primary" href="{% url 'projects:client-form-create' project.pk %}">New form</a>
+        <a class="btn btn-light" href="{% url 'projects:specifications' project.pk %}">Specifications</a>
         <a class="btn btn-light" href="{% url 'projects:update' project.pk %}">Edit project</a>
     </div>
 </div>
@@ -82,6 +84,10 @@
     <section class="content-card detail-wide" id="project-invoices">
         <div class="section-heading"><h2>Invoices</h2><a href="{% url 'documents:invoice-list' %}?project={{ project.pk }}">View all invoices</a></div>
         {% for invoice in invoices %}<a class="item-row" href="{% url 'documents:invoice-detail' invoice.pk %}"><span><strong>{{ invoice.number }}</strong><small>{{ invoice.get_status_display }} · ${{ invoice.total }}</small></span><i class="bi bi-chevron-right" aria-hidden="true"></i></a>{% empty %}<p class="muted">No invoices.</p>{% endfor %}
+    </section>
+    <section class="content-card detail-wide" id="project-forms">
+        <div class="section-heading"><h2>Client forms</h2><a href="{% url 'projects:client-form-create' project.pk %}">New form</a></div>
+        {% for project_form in client_forms %}<a class="item-row" href="{% url 'projects:client-form-detail' project.pk project_form.pk %}"><span><strong>{{ project_form.title }}</strong><small>{{ project_form.get_status_display }} · {{ project_form.recipient_email }}</small></span><i class="bi bi-chevron-right" aria-hidden="true"></i></a>{% empty %}<p class="muted">No client forms.</p>{% endfor %}
     </section>
 </div>
 {% endblock %}

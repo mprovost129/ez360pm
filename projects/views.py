@@ -73,6 +73,7 @@ class ProjectDetailView(LoginRequiredMixin, CompanyScopedQuerysetMixin, DetailVi
         return super().get_queryset().select_related("client").prefetch_related(
             "client__contacts",
             "documents",
+            "client_forms",
             "notes",
         )
 
@@ -85,6 +86,7 @@ class ProjectDetailView(LoginRequiredMixin, CompanyScopedQuerysetMixin, DetailVi
         context["invoices"] = [
             document for document in documents if document.doc_type == "invoice"
         ]
+        context["client_forms"] = list(self.object.client_forms.all())
         active_final_exists = any(
             invoice.invoice_kind == "final" and invoice.status != "void"
             for invoice in context["invoices"]

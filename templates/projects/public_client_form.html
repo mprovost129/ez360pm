@@ -1,0 +1,13 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="robots" content="noindex,nofollow"><title>{{ project_form.title }} | {{ project_form.company.name }}</title><link rel="stylesheet" href="{% static 'vendor/bootstrap/css/bootstrap.min.css' %}"><link rel="stylesheet" href="{% static 'css/main.css' %}"></head>
+<body class="auth-body"><main class="auth-main" id="main-content"><div class="content-card" style="max-width:900px;margin:2rem auto;">
+    <header class="page-heading"><div>{% if project_form.company.logo %}<img src="{{ project_form.company.logo.url }}" alt="{{ project_form.company.name }}" style="max-height:72px;max-width:240px;margin-bottom:1rem;">{% endif %}<p class="eyebrow">{{ project_form.company.name }}</p><h1>{{ project_form.title }}</h1><p>{{ project_form.project.name }}</p></div></header>
+    {% if project_form.status == 'submitted' %}<section class="content-card"><h2>Thank you</h2><p>Your information was submitted successfully to {{ project_form.company.name }}.</p><p>You may close this page.</p></section>
+    {% else %}
+    {% if project_form.welcome_message %}<p>{{ project_form.welcome_message|linebreaksbr }}</p>{% endif %}{% if project_form.estimated_minutes %}<p class="muted">Estimated time: {{ project_form.estimated_minutes }} minutes</p>{% endif %}{% if request.GET.saved %}<div class="alert alert-success">Your progress was saved. You can return using the same link.</div>{% endif %}
+    <form method="post" novalidate>{% csrf_token %}{% if form.errors %}<div class="form-error-summary" role="alert"><strong>Please complete the highlighted required fields.</strong>{{ form.non_field_errors }}</div>{% endif %}{% for section, fields in form.sections %}<fieldset class="form-section form-grid"><legend>{{ section }}</legend>{% for field in fields %}{% include 'shared/_form_field.html' with field=field %}{% endfor %}</fieldset>{% endfor %}<div class="form-actions"><button class="btn btn-light" type="submit" name="action" value="save">Save progress</button><button class="btn btn-primary" type="submit" name="action" value="submit">Submit completed form</button></div></form>
+    {% endif %}
+    <footer class="muted" style="margin-top:2rem;">Questions? Contact {{ project_form.company.name }}{% if project_form.company.email %} at <a href="mailto:{{ project_form.company.email }}">{{ project_form.company.email }}</a>{% endif %}.</footer>
+</div></main></body></html>

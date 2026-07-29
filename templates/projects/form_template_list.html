@@ -1,0 +1,10 @@
+{% extends 'base.html' %}
+
+{% block title %}Client form templates | EZ360PM{% endblock %}
+
+{% block content %}
+<div class="page-heading"><div><p class="eyebrow">Settings</p><h1>Client form templates</h1></div><a class="btn btn-primary" href="{% url 'projects:form-template-create' %}">New template</a></div>
+<section class="content-card">
+    {% for template in form_templates %}<a class="item-row" href="{% url 'projects:form-template-detail' template.pk %}"><span><strong>{{ template.name }}</strong><small>{{ template.questions.count }} question{{ template.questions.count|pluralize }}{% if not template.is_active %} · Inactive{% endif %}</small></span><i class="bi bi-chevron-right" aria-hidden="true"></i></a>{% empty %}<p class="muted">No form templates yet. Create one to start collecting structured project information.</p>{% endfor %}
+</section>
+{% endblock %}

@@ -1,3 +1,4 @@
+import uuid
 from datetime import timedelta
 from decimal import ROUND_HALF_UP, Decimal
 
@@ -196,6 +197,178 @@ class ProjectNumberSequence(models.Model):
 
     def __str__(self):
         return f"{self.company}: {self.period}/{self.last_value}"
+
+
+class ClientFormTemplate(CompanyOwnedModel):
+    name = models.CharField(max_length=255)
+    description = models.TextField(blank=True)
+    welcome_message = models.TextField(blank=True)
+    estimated_minutes = models.PositiveSmallIntegerField(blank=True, null=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("name", "pk")
+        constraints = [
+            models.UniqueConstraint(
+                fields=("company", "name"),
+                name="projects_company_form_template_name_unique",
+            )
+        ]
+
+    def __str__(self):
+        return self.name
+
+
+class ClientFormQuestion(models.Model):
+    class FieldType(models.TextChoices):
+        SHORT_TEXT = "short_text", "Short text"
+        LONG_TEXT = "long_text", "Long text"
+        EMAIL = "email", "Email"
+        PHONE = "phone", "Phone"
+        NUMBER = "number", "Number"
+        DATE = "date", "Date"
+        SELECT = "select", "Dropdown"
+        MULTI_SELECT = "multi_select", "Checkboxes"
+        YES_NO = "yes_no", "Yes / no"
+
+    template = models.ForeignKey(
+        ClientFormTemplate,
+        on_delete=models.CASCADE,
+        related_name="questions",
+    )
+    section = models.CharField(max_length=255, blank=True)
+    label = models.CharField(max_length=500)
+    help_text = models.CharField(max_length=1000, blank=True)
+    field_type = models.CharField(max_length=30, choices=FieldType.choices)
+    required = models.BooleanField(default=False)
+    options = models.JSONField(default=list, blank=True)
+    order = models.PositiveSmallIntegerField(default=1)
+
+    class Meta:
+        ordering = ("order", "pk")
+        constraints = [
+            models.UniqueConstraint(
+                fields=("template", "order"),
+                name="projects_form_template_question_order_unique",
+            )
+        ]
+
+    def clean(self):
+        super().clean()
+        if self.field_type in {self.FieldType.SELECT, self.FieldType.MULTI_SELECT}:
+            if not isinstance(self.options, list) or not any(str(item).strip() for item in self.options):
+                raise ValidationError({"options": "Dropdowns and checkboxes require at least one option."})
+        elif self.options:
+            raise ValidationError({"options": "Options are only used for dropdowns and checkboxes."})
+
+    def __str__(self):
+        return self.label
+
+
+class ProjectClientForm(CompanyOwnedModel):
+    class Status(models.TextChoices):
+        DRAFT = "draft", "Draft"
+        SENT = "sent", "Sent"
+        VIEWED = "viewed", "Opened"
+        SUBMITTED = "submitted", "Submitted"
+
+    class EmailStatus(models.TextChoices):
+        NOT_SENT = "not_sent", "Not sent"
+        SENT = "sent", "Sent"
+        FAILED = "failed", "Failed"
+
+    project = models.ForeignKey(Project, on_delete=models.PROTECT, related_name="client_forms")
+    template = models.ForeignKey(
+        ClientFormTemplate,
+        on_delete=models.PROTECT,
+        related_name="project_forms",
+    )
+    title = models.CharField(max_length=255)
+    welcome_message = models.TextField(blank=True)
+    estimated_minutes = models.PositiveSmallIntegerField(blank=True, null=True)
+    public_token = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.DRAFT)
+    recipient_name = models.CharField(max_length=255)
+    recipient_email = models.EmailField()
+    email_subject = models.CharField(max_length=255, blank=True)
+    email_message = models.TextField(blank=True)
+    email_status = models.CharField(
+        max_length=20,
+        choices=EmailStatus.choices,
+        default=EmailStatus.NOT_SENT,
+    )
+    email_error = models.CharField(max_length=100, blank=True)
+    sent_at = models.DateTimeField(blank=True, null=True)
+    viewed_at = models.DateTimeField(blank=True, null=True)
+    saved_at = models.DateTimeField(blank=True, null=True)
+    submitted_at = models.DateTimeField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("-created_at", "-pk")
+        indexes = [models.Index(fields=("company", "project", "status"))]
+
+    def clean(self):
+        super().clean()
+        errors = {}
+        if self.project_id and self.project.company_id != self.company_id:
+            errors["project"] = "Project must belong to the same company."
+        if self.template_id and self.template.company_id != self.company_id:
+            errors["template"] = "Form template must belong to the same company."
+        if errors:
+            raise ValidationError(errors)
+
+    def __str__(self):
+        return f"{self.project.number} - {self.title}"
+
+
+class ProjectFormQuestion(models.Model):
+    project_form = models.ForeignKey(
+        ProjectClientForm,
+        on_delete=models.CASCADE,
+        related_name="questions",
+    )
+    source_question = models.ForeignKey(
+        ClientFormQuestion,
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+    )
+    section = models.CharField(max_length=255, blank=True)
+    label = models.CharField(max_length=500)
+    help_text = models.CharField(max_length=1000, blank=True)
+    field_type = models.CharField(max_length=30, choices=ClientFormQuestion.FieldType.choices)
+    required = models.BooleanField(default=False)
+    options = models.JSONField(default=list, blank=True)
+    order = models.PositiveSmallIntegerField()
+
+    class Meta:
+        ordering = ("order", "pk")
+        constraints = [
+            models.UniqueConstraint(
+                fields=("project_form", "order"),
+                name="projects_project_form_question_order_unique",
+            )
+        ]
+
+    def __str__(self):
+        return self.label
+
+
+class ProjectFormAnswer(models.Model):
+    question = models.OneToOneField(
+        ProjectFormQuestion,
+        on_delete=models.CASCADE,
+        related_name="answer",
+    )
+    value = models.JSONField(default=str, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Answer: {self.question.label}"
 
 
 class TimeEntry(CompanyOwnedModel):

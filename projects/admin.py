@@ -1,6 +1,13 @@
 from django.contrib import admin
 
-from .models import Project, ProjectNumberSequence, TimeEntry
+from .models import (
+    ClientFormQuestion,
+    ClientFormTemplate,
+    Project,
+    ProjectClientForm,
+    ProjectNumberSequence,
+    TimeEntry,
+)
 
 
 @admin.register(Project)
@@ -30,3 +37,24 @@ class TimeEntryAdmin(admin.ModelAdmin):
     )
     list_filter = ("company", "status", "billable")
     search_fields = ("project__number", "project__name", "description", "user__email")
+
+
+class ClientFormQuestionInline(admin.TabularInline):
+    model = ClientFormQuestion
+    extra = 0
+    ordering = ("order",)
+
+
+@admin.register(ClientFormTemplate)
+class ClientFormTemplateAdmin(admin.ModelAdmin):
+    list_display = ("name", "company", "is_active", "updated_at")
+    list_filter = ("company", "is_active")
+    inlines = (ClientFormQuestionInline,)
+
+
+@admin.register(ProjectClientForm)
+class ProjectClientFormAdmin(admin.ModelAdmin):
+    list_display = ("title", "project", "recipient_email", "status", "email_status")
+    list_filter = ("company", "status", "email_status")
+    search_fields = ("title", "project__number", "recipient_email")
+    readonly_fields = ("public_token", "sent_at", "viewed_at", "saved_at", "submitted_at")
