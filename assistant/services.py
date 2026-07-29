@@ -1,3 +1,4 @@
+import hashlib
 import json
 import logging
 import re
@@ -206,6 +207,7 @@ def _create_provider_response(
     max_output_tokens=None,
     reasoning_effort="",
     text_verbosity="",
+    safety_identifier="",
 ):
     kwargs = {
         # Providers must receive a stable snapshot. The orchestration loop appends
@@ -223,6 +225,7 @@ def _create_provider_response(
                 "max_output_tokens": max_output_tokens,
                 "reasoning_effort": reasoning_effort,
                 "text_verbosity": text_verbosity,
+                "safety_identifier": safety_identifier,
             }
         )
     return provider.create_response(**kwargs)
@@ -243,6 +246,13 @@ def _normalize_conversation_id(value):
         raise ValidationError(
             "Start a new assistant conversation and try again."
         ) from exc
+
+
+def _safety_identifier(user):
+    """Return a stable pseudonymous identifier without sending account PII."""
+
+    source = f"ez360pm:{settings.SECRET_KEY}:{user.pk}"
+    return hashlib.sha256(source.encode("utf-8")).hexdigest()
 
 
 def _conversation_context_items(*, user, conversation_id, policy):
@@ -393,15 +403,16 @@ def run_assistant(*, user, prompt, provider=None, conversation_id=None, page_pat
         else int(settings.AI_MAX_OUTPUT_TOKENS)
     )
     request_reasoning_effort = (
-        str(getattr(settings, "AI_FOCUSED_REASONING_EFFORT", "minimal")).strip()
+        str(getattr(settings, "AI_FOCUSED_REASONING_EFFORT", "low")).strip()
         if tool_plan.focused
-        else ""
+        else str(getattr(settings, "AI_REASONING_EFFORT", "medium")).strip()
     )
     request_text_verbosity = (
         str(getattr(settings, "AI_FOCUSED_VERBOSITY", "low")).strip()
         if tool_plan.focused
-        else ""
+        else str(getattr(settings, "AI_VERBOSITY", "low")).strip()
     )
+    request_safety_identifier = _safety_identifier(user)
     max_tool_rounds = (
         tool_plan.max_tool_rounds
         if tool_plan.max_tool_rounds is not None
@@ -479,6 +490,7 @@ def run_assistant(*, user, prompt, provider=None, conversation_id=None, page_pat
                     max_output_tokens=request_max_output_tokens,
                     reasoning_effort=request_reasoning_effort,
                     text_verbosity=request_text_verbosity,
+                    safety_identifier=request_safety_identifier,
                 )
                 usage = response.usage
                 if response.request_id and response.request_id not in provider_request_ids:

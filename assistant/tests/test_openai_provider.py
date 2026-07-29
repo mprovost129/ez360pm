@@ -119,6 +119,7 @@ class OpenAIResponsesProviderTests(SimpleTestCase):
             instructions="Use registered tools.",
             tools=tools,
             client_request_id="client-test-123",
+            safety_identifier="pseudonymous-user-123",
         )
 
         self.assertEqual(responses.payload["model"], "test-model")
@@ -131,6 +132,9 @@ class OpenAIResponsesProviderTests(SimpleTestCase):
             responses.payload["extra_headers"]["X-Client-Request-Id"],
             "client-test-123",
         )
+        self.assertEqual(
+            responses.payload["safety_identifier"], "pseudonymous-user-123"
+        )
         self.assertEqual(result.text, "Ready.")
         self.assertEqual(result.request_id, "req_test_123")
         self.assertEqual(result.client_request_id, "client-test-123")
@@ -140,7 +144,7 @@ class OpenAIResponsesProviderTests(SimpleTestCase):
         responses = FakeResponses()
         provider = OpenAIResponsesProvider(
             api_key="test-key",
-            model="gpt-5",
+            model="gpt-5.6-terra",
             timeout=15,
             client=SimpleNamespace(responses=responses),
         )
@@ -166,7 +170,7 @@ class OpenAIResponsesProviderTests(SimpleTestCase):
             client_request_id="focused-client-123",
             tool_choice={"type": "function", "name": "create_client"},
             max_output_tokens=600,
-            reasoning_effort="minimal",
+            reasoning_effort="low",
             text_verbosity="low",
         )
 
@@ -175,7 +179,7 @@ class OpenAIResponsesProviderTests(SimpleTestCase):
             {"type": "function", "name": "create_client"},
         )
         self.assertEqual(responses.payload["max_output_tokens"], 600)
-        self.assertEqual(responses.payload["reasoning"], {"effort": "minimal"})
+        self.assertEqual(responses.payload["reasoning"], {"effort": "low"})
         self.assertEqual(responses.payload["text"], {"verbosity": "low"})
 
     def test_bad_request_logs_safe_provider_details_and_request_shape(self):

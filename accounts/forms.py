@@ -1,6 +1,15 @@
 from django import forms
+from django.contrib.auth.forms import AuthenticationForm
 
+from .managers import UserManager
 from .models import Company
+
+
+class NormalizedAuthenticationForm(AuthenticationForm):
+    """Accept the same normalized email form used when accounts are created."""
+
+    def clean_username(self):
+        return UserManager.normalize_login_email(self.cleaned_data["username"])
 
 
 class CompanySettingsForm(forms.ModelForm):

@@ -7,9 +7,9 @@ from django.urls import reverse
 from django.utils import timezone
 
 from accounts.models import Company, User
-from assistant.models import AIActionAttempt, AICompanySettings, AIInteraction
-from assistant.providers import ProviderResponse
+from assistant.models import AIActionAttempt, AIInteraction
 from assistant.policies import get_company_policy
+from assistant.providers import ProviderResponse
 from assistant.services import AssistantUnavailable, run_assistant
 
 

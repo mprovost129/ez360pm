@@ -12,8 +12,8 @@ from assistant.models import (
     AIEvaluationRun,
     AIInteraction,
 )
-from assistant.providers import ProviderResponse
 from assistant.policies import get_company_policy
+from assistant.providers import ProviderResponse
 from assistant.readiness import build_readiness_report
 
 

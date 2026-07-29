@@ -17,6 +17,7 @@ class AssistantViewTests(TestCase):
             company=self.company,
         )
 
+    @override_settings(AI_ASSISTANT_ENABLED=True)
     def test_ask_requires_login(self):
         response = self.client.post(
             reverse("assistant:ask"),

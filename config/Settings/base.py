@@ -51,6 +51,7 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'accounts.middleware.SuperuserAdministrationMiddleware',
     'axes.middleware.AxesMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
@@ -223,7 +224,7 @@ AI_PROVIDER = os.environ.get("AI_PROVIDER", "openai").strip()
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
 OPENAI_ORG_ID = os.environ.get("OPENAI_ORG_ID", "").strip()
 OPENAI_PROJECT_ID = os.environ.get("OPENAI_PROJECT_ID", "").strip()
-AI_MODEL = os.environ.get("AI_MODEL", "gpt-5").strip()
+AI_MODEL = os.environ.get("AI_MODEL", "gpt-5.6-terra").strip()
 AI_WARN_ON_UNPINNED_MODEL = _ai_env.boolean("AI_WARN_ON_UNPINNED_MODEL", True)
 AI_ALLOWED_MODELS = [
     model.strip()
@@ -237,11 +238,13 @@ AI_BROWSER_REQUEST_TIMEOUT_SECONDS = _ai_env.integer(
     "AI_BROWSER_REQUEST_TIMEOUT_SECONDS", GUNICORN_TIMEOUT_SECONDS + 15
 )
 AI_MAX_OUTPUT_TOKENS = _ai_env.integer("AI_MAX_OUTPUT_TOKENS", 3000)
+AI_REASONING_EFFORT = os.environ.get("AI_REASONING_EFFORT", "medium").strip().lower()
+AI_VERBOSITY = os.environ.get("AI_VERBOSITY", "low").strip().lower()
 AI_FOCUSED_MAX_OUTPUT_TOKENS = _ai_env.integer(
     "AI_FOCUSED_MAX_OUTPUT_TOKENS", 600
 )
 AI_FOCUSED_REASONING_EFFORT = os.environ.get(
-    "AI_FOCUSED_REASONING_EFFORT", "minimal"
+    "AI_FOCUSED_REASONING_EFFORT", "low"
 ).strip().lower()
 AI_FOCUSED_VERBOSITY = os.environ.get(
     "AI_FOCUSED_VERBOSITY", "low"
@@ -266,10 +269,10 @@ AI_RATE_LIMIT_WINDOW_SECONDS = _ai_env.integer("AI_RATE_LIMIT_WINDOW_SECONDS", 6
 AI_MONTHLY_COST_LIMIT_USD = _ai_env.decimal("AI_MONTHLY_COST_LIMIT_USD", "25.00")
 # Configure these rates for the selected model. They are only used for the local cost guard.
 AI_INPUT_COST_PER_MILLION_USD = _ai_env.decimal(
-    "AI_INPUT_COST_PER_MILLION_USD", "0"
+    "AI_INPUT_COST_PER_MILLION_USD", "2.50"
 )
 AI_OUTPUT_COST_PER_MILLION_USD = _ai_env.decimal(
-    "AI_OUTPUT_COST_PER_MILLION_USD", "0"
+    "AI_OUTPUT_COST_PER_MILLION_USD", "15.00"
 )
 AI_MODEL_PRICING = _ai_env.json_object("AI_MODEL_PRICING_JSON", {})
 AI_MODEL_PRICING_JSON = os.environ.get("AI_MODEL_PRICING_JSON", "{}")

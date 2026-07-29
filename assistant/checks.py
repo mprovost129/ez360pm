@@ -285,8 +285,34 @@ def assistant_settings_check(app_configs, **kwargs):
                 id="assistant.E022",
             )
         )
+    allowed_reasoning_efforts = {
+        "",
+        "none",
+        "minimal",
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max",
+    }
+    reasoning_effort = getattr(settings, "AI_REASONING_EFFORT", "")
+    if reasoning_effort not in allowed_reasoning_efforts:
+        messages.append(
+            Error(
+                "AI_REASONING_EFFORT is not an allowed value.",
+                id="assistant.E030",
+            )
+        )
+    verbosity = getattr(settings, "AI_VERBOSITY", "")
+    if verbosity not in {"", "low", "medium", "high"}:
+        messages.append(
+            Error(
+                "AI_VERBOSITY must be low, medium, high, or blank.",
+                id="assistant.E031",
+            )
+        )
     focused_effort = getattr(settings, "AI_FOCUSED_REASONING_EFFORT", "")
-    if focused_effort not in {"", "none", "minimal", "low", "medium", "high", "xhigh"}:
+    if focused_effort not in allowed_reasoning_efforts:
         messages.append(
             Error(
                 "AI_FOCUSED_REASONING_EFFORT is not an allowed value.",

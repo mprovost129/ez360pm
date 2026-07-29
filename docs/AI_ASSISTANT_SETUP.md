@@ -73,55 +73,27 @@ ask one concise question instead of guessing.
 
 ## Environment variables
 
-The assistant is disabled unless explicitly enabled.
+Environment values are separated into two complete, non-overlapping sections.
 
-```env
-AI_ASSISTANT_ENABLED=true
-AI_PROVIDER=openai
-OPENAI_API_KEY=...
-OPENAI_ORG_ID=
-OPENAI_PROJECT_ID=
-AI_MODEL=gpt-5
-AI_ALLOWED_MODELS=gpt-5
-AI_WARN_ON_UNPINNED_MODEL=true
-AI_PROVIDER_TIMEOUT_SECONDS=30
-AI_MAX_TOOL_ROUNDS=4
-AI_MAX_TOOL_CALLS=4
-AI_MAX_OUTPUT_TOKENS=3000
-AI_FOCUSED_MAX_OUTPUT_TOKENS=600
-AI_FOCUSED_REASONING_EFFORT=minimal
-AI_FOCUSED_VERBOSITY=low
-AI_MAX_PROMPT_CHARS=4000
-AI_CONVERSATION_CONTEXT_TURNS=4
-AI_CONVERSATION_CONTEXT_MINUTES=60
-AI_MAX_REQUEST_BYTES=12000
-AI_MAX_TOOL_OUTPUT_CHARS=40000
-AI_REQUIRE_EXPLICIT_WRITE_INTENT=true
-AI_RATE_LIMIT_REQUESTS=10
-AI_LOCAL_ACTION_RATE_LIMIT_REQUESTS=30
-AI_RATE_LIMIT_WINDOW_SECONDS=60
-AI_MONTHLY_COST_LIMIT_USD=25.00
-AI_COMPANY_DEFAULT_ENABLED=
-AI_COMPANY_DEFAULT_EXTERNAL_COMMITS=
-AI_COMPANY_DEFAULT_PRIVACY_ACKNOWLEDGED=
-AI_COMPANY_DEFAULT_MONTHLY_REQUEST_LIMIT=500
-AI_COMPANY_DEFAULT_RETENTION_DAYS=90
-AI_COMPANY_DEFAULT_ACCESS_MODE=all_users
-AI_COMPANY_DEFAULT_FAILURE_THRESHOLD=5
-AI_COMPANY_DEFAULT_FAILURE_WINDOW_MINUTES=60
-AI_INPUT_COST_PER_MILLION_USD=0
-AI_OUTPUT_COST_PER_MILLION_USD=0
-AI_MODEL_PRICING_JSON={}
-AI_PROACTIVE_INSIGHTS_ENABLED=true
-AI_PROACTIVE_MAX_ITEMS=4
-AI_PROACTIVE_DISMISS_DAYS=7
-AI_PROACTIVE_REFRESH_SECONDS=3600
-AI_DRAFT_STALE_DAYS=14
-AI_FOLLOW_UP_MIN_INTERVAL_HOURS=24
-AI_STALE_LEAD_DAYS=14
-AI_FORGOTTEN_TIMER_HOURS=8
-AI_READINESS_MAX_EVALUATION_AGE_DAYS=30
-```
+### Section 1: Development
+
+Copy [`.env.example`](../.env.example) to `.env`. AI is disabled until a local
+API key is supplied. The remaining values are safe single-user defaults, so set
+`AI_ASSISTANT_ENABLED=true` after adding the key.
+
+### Section 2: Render production
+
+Enter the values from [`.env.render.example`](../.env.render.example) in the
+Render service Environment page. The production section explicitly enables the
+single company and owner, confirmed external communications, cost/request guards,
+and metadata retention. Replace every placeholder and review the privacy notice
+before deploying.
+
+Both sections use `gpt-5.6-terra`, medium reasoning for general requests, low
+reasoning for focused one-tool actions, low response verbosity, and current
+per-million-token cost-guard rates of $2.50 input and $15.00 output. OpenAI
+describes Terra as the GPT-5.6 balance of intelligence and cost:
+<https://developers.openai.com/api/docs/models/compare>.
 
 `AI_RATE_LIMIT_REQUESTS` applies only to OpenAI-backed requests.
 `AI_LOCAL_ACTION_RATE_LIMIT_REQUESTS` separately limits deterministic zero-token
@@ -129,7 +101,7 @@ workflows such as the structured client template, so an OpenAI burst does not bl
 local intake while the local endpoint still has an abuse guard. Both use
 `AI_RATE_LIMIT_WINDOW_SECONDS`.
 
-Set the two per-million token rates to the current rates for the default model.
+Keep the two per-million token rates aligned with the current rates for the default model.
 When more than one model is allowlisted and their rates differ, configure
 `AI_MODEL_PRICING_JSON` as an object keyed by model name with `input` and `output`
 per-million-token rates. The application records provider token usage and applies

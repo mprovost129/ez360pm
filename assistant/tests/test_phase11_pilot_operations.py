@@ -16,8 +16,8 @@ from assistant.models import (
     AIInteraction,
     AIUserAccess,
 )
-from assistant.providers import ProviderError, ProviderResponse
 from assistant.policies import get_company_policy
+from assistant.providers import ProviderError, ProviderResponse
 from assistant.services import AssistantUnavailable, run_assistant
 
 

@@ -8,7 +8,6 @@ confirmation before execution.
 import re
 from dataclasses import dataclass
 
-
 CLIENT_TEMPLATE_TEXT = """Create this client:
 Company/household:
 Contact first name:

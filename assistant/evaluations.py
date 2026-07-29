@@ -8,18 +8,18 @@ from inspect import getsource
 from django.conf import settings
 from django.utils import timezone
 
-from .models import (
-    AIActionAttempt,
-    AIEvaluationCaseResult,
-    AIEvaluationRun,
-    AIInteraction,
-)
 from .local_actions import (
     CLIENT_TEMPLATE_PREFIX_PATTERN,
     CLIENT_TEMPLATE_TEXT,
     inspect_client_template,
     is_client_template_prompt,
     parse_client_template,
+)
+from .models import (
+    AIActionAttempt,
+    AIEvaluationCaseResult,
+    AIEvaluationRun,
+    AIInteraction,
 )
 from .page_context import resolve_page_context
 from .policies import allowed_models, get_company_policy
@@ -30,6 +30,7 @@ from .services import (
     FOCUSED_SYSTEM_INSTRUCTIONS,
     SYSTEM_INSTRUCTIONS,
     _conversation_context_items,
+    _safety_identifier,
     run_assistant,
 )
 from .tool_routing import select_tool_plan
@@ -149,7 +150,9 @@ def evaluation_fingerprint(model):
         "local_client_template_text": CLIENT_TEMPLATE_TEXT,
         "action_preparation": getsource(ToolRegistry._prepare_action),
         "focused_max_output_tokens": getattr(settings, "AI_FOCUSED_MAX_OUTPUT_TOKENS", 600),
-        "focused_reasoning_effort": getattr(settings, "AI_FOCUSED_REASONING_EFFORT", "minimal"),
+        "reasoning_effort": getattr(settings, "AI_REASONING_EFFORT", "medium"),
+        "verbosity": getattr(settings, "AI_VERBOSITY", "low"),
+        "focused_reasoning_effort": getattr(settings, "AI_FOCUSED_REASONING_EFFORT", "low"),
         "focused_verbosity": getattr(settings, "AI_FOCUSED_VERBOSITY", "low"),
         "conversation_context_turns": getattr(settings, "AI_CONVERSATION_CONTEXT_TURNS", 4),
         "conversation_context_minutes": getattr(settings, "AI_CONVERSATION_CONTEXT_MINUTES", 60),
@@ -249,7 +252,14 @@ def contract_check_results():
     provider_source = getsource(OpenAIResponsesProvider.create_response)
     provider_guards = all(
         marker in provider_source
-        for marker in ('"store": False', '"parallel_tool_calls": False', "max_output_tokens")
+        for marker in (
+            '"store": False',
+            '"parallel_tool_calls": False',
+            "max_output_tokens",
+            "reasoning_effort",
+            "text_verbosity",
+            "safety_identifier",
+        )
     )
     results.append(
         {
@@ -614,6 +624,7 @@ def run_connection_evaluation(*, user, provider=None):
             ),
             tools=[],
             client_request_id=client_request_id,
+            safety_identifier=_safety_identifier(user),
         )
         usage = response.usage
         input_tokens = int(usage.get("input_tokens", 0) or 0)

@@ -55,6 +55,36 @@ class TrackedQueueProvider(QueueProvider):
         return ProviderResponse(response)
 
 
+class OptionsQueueProvider(QueueProvider):
+    supports_request_options = True
+
+    def create_response(
+        self,
+        *,
+        input_items,
+        instructions,
+        tools,
+        tool_choice,
+        max_output_tokens,
+        reasoning_effort,
+        text_verbosity,
+        safety_identifier,
+    ):
+        self.requests.append(
+            {
+                "input_items": input_items,
+                "instructions": instructions,
+                "tools": tools,
+                "tool_choice": tool_choice,
+                "max_output_tokens": max_output_tokens,
+                "reasoning_effort": reasoning_effort,
+                "text_verbosity": text_verbosity,
+                "safety_identifier": safety_identifier,
+            }
+        )
+        return ProviderResponse(self.responses.pop(0))
+
+
 def function_call(name, arguments, *, call_id="call-1"):
     return {
         "output": [
@@ -135,6 +165,22 @@ class AssistantServiceTests(TestCase):
         self.assertEqual(interaction.status, AIInteraction.Status.COMPLETED)
         self.assertGreater(interaction.total_tokens, 0)
         self.assertEqual(interaction.provider_request_ids, ["req_read_123"])
+
+    @override_settings(AI_REASONING_EFFORT="medium", AI_VERBOSITY="low")
+    def test_general_request_passes_model_controls_and_pseudonymous_user(self):
+        provider = OptionsQueueProvider(message("Nothing urgent."))
+
+        run_assistant(
+            user=self.user,
+            prompt="What needs attention?",
+            provider=provider,
+        )
+
+        request = provider.requests[0]
+        self.assertEqual(request["reasoning_effort"], "medium")
+        self.assertEqual(request["text_verbosity"], "low")
+        self.assertRegex(request["safety_identifier"], r"^[0-9a-f]{64}$")
+        self.assertNotIn(self.user.email, request["safety_identifier"])
 
     def test_tool_round_replays_reasoning_without_response_status(self):
         provider = QueueProvider(

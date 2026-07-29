@@ -18,8 +18,8 @@ from django.views.generic import UpdateView
 
 from .action_center import expire_pending_actions, pending_actions_for_user
 from .draft_tracking import track_completed_draft_action
-from .followups import follow_up_metrics, follow_up_rows
 from .errors import validation_error_message
+from .followups import follow_up_metrics, follow_up_rows
 from .forms import AICompanySettingsForm
 from .insights import (
     SUGGESTION_LIBRARY,

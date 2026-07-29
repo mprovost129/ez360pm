@@ -39,6 +39,12 @@ class AccountAccessTests(TestCase):
         self.assertEqual(len(mail.outbox), 1)
         self.assertIn("/accounts/password/reset/", mail.outbox[0].body)
 
+    def test_password_reset_page_is_visible_to_anonymous_users(self):
+        response = self.client.get(reverse("accounts:password-reset"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Reset Password")
+
     def test_authenticated_owner_can_open_password_change(self):
         self.client.force_login(self.user)
 

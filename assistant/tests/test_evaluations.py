@@ -40,6 +40,7 @@ class EvaluationContractTests(SimpleTestCase):
         self.assertTrue(any("Prepared 1 action" in reason for reason in reasons))
 
 
+@override_settings(AI_ASSISTANT_ENABLED=True)
 class EvaluationHistoryViewTests(TestCase):
     def setUp(self):
         self.company = Company.objects.create(name="Provost Home Design")

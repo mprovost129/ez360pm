@@ -1,6 +1,9 @@
 from django.test import SimpleTestCase
 
-from assistant.local_actions import CLIENT_TEMPLATE_TEXT, local_action_decision_for_prompt
+from assistant.local_actions import (
+    CLIENT_TEMPLATE_TEXT,
+    local_action_decision_for_prompt,
+)
 from assistant.security import matching_write_intents, write_intent_matches
 from assistant.tool_routing import select_tool_plan
 

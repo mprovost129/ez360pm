@@ -34,6 +34,10 @@ process in `Procfile` runs migrations, Django's deployment security checks, the
 database/cache check, and the read-only data audit before the new web process is
 promoted.
 
+Development and Render values are intentionally separated. Use `.env.example`
+only for development and use `.env.render.example` as the Render Environment-page
+checklist. See `docs/ENVIRONMENT.md` for the two-section handoff.
+
 Set `PUBLIC_BASE_URL` to the public HTTPS origin with no trailing slash. Public
 document links in email and Stripe redirects are built from this value.
 

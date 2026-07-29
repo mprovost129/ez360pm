@@ -156,6 +156,7 @@ Internal note:
             )
 
 
+@override_settings(AI_ASSISTANT_ENABLED=True)
 class StrictJsonBoundaryTests(TestCase):
     def setUp(self):
         self.company = Company.objects.create(name="Provost Home Design")

@@ -87,11 +87,15 @@ def default_policy_for_company(company):
 
 
 def get_company_policy(company, *, create=True):
-    if hasattr(company, "ai_settings"):
-        try:
-            return company.ai_settings
-        except AICompanySettings.DoesNotExist:
-            pass
+    try:
+        cached_policy = company.ai_settings
+    except AICompanySettings.DoesNotExist:
+        cached_policy = None
+    # Constructing an unsaved default OneToOne object can populate Django's
+    # reverse-relation cache. Never mistake that read-only preview for a stored
+    # company policy when the first real assistant request needs one.
+    if cached_policy is not None and cached_policy.pk is not None:
+        return cached_policy
     if not create:
         return None
     policy, _created = AICompanySettings.objects.get_or_create(

@@ -134,6 +134,7 @@ class BaseProvider:
         max_output_tokens=None,
         reasoning_effort="",
         text_verbosity="",
+        safety_identifier="",
     ):
         raise NotImplementedError
 
@@ -168,6 +169,7 @@ class OpenAIResponsesProvider(BaseProvider):
         max_output_tokens=None,
         reasoning_effort="",
         text_verbosity="",
+        safety_identifier="",
     ):
         request_kwargs = {
             "model": self.model,
@@ -189,6 +191,8 @@ class OpenAIResponsesProvider(BaseProvider):
             request_kwargs["reasoning"] = {"effort": reasoning_effort}
         if text_verbosity and model_name.startswith("gpt-5"):
             request_kwargs["text"] = {"verbosity": text_verbosity}
+        if safety_identifier:
+            request_kwargs["safety_identifier"] = str(safety_identifier)
         if client_request_id:
             request_kwargs["extra_headers"] = {
                 "X-Client-Request-Id": str(client_request_id)
