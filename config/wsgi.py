@@ -16,9 +16,10 @@ os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.Settings.prod')
 
 application = get_wsgi_application()
 
-# Render should start through bin/start.sh, which applies migrations before
-# Gunicorn. This guard makes an accidental Start Command override fail closed
-# instead of serving code against an older schema and returning 500s.
+# Render starts through the Dockerfile's bin/start.sh, which applies migrations
+# before Gunicorn. This defense-in-depth guard also checks physical model columns
+# so any transient or historical schema mismatch fails closed instead of serving
+# pages that return database errors.
 if not settings.DEBUG:
     from core.deployment_safety import assert_schema_current
 

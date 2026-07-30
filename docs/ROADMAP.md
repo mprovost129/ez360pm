@@ -403,10 +403,17 @@ exit gate remains open only for verified sending-domain evidence, controlled
 document/form/password-reset sends with delivered events, webhook replay, and
 the SMTP rollback drill.
 
-Production validation also exposed an overridden/bypassed migration startup on
-2026-07-30: code queried `ProjectClientForm.revoked_at` before `projects.0007`
-was applied. The release path now retains migration execution in `bin/start.sh`
-and independently refuses WSGI startup while any migration is pending.
+Production validation exposed a schema/code mismatch on 2026-07-30: code queried
+`ProjectClientForm.revoked_at` while the active database did not expose that
+column. Render was using the intended Docker startup and migration history later
+showed `projects.0007` applied, so no unsupported start-command cause is assumed.
+The release path now checks both pending migrations and physical model columns
+before WSGI serves traffic.
+
+Production inspection confirmed the migration-history drift: `projects.0007`
+was marked applied while the physical `revoked_at` column was absent. The
+idempotent `projects.0008` repair adds that column only when missing and preserves
+it on reverse migration; ordinary databases treat the repair as a no-op.
 
 - Introduce one provider-neutral outbound email service for documents, client
   forms, internal notifications, and future transactional messages. Keep Django's

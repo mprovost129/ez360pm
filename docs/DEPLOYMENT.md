@@ -53,11 +53,11 @@ container start, writes Gunicorn logs to stdout/stderr, honors the platform's
 not promoted to receive traffic. `EZ360PM_OWNER_PASSWORD` is strictly a one-time
 bootstrap value and must not remain in the deployment environment afterward.
 
-The Render service Start Command must be `sh ./bin/start.sh` (or left empty for
-the Dockerfile `CMD`). Do not override it with a direct `gunicorn` command,
-because that bypasses migrations and release checks. WSGI also verifies the
-migration graph before serving traffic, so a future accidental override fails
-the deployment instead of exposing pages backed by an older schema.
+The Render Docker service uses the Dockerfile `CMD`, which calls
+`sh ./bin/start.sh`. Keep any optional Start Command override equivalent to that
+script rather than invoking Gunicorn directly. WSGI independently verifies both
+the migration graph and physical model columns before serving traffic, so a
+schema/history mismatch fails deployment instead of exposing broken pages.
 
 If production reports an undefined model column, stop testing that release and
 run the following in the Render Shell against the web service environment:
@@ -68,9 +68,16 @@ python manage.py migrate --noinput
 python manage.py deployment_check
 ```
 
-Then set the Start Command correctly and redeploy. Never use `--fake` for this
-recovery unless the database schema has been independently verified to match the
-migration exactly.
+If migration history already shows `[X]`, verify the physical column before
+changing migration state. Never use `--fake` for recovery unless the database
+schema has been independently verified to match the migration exactly.
+
+The 2026-07-30 `ProjectClientForm.revoked_at` incident is repaired by
+`projects.0008_repair_projectclientform_revoked_at`. It introspects the live
+table and adds the nullable column only when absent; it is a no-op on databases
+where `projects.0007` created the column normally. Its reverse operation does
+not remove the field because the field remains part of model state and migration
+`0007`.
 
 `.dockerignore` excludes `.env`, repository metadata, local virtualenvs, logs,
 media, test output, and other workstation files from the build context. Never
