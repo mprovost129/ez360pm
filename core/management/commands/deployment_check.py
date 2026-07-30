@@ -1,7 +1,8 @@
 from django.core.cache import cache
 from django.core.management.base import BaseCommand, CommandError
 from django.db import connection
-from django.db.migrations.executor import MigrationExecutor
+
+from core.deployment_safety import SchemaNotReadyError, assert_schema_current
 
 
 class Command(BaseCommand):
@@ -22,15 +23,10 @@ class Command(BaseCommand):
                 raise CommandError("Database connectivity check returned bad data.")
         self.stdout.write(self.style.SUCCESS("Database: ok"))
 
-        executor = MigrationExecutor(connection)
-        targets = executor.loader.graph.leaf_nodes()
-        pending = executor.migration_plan(targets)
-        if pending:
-            labels = ", ".join(
-                f"{migration.app_label}.{migration.name}"
-                for migration, _backwards in pending
-            )
-            raise CommandError(f"Unapplied migrations: {labels}")
+        try:
+            assert_schema_current(connection)
+        except SchemaNotReadyError as exc:
+            raise CommandError(str(exc)) from exc
         self.stdout.write(self.style.SUCCESS("Migrations: ok"))
 
         if not options["skip_cache"]:
@@ -43,4 +39,3 @@ class Command(BaseCommand):
             self.stdout.write(self.style.SUCCESS("Cache: ok"))
 
         self.stdout.write(self.style.SUCCESS("Deployment check passed."))
-

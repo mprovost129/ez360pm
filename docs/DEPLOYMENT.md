@@ -53,6 +53,25 @@ container start, writes Gunicorn logs to stdout/stderr, honors the platform's
 not promoted to receive traffic. `EZ360PM_OWNER_PASSWORD` is strictly a one-time
 bootstrap value and must not remain in the deployment environment afterward.
 
+The Render service Start Command must be `sh ./bin/start.sh` (or left empty for
+the Dockerfile `CMD`). Do not override it with a direct `gunicorn` command,
+because that bypasses migrations and release checks. WSGI also verifies the
+migration graph before serving traffic, so a future accidental override fails
+the deployment instead of exposing pages backed by an older schema.
+
+If production reports an undefined model column, stop testing that release and
+run the following in the Render Shell against the web service environment:
+
+```text
+python manage.py showmigrations
+python manage.py migrate --noinput
+python manage.py deployment_check
+```
+
+Then set the Start Command correctly and redeploy. Never use `--fake` for this
+recovery unless the database schema has been independently verified to match the
+migration exactly.
+
 `.dockerignore` excludes `.env`, repository metadata, local virtualenvs, logs,
 media, test output, and other workstation files from the build context. Never
 pass runtime secrets as Docker build arguments or copy `.env` into an image.

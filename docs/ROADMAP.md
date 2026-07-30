@@ -403,6 +403,11 @@ exit gate remains open only for verified sending-domain evidence, controlled
 document/form/password-reset sends with delivered events, webhook replay, and
 the SMTP rollback drill.
 
+Production validation also exposed an overridden/bypassed migration startup on
+2026-07-30: code queried `ProjectClientForm.revoked_at` before `projects.0007`
+was applied. The release path now retains migration execution in `bin/start.sh`
+and independently refuses WSGI startup while any migration is pending.
+
 - Introduce one provider-neutral outbound email service for documents, client
   forms, internal notifications, and future transactional messages. Keep Django's
   console/locmem backends as the safe development and test defaults.
