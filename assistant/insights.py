@@ -24,6 +24,10 @@ from .policies import (
 )
 
 SUGGESTION_LIBRARY = {
+    "create_project_activity": (
+        "Capture a client project update",
+        "Turn a pasted client email or message into a project activity with separately trackable action items. Ask me which project if it is unclear.",
+    ),
     "create_note": (
         "Capture a quick note",
         "Create a quick note. Ask me for the note text.",
@@ -75,6 +79,7 @@ SUGGESTION_LIBRARY = {
 }
 
 SUGGESTION_RISKS = {
+    "create_project_activity": "low_write",
     "create_note": "low_write",
     "start_timer": "low_write",
     "stop_timer": "low_write",

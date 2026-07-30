@@ -21,6 +21,10 @@ INSTRUCTION_MARKERS = (
 
 
 WRITE_INTENT_PATTERNS = {
+    "create_project_activity": (
+        r"\b(?:create|add|capture|save)\b.{0,100}\b(?:project\s+(?:update|activity)|client\s+change)\b",
+        r"\b(?:turn|convert|add)\b.{0,100}\b(?:email|message)\b.{0,140}\b(?:project|activity|action\s+items?)\b",
+    ),
     "create_note": (
         r"\b(?:create|add|save|capture|take|make)\s+(?:a\s+|new\s+|the\s+)?(?:quick\s+)?note\b",
     ),

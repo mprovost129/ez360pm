@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import ActivityItem, Note, NoteAttachment
+from .models import ActivityEvent, ActivityItem, Note, NoteAttachment
 
 
 class NoteAttachmentInline(admin.TabularInline):
@@ -13,6 +13,16 @@ class ActivityItemInline(admin.TabularInline):
     model = ActivityItem
     extra = 0
     ordering = ("order", "pk")
+
+
+class ActivityEventInline(admin.TabularInline):
+    model = ActivityEvent
+    extra = 0
+    can_delete = False
+    readonly_fields = ("event_type", "actor", "description", "metadata", "created_at")
+
+    def has_add_permission(self, request, obj=None):
+        return False
 
 
 @admin.register(Note)
@@ -39,7 +49,7 @@ class NoteAdmin(admin.ModelAdmin):
         "project__name",
     )
     readonly_fields = ("created_at", "updated_at", "resolved_at")
-    inlines = (ActivityItemInline, NoteAttachmentInline)
+    inlines = (ActivityItemInline, NoteAttachmentInline, ActivityEventInline)
 
     @admin.display(description="Note")
     def short_body(self, obj):

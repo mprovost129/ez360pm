@@ -12,7 +12,9 @@ from core.reporting import payment_queryset, payment_totals
 from documents.models import Document, Payment
 from documents.reporting import outstanding_invoices
 from intake.forms import QuickNoteForm
-from intake.models import Note
+from intake.models import ActivityEvent, ActivityItem, Note
+from intake.services import create_project_activity as create_project_activity_record
+from intake.services import record_activity_event
 from projects.models import (
     Project,
     ProjectClientForm,
@@ -670,10 +672,104 @@ def execute_create_note(context, arguments):
     note = form.save(commit=False)
     note.created_by = context.user
     note.save()
+    record_activity_event(
+        note=note,
+        event_type=ActivityEvent.Type.CREATED,
+        description="Note created through the assistant.",
+        actor=context.user,
+        metadata={"source": note.source_type, "activity_type": note.activity_type},
+    )
     return {
         "message": "Note created.",
         "record_id": note.pk,
         "links": [{"label": "Open notes", "url": reverse("intake:list")}],
+    }
+
+
+def _project_activity_values(context, arguments):
+    project = _resolve_project(context.company, arguments["project_reference"])
+    follow_up_on = (
+        _parse_date(arguments["follow_up_on"], "follow_up_on")
+        if arguments["follow_up_on"]
+        else None
+    )
+    data = {
+        "title": arguments["title"],
+        "activity_type": arguments["activity_type"],
+        "source_type": arguments["source_type"],
+        "status": arguments["status"],
+        "contact_first_name": arguments["contact_first_name"],
+        "contact_last_name": arguments["contact_last_name"],
+        "prospect_company_name": arguments["prospect_company_name"],
+        "source_email": arguments["source_email"],
+        "source_reference": arguments["source_reference"],
+        "body": arguments["body"],
+        "original_content": arguments["original_content"],
+        "follow_up_on": follow_up_on,
+    }
+    note = Note(
+        company=context.company,
+        project=project,
+        client=project.client,
+        created_by=context.user,
+        **data,
+    )
+    note.full_clean()
+    action_items = []
+    for index, raw in enumerate(arguments["action_items"], start=1):
+        item_data = {
+            "item_type": raw["item_type"],
+            "title": raw["title"],
+            "detail": raw["detail"],
+            "status": raw["status"],
+            "due_on": (
+                _parse_date(raw["due_on"], f"action_items[{index}].due_on")
+                if raw["due_on"]
+                else None
+            ),
+        }
+        item = ActivityItem(
+            note=note,
+            order=index,
+            created_by=context.user,
+            **item_data,
+        )
+        item.full_clean(exclude=("note",))
+        action_items.append(item_data)
+    return project, data, action_items
+
+
+def preview_create_project_activity(context, arguments):
+    project, data, action_items = _project_activity_values(context, arguments)
+    return {
+        "title": "Create project activity",
+        "summary": f"{project.number} — {data['title']}",
+        "details": [
+            f"Type: {Note.ActivityType(data['activity_type']).label}",
+            f"Source: {Note.SourceType(data['source_type']).label}",
+            f"Status: {Note.Status(data['status']).label}",
+            f"Action items: {len(action_items)}",
+        ]
+        + [f"{index}. {item['title']}" for index, item in enumerate(action_items, 1)],
+        "confirm_label": "Create project activity",
+    }
+
+
+def execute_create_project_activity(context, arguments):
+    project, data, action_items = _project_activity_values(context, arguments)
+    note = create_project_activity_record(
+        project=project,
+        data=data,
+        action_items=action_items,
+        created_by=context.user,
+    )
+    return {
+        "message": "Project activity created.",
+        "record_id": note.pk,
+        "links": [
+            {"label": "Open activity", "url": reverse("intake:detail", args=(note.pk,))},
+            _project_link(project),
+        ],
     }
 
 
@@ -1063,6 +1159,84 @@ registry.register(
         preview_create_note,
         risk_level=AIActionAttempt.RiskLevel.LOW_WRITE,
         executor=execute_create_note,
+    )
+)
+registry.register(
+    RegisteredTool(
+        "create_project_activity",
+        (
+            "Prepare a project activity from a client email, call, meeting, or document, "
+            "including separately trackable action items. Nothing is saved until confirmed."
+        ),
+        _object_schema(
+            {
+                "project_reference": QUERY,
+                "title": {"type": "string", "minLength": 1, "maxLength": 255},
+                "activity_type": {
+                    "type": "string",
+                    "enum": list(Note.ActivityType.values),
+                },
+                "source_type": {
+                    "type": "string",
+                    "enum": list(Note.SourceType.values),
+                },
+                "status": {"type": "string", "enum": list(Note.Status.values)},
+                "contact_first_name": {"type": "string", "maxLength": 150},
+                "contact_last_name": {"type": "string", "maxLength": 150},
+                "prospect_company_name": {"type": "string", "maxLength": 255},
+                "source_email": {"type": "string", "maxLength": 320},
+                "source_reference": {"type": "string", "maxLength": 500},
+                "body": {"type": "string", "minLength": 1, "maxLength": 10000},
+                "original_content": {"type": "string", "maxLength": 20000},
+                "follow_up_on": {"type": ["string", "null"], "maxLength": 10},
+                "action_items": {
+                    "type": "array",
+                    "maxItems": 12,
+                    "items": _object_schema(
+                        {
+                            "item_type": {
+                                "type": "string",
+                                "enum": list(ActivityItem.ItemType.values),
+                            },
+                            "title": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 500,
+                            },
+                            "detail": {"type": "string", "maxLength": 4000},
+                            "status": {
+                                "type": "string",
+                                "enum": list(ActivityItem.Status.values),
+                            },
+                            "due_on": {
+                                "type": ["string", "null"],
+                                "maxLength": 10,
+                            },
+                        },
+                        ["item_type", "title", "detail", "status", "due_on"],
+                    ),
+                },
+            },
+            [
+                "project_reference",
+                "title",
+                "activity_type",
+                "source_type",
+                "status",
+                "contact_first_name",
+                "contact_last_name",
+                "prospect_company_name",
+                "source_email",
+                "source_reference",
+                "body",
+                "original_content",
+                "follow_up_on",
+                "action_items",
+            ],
+        ),
+        preview_create_project_activity,
+        risk_level=AIActionAttempt.RiskLevel.LOW_WRITE,
+        executor=execute_create_project_activity,
     )
 )
 registry.register(

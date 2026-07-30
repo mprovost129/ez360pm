@@ -33,4 +33,10 @@
   {% for attachment in note.attachments.all %}<div class="detail-row"><span><a href="{% url 'intake:attachment-download' attachment.pk %}">{{ attachment.original_name }}</a><small>{{ attachment.content_type|default:'File' }} · {{ attachment.size|filesizeformat }}</small></span><form method="post" action="{% url 'intake:attachment-delete' note.pk attachment.pk %}" data-confirm="Remove this attachment?">{% csrf_token %}<button class="btn btn-sm btn-light" type="submit">Remove</button></form></div>{% empty %}<p class="muted">No attachments.</p>{% endfor %}
 </section>
 <section class="content-card"><div class="button-group">{% if note.status != 'action_required' %}<form method="post" action="{% url 'intake:update-status' note.pk 'action_required' %}">{% csrf_token %}<button class="btn btn-light" type="submit">Mark action required</button></form>{% endif %}{% if note.status != 'waiting_client' %}<form method="post" action="{% url 'intake:update-status' note.pk 'waiting_client' %}">{% csrf_token %}<button class="btn btn-light" type="submit">Waiting on client</button></form>{% endif %}{% if note.status != 'resolved' %}<form method="post" action="{% url 'intake:update-status' note.pk 'resolved' %}">{% csrf_token %}<button class="btn btn-success" type="submit">Resolve</button></form>{% else %}<form method="post" action="{% url 'intake:update-status' note.pk 'open' %}">{% csrf_token %}<button class="btn btn-light" type="submit">Reopen</button></form>{% endif %}</div></section>
+<section class="content-card">
+  <details>
+    <summary><strong>Activity history</strong></summary>
+    <div style="margin-top:1rem;">{% for event in note.events.all %}<div class="detail-row"><span><strong>{{ event.description }}</strong><small>{{ event.get_event_type_display }}{% if event.actor %} · {{ event.actor.email }}{% endif %}</small></span><span>{{ event.created_at|date:'M j, Y g:i a' }}</span></div>{% empty %}<p class="muted">No history has been recorded.</p>{% endfor %}</div>
+  </details>
+</section>
 {% endblock %}

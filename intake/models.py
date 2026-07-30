@@ -251,3 +251,45 @@ class ActivityItem(models.Model):
 
     def __str__(self):
         return self.title
+
+
+class ActivityEvent(models.Model):
+    class Type(models.TextChoices):
+        CREATED = "created", "Activity created"
+        UPDATED = "updated", "Activity updated"
+        STATUS_CHANGED = "status_changed", "Activity status changed"
+        ATTACHMENT_ADDED = "attachment_added", "Attachment added"
+        ATTACHMENT_REMOVED = "attachment_removed", "Attachment removed"
+        ITEM_ADDED = "item_added", "Action item added"
+        ITEM_UPDATED = "item_updated", "Action item updated"
+        ITEM_STATUS_CHANGED = "item_status_changed", "Action item status changed"
+
+    note = models.ForeignKey(Note, on_delete=models.CASCADE, related_name="events")
+    event_type = models.CharField(max_length=30, choices=Type.choices)
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="activity_events",
+        blank=True,
+        null=True,
+    )
+    description = models.CharField(max_length=500)
+    metadata = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("-created_at", "-pk")
+        indexes = [models.Index(fields=("note", "created_at"))]
+
+    def clean(self):
+        super().clean()
+        if self.actor_id and self.actor.company_id != self.note.company_id:
+            raise ValidationError({"actor": "Actor must belong to the activity's company."})
+
+    def save(self, *args, **kwargs):
+        if self.pk:
+            raise ValidationError("Activity history entries are immutable.")
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return self.description

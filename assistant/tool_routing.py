@@ -23,6 +23,7 @@ class ToolPlan:
 
 
 _DIRECT_WRITE_TOOLS = {
+    "create_project_activity",
     "create_note",
     "start_timer",
     "pause_timer",

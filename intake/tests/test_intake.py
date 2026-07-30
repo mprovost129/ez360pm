@@ -10,7 +10,7 @@ from accounts.models import Company, User
 from clients.models import Client
 from clients.tests.test_clients import create_client
 from intake.forms import NoteForm
-from intake.models import ActivityItem, Note, NoteAttachment
+from intake.models import ActivityEvent, ActivityItem, Note, NoteAttachment
 from projects.models import Project
 from projects.services import create_project
 from projects.tests.test_projects import project_data
@@ -391,6 +391,7 @@ class NoteWorkflowTests(TestCase):
         self.assertEqual(note.status, Note.Status.ACTION_REQUIRED)
         self.assertEqual(note.title, "Materials-side walkout changes")
         self.assertEqual(note.original_content, email_body)
+        self.assertEqual(note.events.get().event_type, ActivityEvent.Type.CREATED)
 
         project_page = self.client.get(reverse("projects:detail", args=(project.pk,)))
         self.assertContains(project_page, "Project activity")
@@ -449,6 +450,9 @@ class NoteWorkflowTests(TestCase):
         self.assertEqual(attachment.original_name, "Revised Layout.pdf")
         self.assertNotIn("Revised Layout", attachment.file.name)
         self.assertEqual(attachment.uploaded_by, self.user)
+        self.assertTrue(
+            note.events.filter(event_type=ActivityEvent.Type.ATTACHMENT_ADDED).exists()
+        )
 
         download_url = reverse("intake:attachment-download", args=(attachment.pk,))
         self.client.logout()
@@ -528,6 +532,7 @@ class NoteWorkflowTests(TestCase):
         item = ActivityItem.objects.get(note=note)
         self.assertEqual(item.created_by, self.user)
         self.assertEqual(item.order, 1)
+        self.assertTrue(note.events.filter(event_type=ActivityEvent.Type.ITEM_ADDED).exists())
 
         dashboard = self.client.get(reverse("core:home"))
         self.assertEqual(dashboard.context["activity_followup_count"], 1)
@@ -550,5 +555,8 @@ class NoteWorkflowTests(TestCase):
         item.refresh_from_db()
         self.assertEqual(item.resolved_by, self.user)
         self.assertIsNotNone(item.resolved_at)
+        self.assertTrue(
+            note.events.filter(event_type=ActivityEvent.Type.ITEM_STATUS_CHANGED).exists()
+        )
         dashboard = self.client.get(reverse("core:home"))
         self.assertEqual(dashboard.context["activity_followup_count"], 0)

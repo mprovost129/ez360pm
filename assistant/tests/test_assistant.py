@@ -15,7 +15,7 @@ from assistant.tool_routing import select_tool_plan
 from clients.models import Client
 from clients.tests.test_clients import create_client
 from documents.models import Document, Payment
-from intake.models import Note
+from intake.models import ActivityEvent, ActivityItem, Note
 from projects.models import TimeEntry
 from projects.services import create_project
 from projects.tests.test_projects import project_data
@@ -461,9 +461,21 @@ class AssistantServiceTests(TestCase):
 
         self.assertEqual(plan.tool_names, ("create_client",))
         self.assertEqual(plan.force_tool_name, "create_client")
+        self.assertEqual(plan.max_tool_calls, 1)
         self.assertEqual(plan.max_tool_rounds, 1)
         self.assertFalse(plan.include_conversation_context)
         self.assertFalse(plan.include_page_context)
+
+    def test_client_email_project_update_uses_focused_activity_tool(self):
+        plan = select_tool_plan(
+            "Turn this client email into a project update with action items."
+        )
+
+        self.assertEqual(plan.tool_names, ("create_project_activity",))
+        self.assertEqual(plan.max_tool_calls, 1)
+        self.assertEqual(plan.max_tool_rounds, 1)
+        self.assertFalse(plan.include_conversation_context)
+        self.assertTrue(plan.include_page_context)
 
     def test_incomplete_create_client_request_can_ask_for_required_name(self):
         plan = select_tool_plan("Create a client.")
@@ -585,6 +597,61 @@ class AssistantConfirmationViewTests(TestCase):
         self.assertEqual(second.status_code, 200)
         self.assertTrue(second.json()["already_completed"])
         self.assertEqual(Note.objects.count(), 1)
+
+    def test_project_activity_from_email_requires_confirmation_and_creates_audit(self):
+        arguments = {
+            "project_reference": self.project.number,
+            "title": "Materials-side walkout changes",
+            "activity_type": "client_change",
+            "source_type": "email",
+            "status": "action_required",
+            "contact_first_name": "Rob",
+            "contact_last_name": "Arruda",
+            "prospect_company_name": "Marchon Eyewear, Inc",
+            "source_email": "rob@example.com",
+            "source_reference": "Walkout and slider revisions",
+            "body": "Client requested a walkout and four-panel slider.",
+            "original_content": "Full original client email.",
+            "follow_up_on": None,
+            "action_items": [
+                {
+                    "item_type": "change",
+                    "title": "Replace four windows with a four-panel slider",
+                    "detail": "Confirm rough opening.",
+                    "status": "open",
+                    "due_on": None,
+                },
+                {
+                    "item_type": "decision",
+                    "title": "Decide whether the existing door remains",
+                    "detail": "Review circulation with client.",
+                    "status": "open",
+                    "due_on": None,
+                },
+            ],
+        }
+        attempt = self._pending_attempt("create_project_activity", arguments)
+        self.assertFalse(Note.objects.exists())
+
+        response = self.client.post(
+            reverse("assistant:confirm-action", args=(attempt.confirmation_token,)),
+            data="{}",
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        note = Note.objects.get(project=self.project)
+        self.assertEqual(note.original_content, "Full original client email.")
+        self.assertEqual(note.action_items.count(), 2)
+        self.assertEqual(
+            note.events.filter(event_type=ActivityEvent.Type.CREATED).count(),
+            1,
+        )
+        self.assertEqual(
+            note.events.filter(event_type=ActivityEvent.Type.ITEM_ADDED).count(),
+            2,
+        )
+        self.assertEqual(ActivityItem.objects.filter(note=note).count(), 2)
 
     def test_confirming_timer_uses_existing_timer_service(self):
         attempt = self._pending_attempt(
