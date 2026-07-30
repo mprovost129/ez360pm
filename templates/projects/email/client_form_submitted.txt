@@ -1,0 +1,4 @@
+{{ project_form.recipient_name }} submitted {{ project_form.title }} for {{ project_form.project.name }}.
+
+Review the project specifications:
+{{ detail_url }}

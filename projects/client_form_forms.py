@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from django import forms
 
 from .models import (
@@ -5,7 +7,45 @@ from .models import (
     ClientFormTemplate,
     ProjectClientForm,
     ProjectFormAnswer,
+    ProjectFormUpload,
 )
+
+MAX_CLIENT_FORM_UPLOAD_BYTES = 10 * 1024 * 1024
+CLIENT_FORM_UPLOAD_EXTENSIONS = {
+    ".doc",
+    ".docx",
+    ".heic",
+    ".heif",
+    ".jpeg",
+    ".jpg",
+    ".pdf",
+    ".png",
+    ".webp",
+}
+CLIENT_FORM_UPLOAD_CONTENT_TYPES = {
+    "application/msword",
+    "application/octet-stream",
+    "application/pdf",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "image/heic",
+    "image/heif",
+    "image/jpeg",
+    "image/png",
+    "image/webp",
+}
+
+
+def validate_client_form_upload(uploaded_file):
+    if uploaded_file.size > MAX_CLIENT_FORM_UPLOAD_BYTES:
+        raise forms.ValidationError("Files must be 10 MB or smaller.")
+    suffix = Path(uploaded_file.name).suffix.lower()
+    if suffix not in CLIENT_FORM_UPLOAD_EXTENSIONS:
+        raise forms.ValidationError(
+            "Upload a PDF, Word document, JPEG, PNG, WebP, HEIC, or HEIF file."
+        )
+    content_type = (getattr(uploaded_file, "content_type", "") or "").lower()
+    if content_type and content_type not in CLIENT_FORM_UPLOAD_CONTENT_TYPES:
+        raise forms.ValidationError("The reported file type is not allowed.")
 
 
 class ClientFormTemplateForm(forms.ModelForm):
@@ -104,10 +144,18 @@ class PublicProjectFormResponseForm(forms.Form):
                 initial = question.answer.value
             except ProjectFormAnswer.DoesNotExist:
                 pass
+            has_upload = False
+            if question.field_type == ClientFormQuestion.FieldType.FILE:
+                try:
+                    question.upload
+                except ProjectFormUpload.DoesNotExist:
+                    pass
+                else:
+                    has_upload = True
             common = {
                 "label": question.label,
                 "help_text": question.help_text,
-                "required": bool(require_complete and question.required),
+                "required": bool(require_complete and question.required and not has_upload),
                 "initial": initial,
             }
             field_type = question.field_type
@@ -135,6 +183,19 @@ class PublicProjectFormResponseForm(forms.Form):
                     choices=(("", "Select one"), ("yes", "Yes"), ("no", "No")),
                     **common,
                 )
+            elif field_type == ClientFormQuestion.FieldType.FILE:
+                common.pop("initial", None)
+                field = forms.FileField(
+                    validators=[validate_client_form_upload],
+                    widget=forms.ClearableFileInput(
+                        attrs={
+                            "accept": ".pdf,.doc,.docx,.jpg,.jpeg,.png,.webp,.heic,.heif"
+                        }
+                    ),
+                    **common,
+                )
+                if has_upload:
+                    field.help_text = "A file is already saved. Choose another file to replace it."
             else:
                 input_type = "tel" if field_type == ClientFormQuestion.FieldType.PHONE else "text"
                 field = forms.CharField(max_length=500, widget=forms.TextInput(attrs={"type": input_type}), **common)

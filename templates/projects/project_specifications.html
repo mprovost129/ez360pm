@@ -3,6 +3,21 @@
 {% block title %}{{ project.number }} specifications | EZ360PM{% endblock %}
 
 {% block content %}
-<div class="page-heading"><div><p class="eyebrow">{{ project.number }}</p><h1>Project specifications</h1></div><div class="button-group"><a class="btn btn-light" href="{% url 'projects:detail' project.pk %}">Project overview</a><a class="btn btn-primary" href="{% url 'projects:client-form-create' project.pk %}">New form</a></div></div>
-{% for project_form, sections in form_sections %}<section class="content-card"><div class="section-heading"><div><h2><a href="{% url 'projects:client-form-detail' project.pk project_form.pk %}">{{ project_form.title }}</a></h2><p class="muted">{{ project_form.get_status_display }} · {{ project_form.recipient_email }}{% if project_form.submitted_at %} · Submitted {{ project_form.submitted_at|date:'M j, Y' }}{% endif %}</p></div></div>{% for section, answers in sections %}<h3>{{ section }}</h3>{% for question, value in answers %}<div class="detail-row"><strong>{{ question.label }}</strong><span>{% if value %}{{ value }}{% else %}<span class="muted">Not answered</span>{% endif %}</span></div>{% endfor %}{% endfor %}</section>{% empty %}<section class="content-card"><p class="muted">No client forms have been created for this project.</p><a class="btn btn-primary" href="{% url 'projects:client-form-create' project.pk %}">Create the first form</a></section>{% endfor %}
+<div class="page-heading">
+  <div><p class="eyebrow">{{ project.number }}</p><h1>Project specifications</h1></div>
+  <div class="button-group"><a class="btn btn-light" href="{% url 'projects:detail' project.pk %}">Project overview</a><a class="btn btn-primary" href="{% url 'projects:client-form-create' project.pk %}">New form</a></div>
+</div>
+{% for project_form, sections in form_sections %}
+<section class="content-card">
+  <div class="section-heading"><div><h2><a href="{% url 'projects:client-form-detail' project.pk project_form.pk %}">{{ project_form.title }}</a></h2><p class="muted">{{ project_form.get_status_display }} · {{ project_form.recipient_email }}{% if project_form.submitted_at %} · Submitted {{ project_form.submitted_at|date:'M j, Y' }}{% endif %}</p></div></div>
+  {% for section, answers in sections %}
+    <h3>{{ section }}</h3>
+    {% for question, value in answers %}
+      <div class="detail-row"><strong>{{ question.label }}</strong><span>{% if value %}{% if question.field_type == 'file' %}<a href="{% url 'projects:client-form-upload-download' project.pk project_form.pk value.pk %}">{{ value.original_name }}</a> <small>{{ value.size|filesizeformat }}</small>{% else %}{{ value }}{% endif %}{% else %}<span class="muted">Not answered</span>{% endif %}</span></div>
+    {% endfor %}
+  {% endfor %}
+</section>
+{% empty %}
+<section class="content-card"><p class="muted">No client forms have been created for this project.</p><a class="btn btn-primary" href="{% url 'projects:client-form-create' project.pk %}">Create the first form</a></section>
+{% endfor %}
 {% endblock %}

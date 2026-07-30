@@ -1,6 +1,8 @@
+import tempfile
 from types import SimpleNamespace
 
 from django.core import mail
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
@@ -13,6 +15,7 @@ from projects.models import (
     ClientFormTemplate,
     ProjectClientForm,
     ProjectFormAnswer,
+    ProjectFormUpload,
 )
 from projects.services import create_project
 from projects.tests.test_projects import project_data
@@ -24,6 +27,19 @@ from projects.tests.test_projects import project_data
     PUBLIC_BASE_URL="https://app.example.com",
 )
 class ClientFormWorkflowTests(TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls._media_directory = tempfile.TemporaryDirectory()
+        cls._media_settings = override_settings(MEDIA_ROOT=cls._media_directory.name)
+        cls._media_settings.enable()
+        super().setUpClass()
+
+    @classmethod
+    def tearDownClass(cls):
+        super().tearDownClass()
+        cls._media_settings.disable()
+        cls._media_directory.cleanup()
+
     def setUp(self):
         self.company = Company.objects.create(
             name="Provost Home Design",
@@ -150,7 +166,10 @@ class ClientFormWorkflowTests(TestCase):
         project_form.refresh_from_db()
         self.assertEqual(project_form.status, ProjectClientForm.Status.SUBMITTED)
         self.assertIsNotNone(project_form.submitted_at)
+        self.assertIsNotNone(project_form.submission_notified_at)
         self.assertEqual(ProjectFormAnswer.objects.count(), 2)
+        self.assertEqual(len(mail.outbox), 2)
+        self.assertEqual(mail.outbox[1].to, [self.company.email])
 
         self.client.force_login(self.user)
         specifications = self.client.get(
@@ -263,3 +282,105 @@ class ClientFormWorkflowTests(TestCase):
         )
         self.assertContains(self.client.get(public_url), "Thank you")
         self.assertEqual(self.client.post(public_url, {"action": "save"}).status_code, 404)
+
+    def test_file_upload_is_validated_stored_privately_and_download_is_company_scoped(self):
+        ClientFormQuestion.objects.create(
+            template=self.template,
+            section="Existing conditions",
+            label="Plans or site photos",
+            field_type=ClientFormQuestion.FieldType.FILE,
+            required=True,
+            order=3,
+        )
+        project_form = self.send_form()
+        first, _second, upload_question = project_form.questions.order_by("order")
+        public_url = reverse("public-project-form", args=(project_form.public_token,))
+        self.client.logout()
+
+        missing = self.client.post(
+            public_url,
+            {"action": "submit", f"question_{first.pk}": "Alex Smith"},
+        )
+        self.assertEqual(missing.status_code, 400)
+        self.assertContains(missing, "This field is required", status_code=400)
+
+        invalid = self.client.post(
+            public_url,
+            {
+                "action": "save",
+                f"question_{upload_question.pk}": SimpleUploadedFile(
+                    "malware.exe", b"not an executable", content_type="application/octet-stream"
+                ),
+            },
+        )
+        self.assertEqual(invalid.status_code, 400)
+        self.assertContains(invalid, "Upload a PDF", status_code=400)
+
+        submitted = self.client.post(
+            public_url,
+            {
+                "action": "submit",
+                f"question_{first.pk}": "Alex Smith",
+                f"question_{upload_question.pk}": SimpleUploadedFile(
+                    "Plans Final.pdf", b"%PDF-1.4 test plan", content_type="application/pdf"
+                ),
+            },
+        )
+        self.assertRedirects(submitted, public_url)
+        upload = ProjectFormUpload.objects.get(question=upload_question)
+        self.assertEqual(upload.original_name, "Plans Final.pdf")
+        self.assertNotIn("Plans Final", upload.file.name)
+        self.assertIn(f"company_{self.company.pk}", upload.file.name)
+
+        download_url = reverse(
+            "projects:client-form-upload-download",
+            args=(self.project.pk, project_form.pk, upload.pk),
+        )
+        self.assertEqual(self.client.get(download_url).status_code, 302)
+
+        other_company = Company.objects.create(name="Other company")
+        other_user = User.objects.create_user(
+            "other-upload@example.com",
+            "Strong-Test-Password-483!",
+            company=other_company,
+        )
+        self.client.force_login(other_user)
+        self.assertEqual(self.client.get(download_url).status_code, 404)
+
+        self.client.force_login(self.user)
+        downloaded = self.client.get(download_url)
+        self.assertEqual(downloaded.status_code, 200)
+        self.assertEqual(downloaded["X-Content-Type-Options"], "nosniff")
+        self.assertIn("attachment", downloaded["Content-Disposition"])
+        self.assertEqual(b"".join(downloaded.streaming_content), b"%PDF-1.4 test plan")
+        summary = project_summary(
+            SimpleNamespace(company=self.company),
+            {"project_reference": self.project.number},
+        )
+        file_answer = summary["specifications"]["forms"][0]["answers"][-1]["answer"]
+        self.assertEqual(file_answer["file_name"], "Plans Final.pdf")
+
+    def test_owner_can_revoke_and_restore_public_form_link(self):
+        project_form = self.send_form()
+        public_url = reverse("public-project-form", args=(project_form.public_token,))
+        revoke_url = reverse(
+            "projects:client-form-access",
+            args=(self.project.pk, project_form.pk, "revoke"),
+        )
+        restore_url = reverse(
+            "projects:client-form-access",
+            args=(self.project.pk, project_form.pk, "restore"),
+        )
+
+        self.client.post(revoke_url)
+        project_form.refresh_from_db()
+        self.assertIsNotNone(project_form.revoked_at)
+        self.client.logout()
+        self.assertEqual(self.client.get(public_url).status_code, 404)
+
+        self.client.force_login(self.user)
+        self.client.post(restore_url)
+        project_form.refresh_from_db()
+        self.assertIsNone(project_form.revoked_at)
+        self.client.logout()
+        self.assertEqual(self.client.get(public_url).status_code, 200)

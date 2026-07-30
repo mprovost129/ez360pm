@@ -1,7 +1,7 @@
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import ValidationError
-from django.http import Http404, HttpResponse
+from django.http import FileResponse, Http404, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -23,12 +23,16 @@ from .client_form_services import (
     save_project_form_answers,
     save_template_question,
     send_project_client_form,
+    send_project_form_submission_notification,
+    set_project_form_access,
 )
 from .models import (
+    ClientFormQuestion,
     ClientFormTemplate,
     Project,
     ProjectClientForm,
     ProjectFormAnswer,
+    ProjectFormUpload,
 )
 
 
@@ -48,7 +52,7 @@ def _project_form_for_user(request, pk, form_pk):
     return get_object_or_404(
         ProjectClientForm.objects.for_company(request.user.company)
         .select_related("project", "project__client", "template", "company")
-        .prefetch_related("questions__answer"),
+        .prefetch_related("questions__answer", "questions__upload"),
         pk=form_pk,
         project_id=pk,
     )
@@ -60,10 +64,16 @@ def _answer_sections(project_form):
         section = question.section or "Project information"
         if not sections or sections[-1][0] != section:
             sections.append((section, []))
-        try:
-            value = question.answer.value
-        except ProjectFormAnswer.DoesNotExist:
-            value = ""
+        if question.field_type == ClientFormQuestion.FieldType.FILE:
+            try:
+                value = question.upload
+            except ProjectFormUpload.DoesNotExist:
+                value = ""
+        else:
+            try:
+                value = question.answer.value
+            except ProjectFormAnswer.DoesNotExist:
+                value = ""
         if isinstance(value, list):
             value = ", ".join(str(item) for item in value)
         elif value == "yes":
@@ -261,6 +271,45 @@ class ProjectClientFormResendView(LoginRequiredMixin, View):
         return redirect("projects:client-form-detail", pk=pk, form_pk=form_pk)
 
 
+class ProjectClientFormAccessView(LoginRequiredMixin, View):
+    def post(self, request, pk, form_pk, action):
+        project_form = _project_form_for_user(request, pk, form_pk)
+        if action not in {"revoke", "restore"}:
+            raise Http404
+        try:
+            set_project_form_access(project_form=project_form, active=action == "restore")
+        except ValidationError as exc:
+            messages.error(request, "; ".join(exc.messages))
+        else:
+            message = "Client link restored." if action == "restore" else "Client link revoked."
+            messages.success(request, message)
+        return redirect("projects:client-form-detail", pk=pk, form_pk=form_pk)
+
+
+class ProjectFormUploadDownloadView(LoginRequiredMixin, View):
+    def get(self, request, pk, form_pk, upload_pk):
+        upload = get_object_or_404(
+            ProjectFormUpload.objects.select_related("question__project_form"),
+            pk=upload_pk,
+            question__project_form_id=form_pk,
+            question__project_form__project_id=pk,
+            question__project_form__company=request.user.company,
+        )
+        try:
+            file_handle = upload.file.open("rb")
+        except (FileNotFoundError, OSError):
+            raise Http404 from None
+        response = FileResponse(
+            file_handle,
+            as_attachment=True,
+            filename=upload.original_name,
+            content_type=upload.content_type or "application/octet-stream",
+        )
+        response["X-Content-Type-Options"] = "nosniff"
+        response["Cache-Control"] = "private, no-store"
+        return response
+
+
 class ProjectSpecificationsView(LoginRequiredMixin, View):
     def get(self, request, pk):
         project = _project_for_user(request, pk)
@@ -268,7 +317,7 @@ class ProjectSpecificationsView(LoginRequiredMixin, View):
             ProjectClientForm.objects.for_company(request.user.company)
             .filter(project=project)
             .select_related("template")
-            .prefetch_related("questions__answer")
+            .prefetch_related("questions__answer", "questions__upload")
         )
         form_sections = [(item, _answer_sections(item)) for item in project_forms]
         return render(
@@ -285,13 +334,13 @@ class PublicProjectClientFormView(View):
         return get_object_or_404(
             ProjectClientForm.objects.select_related(
                 "company", "project", "project__client"
-            ).prefetch_related("questions__answer"),
+            ).prefetch_related("questions__answer", "questions__upload"),
             public_token=token,
         )
 
     def get(self, request, token):
         project_form = self._form(token)
-        if project_form.status == ProjectClientForm.Status.DRAFT:
+        if project_form.status == ProjectClientForm.Status.DRAFT or project_form.revoked_at:
             raise Http404
         if project_form.status == ProjectClientForm.Status.SENT:
             project_form.status = ProjectClientForm.Status.VIEWED
@@ -309,11 +358,15 @@ class PublicProjectClientFormView(View):
         if public_action_rate_limited(request=request, token=token, action="project-form", limit=30):
             return HttpResponse("Too many attempts. Please wait and try again.", status=429)
         project_form = self._form(token)
-        if project_form.status in {ProjectClientForm.Status.DRAFT, ProjectClientForm.Status.SUBMITTED}:
+        if project_form.revoked_at or project_form.status in {
+            ProjectClientForm.Status.DRAFT,
+            ProjectClientForm.Status.SUBMITTED,
+        }:
             raise Http404
         submit = request.POST.get("action") == "submit"
         response_form = PublicProjectFormResponseForm(
             request.POST,
+            request.FILES,
             project_form=project_form,
             require_complete=submit,
         )
@@ -324,6 +377,7 @@ class PublicProjectClientFormView(View):
                 submit=submit,
             )
             if submit:
+                send_project_form_submission_notification(project_form=project_form)
                 return redirect("public-project-form", token=token)
             return redirect(f"{reverse('public-project-form', args=(token,))}?saved=1")
         return render(

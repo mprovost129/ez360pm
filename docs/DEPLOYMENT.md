@@ -60,7 +60,7 @@ Django can identify secure requests before enforcing HTTPS redirects. Configure
 the public load balancer to replace—not append an untrusted client value for—
 that header, terminate TLS, and forward only to the private application service.
 
-Company logos can use private Amazon S3 storage. Set `USE_S3_MEDIA=True` together
+Company logos and client-form uploads can use private Amazon S3 storage. Set `USE_S3_MEDIA=True` together
 with `AWS_STORAGE_BUCKET_NAME`, `AWS_S3_REGION_NAME`, `AWS_ACCESS_KEY_ID`, and
 `AWS_SECRET_ACCESS_KEY`. Objects are stored below the `media/` prefix, retain
 their original content type, and use one-hour signed URLs; keep S3 Block Public
@@ -68,7 +68,7 @@ Access enabled. The IAM principal needs `s3:ListBucket` on the bucket and
 `s3:GetObject`, `s3:PutObject`, and `s3:DeleteObject` on `media/*`.
 
 When `USE_S3_MEDIA` is false, the default filesystem `MEDIA_ROOT` needs a
-persistent volume at `/app/media` before company logos are treated as durable.
+persistent volume at `/app/media` before company logos and client-form uploads are treated as durable.
 Static assets always remain on WhiteNoise and do not need that volume.
 
 For a remote PostgreSQL service that requires TLS, set `DB_SSLMODE=require` (or
@@ -185,7 +185,7 @@ Point a temporary EZ360PM environment at the isolated restore, then run:
 Verify that the owner can sign in and open representative accepted proposals,
 paid invoices, payment history, and attached time. Destroy the isolated restore
 through the provider after the drill. Back up and restore `MEDIA_ROOT` separately
-if company logos are stored on the application filesystem.
+if company logos or client-form uploads are stored on the application filesystem.
 
 ## Stripe webhook replay drill
 

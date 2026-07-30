@@ -5,6 +5,7 @@ from .models import (
     ClientFormTemplate,
     Project,
     ProjectClientForm,
+    ProjectFormUpload,
     ProjectNumberSequence,
     TimeEntry,
 )
@@ -57,4 +58,19 @@ class ProjectClientFormAdmin(admin.ModelAdmin):
     list_display = ("title", "project", "recipient_email", "status", "email_status")
     list_filter = ("company", "status", "email_status")
     search_fields = ("title", "project__number", "recipient_email")
-    readonly_fields = ("public_token", "sent_at", "viewed_at", "saved_at", "submitted_at")
+    readonly_fields = (
+        "public_token",
+        "sent_at",
+        "viewed_at",
+        "saved_at",
+        "submitted_at",
+        "revoked_at",
+        "submission_notified_at",
+    )
+
+
+@admin.register(ProjectFormUpload)
+class ProjectFormUploadAdmin(admin.ModelAdmin):
+    list_display = ("original_name", "question", "size", "uploaded_at")
+    search_fields = ("original_name", "question__label", "question__project_form__project__number")
+    readonly_fields = ("original_name", "content_type", "size", "uploaded_at")

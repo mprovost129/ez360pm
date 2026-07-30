@@ -13,7 +13,13 @@ from documents.models import Document, Payment
 from documents.reporting import outstanding_invoices
 from intake.forms import QuickNoteForm
 from intake.models import Note
-from projects.models import Project, ProjectClientForm, ProjectFormAnswer, TimeEntry
+from projects.models import (
+    Project,
+    ProjectClientForm,
+    ProjectFormAnswer,
+    ProjectFormUpload,
+    TimeEntry,
+)
 from projects.time_services import pause_timer, resume_timer, start_timer, stop_timer
 
 from .models import AIActionAttempt
@@ -250,16 +256,23 @@ def project_summary(context, arguments):
     submitted_forms = (
         ProjectClientForm.objects.for_company(context.company)
         .filter(project=project, status=ProjectClientForm.Status.SUBMITTED)
-        .prefetch_related("questions__answer")
+        .prefetch_related("questions__answer", "questions__upload")
         .order_by("submitted_at", "pk")[:10]
     )
     for project_form in submitted_forms:
         answers = []
         for question in project_form.questions.all():
-            try:
-                value = question.answer.value
-            except ProjectFormAnswer.DoesNotExist:
-                continue
+            if question.field_type == "file":
+                try:
+                    upload = question.upload
+                except ProjectFormUpload.DoesNotExist:
+                    continue
+                value = {"file_name": upload.original_name, "size": upload.size}
+            else:
+                try:
+                    value = question.answer.value
+                except ProjectFormAnswer.DoesNotExist:
+                    continue
             if value not in (None, "", []):
                 answers.append(
                     {

@@ -16,6 +16,7 @@ from .models import (
     ProjectClientForm,
     ProjectFormAnswer,
     ProjectFormQuestion,
+    ProjectFormUpload,
 )
 
 logger = logging.getLogger(__name__)
@@ -147,13 +148,42 @@ def send_project_client_form(*, project_form):
             project_form.email_error = ""
             project_form.status = ProjectClientForm.Status.SENT
             project_form.sent_at = timezone.now()
+            project_form.revoked_at = None
         else:
             project_form.email_status = ProjectClientForm.EmailStatus.FAILED
             project_form.email_error = "provider_did_not_confirm_send"
     project_form.save(
-        update_fields=["email_status", "email_error", "status", "sent_at", "updated_at"]
+        update_fields=[
+            "email_status",
+            "email_error",
+            "status",
+            "sent_at",
+            "revoked_at",
+            "updated_at",
+        ]
     )
     return project_form
+
+
+def _save_project_form_upload(*, question, uploaded_file):
+    original_name = uploaded_file.name.replace("\\", "/").rsplit("/", 1)[-1][:255]
+    try:
+        upload = question.upload
+    except ProjectFormUpload.DoesNotExist:
+        upload = ProjectFormUpload(question=question)
+        old_name = ""
+        storage = None
+    else:
+        old_name = upload.file.name
+        storage = upload.file.storage
+    upload.file = uploaded_file
+    upload.original_name = original_name
+    upload.content_type = (getattr(uploaded_file, "content_type", "") or "")[:255]
+    upload.size = uploaded_file.size
+    upload.save()
+    if old_name and old_name != upload.file.name:
+        transaction.on_commit(lambda: storage.delete(old_name))
+    return upload
 
 
 @transaction.atomic
@@ -163,6 +193,10 @@ def save_project_form_answers(*, project_form, cleaned_data, submit):
         raise ValidationError("This form has already been submitted.")
     for question in project_form.questions.all():
         value = cleaned_data.get(f"question_{question.pk}", "")
+        if question.field_type == ClientFormQuestion.FieldType.FILE:
+            if value:
+                _save_project_form_upload(question=question, uploaded_file=value)
+            continue
         if hasattr(value, "isoformat"):
             value = value.isoformat()
         elif value is not None and not isinstance(value, (str, list, dict, bool, int, float)):
@@ -180,3 +214,65 @@ def save_project_form_answers(*, project_form, cleaned_data, submit):
         update_fields.append("status")
     project_form.save(update_fields=update_fields)
     return project_form
+
+
+@transaction.atomic
+def set_project_form_access(*, project_form, active):
+    project_form = ProjectClientForm.objects.select_for_update().get(pk=project_form.pk)
+    if project_form.status == ProjectClientForm.Status.DRAFT:
+        raise ValidationError("The client link is not active until the form is sent.")
+    project_form.revoked_at = None if active else timezone.now()
+    project_form.save(update_fields=["revoked_at", "updated_at"])
+    return project_form
+
+
+def send_project_form_submission_notification(*, project_form):
+    project_form = ProjectClientForm.objects.select_related(
+        "company", "project", "project__client"
+    ).get(pk=project_form.pk)
+    if (
+        project_form.status != ProjectClientForm.Status.SUBMITTED
+        or project_form.submission_notified_at
+    ):
+        return False
+    recipient = project_form.company.email or (
+        project_form.company.users.filter(is_active=True)
+        .exclude(email="")
+        .values_list("email", flat=True)
+        .first()
+    )
+    if not recipient or not email_configuration_status()["configured"]:
+        return False
+    context = {
+        "project_form": project_form,
+        "detail_url": (
+            f"{settings.PUBLIC_BASE_URL}"
+            f"{reverse('projects:client-form-detail', args=(project_form.project_id, project_form.pk))}"
+        ),
+    }
+    message = EmailMultiAlternatives(
+        subject=f"Form submitted: {project_form.title} — {project_form.project.name}",
+        body=render_to_string("projects/email/client_form_submitted.txt", context),
+        from_email=settings.DEFAULT_FROM_EMAIL,
+        to=[recipient],
+    )
+    message.attach_alternative(
+        render_to_string("projects/email/client_form_submitted.html", context),
+        "text/html",
+    )
+    try:
+        sent_count = message.send(fail_silently=False)
+    except Exception as exc:
+        logger.warning(
+            "Project form submission notification failed form_id=%s error=%s",
+            project_form.pk,
+            exc.__class__.__name__,
+        )
+        return False
+    if sent_count != 1:
+        return False
+    ProjectClientForm.objects.filter(
+        pk=project_form.pk,
+        submission_notified_at__isnull=True,
+    ).update(submission_notified_at=timezone.now())
+    return True

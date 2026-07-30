@@ -1,6 +1,7 @@
 import uuid
 from datetime import timedelta
 from decimal import ROUND_HALF_UP, Decimal
+from pathlib import Path
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
@@ -232,6 +233,7 @@ class ClientFormQuestion(models.Model):
         SELECT = "select", "Dropdown"
         MULTI_SELECT = "multi_select", "Checkboxes"
         YES_NO = "yes_no", "Yes / no"
+        FILE = "file", "File upload"
 
     template = models.ForeignKey(
         ClientFormTemplate,
@@ -304,6 +306,8 @@ class ProjectClientForm(CompanyOwnedModel):
     viewed_at = models.DateTimeField(blank=True, null=True)
     saved_at = models.DateTimeField(blank=True, null=True)
     submitted_at = models.DateTimeField(blank=True, null=True)
+    revoked_at = models.DateTimeField(blank=True, null=True)
+    submission_notified_at = models.DateTimeField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -369,6 +373,34 @@ class ProjectFormAnswer(models.Model):
 
     def __str__(self):
         return f"Answer: {self.question.label}"
+
+
+def project_form_upload_path(instance, filename):
+    """Keep client filenames out of storage paths and isolate files by tenant/project."""
+    suffix = Path(filename).suffix.lower()[:12]
+    question = instance.question
+    project_form = question.project_form
+    return (
+        f"project_forms/company_{project_form.company_id}/"
+        f"project_{project_form.project_id}/form_{project_form.pk}/"
+        f"{uuid.uuid4().hex}{suffix}"
+    )
+
+
+class ProjectFormUpload(models.Model):
+    question = models.OneToOneField(
+        ProjectFormQuestion,
+        on_delete=models.CASCADE,
+        related_name="upload",
+    )
+    file = models.FileField(upload_to=project_form_upload_path)
+    original_name = models.CharField(max_length=255)
+    content_type = models.CharField(max_length=255, blank=True)
+    size = models.PositiveBigIntegerField()
+    uploaded_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return self.original_name
 
 
 class TimeEntry(CompanyOwnedModel):
