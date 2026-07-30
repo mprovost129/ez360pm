@@ -13,6 +13,7 @@ erDiagram
     Company ||--o{ Project : owns
     Company ||--o{ TimeEntry : owns
     Company ||--o{ Document : owns
+    Company ||--o{ ProjectClientForm : owns
 
     Client ||--|{ Contact : has
     Client ||--o{ Project : commissions
@@ -22,9 +23,12 @@ erDiagram
     User ||--o{ TimeEntry : logs
 
     Project ||--o{ Document : has
+    Project ||--o{ ProjectClientForm : requests
     Document ||--o{ LineItem : contains
     Document ||--o{ Payment : receives
     Document ||--o{ DocumentDelivery : delivers
+    ProjectClientForm ||--o{ DocumentDelivery : delivers
+    DocumentDelivery ||--o{ EmailWebhookEvent : receives
     LineItem ||--o{ TimeEntry : bills
 
     Document o|--o{ Document : source_proposal
@@ -35,7 +39,7 @@ erDiagram
 ## Ownership model
 
 Direct company ownership is stored on `User`, `Note`, `Client`, `Project`,
-`TimeEntry`, and `Document`. Child objects derive ownership from a parent to avoid
+`TimeEntry`, `Document`, and `ProjectClientForm`. Child objects derive ownership from a parent to avoid
 duplicated company columns that could disagree:
 
 | Child | Ownership path |
@@ -44,7 +48,8 @@ duplicated company columns that could disagree:
 | `LineItem` | `document.company` |
 | `Payment` | `document.company` |
 | `InvoiceCredit` | `source_invoice.company` and `destination_invoice.company` must match |
-| `DocumentDelivery` | `document.company` |
+| `DocumentDelivery` | exactly one of `document.company` or `project_form.company` |
+| `EmailWebhookEvent` | optional matched delivery target; unmatched signed events remain operational audit data |
 
 The direct `company` on `TimeEntry` is intentional even though project and user
 also imply it: it is a top-level reportable record and the brief explicitly
@@ -201,7 +206,7 @@ Where conditional database checks become too opaque, keep the database rule
 simple and put the full error-producing validation in the service, backed by
 tests.
 
-## Supporting delivery record (implemented in Phase 5)
+## Supporting delivery records (expanded in Phase 8)
 
 The screen specification asks for recipient selection and send history, which
 cannot be represented by `Document.sent_at` alone. Phase 4 deliberately issues
@@ -209,21 +214,33 @@ the stable public link without claiming email delivery. Phase 5 added:
 
 ### DocumentDelivery
 
+The historical model name remains for migration compatibility, but the record
+now represents transactional email for either a document or a project client
+form.
+
 | Field | Purpose |
 | --- | --- |
-| `document` | parent proposal/invoice |
-| `purpose` | client document or internal acceptance notification |
+| `document` / `project_form` | exactly one delivery target |
+| `purpose` | document, follow-up, internal notification, or client-form event |
 | `recipient_name` | snapshot at send time |
 | `recipient_email` | snapshot at send time |
-| `status` | pending, sent, or failed |
-| `provider_message_id` | optional delivery-provider reference |
+| `status` | pending, sent, delivered, delayed, failed, bounced, complained, or suppressed |
+| `provider`, `provider_message_id` | transport and delivery-provider reference |
 | `error_code` | safe diagnostic category, no credentials/body |
-| `created_at`, `sent_at` | attempt and success timestamps |
+| `created_at`, `sent_at`, `last_event_at` | attempt, API acceptance, and provider-event timestamps |
+
+### EmailWebhookEvent
+
+Stores the provider, unique event ID, event type, provider message ID, event
+timestamp, receipt timestamp, and optional matched delivery. This supports
+at-least-once webhook delivery, unknown-message diagnosis, replay safety, and
+out-of-order event handling without retaining the full provider payload.
 
 Each recipient attempt creates a delivery row. `Document.sent_at` records when
-the public document was issued; `DocumentDelivery.sent_at` records confirmed
-email delivery. Failures remain in history with a safe error category and can be
-retried without fabricating a successful send.
+the public document was issued; `DocumentDelivery.sent_at` records provider API
+acceptance; `delivered` records acceptance by the recipient's mail server.
+Failures remain in history with a safe error category and can be retried without
+fabricating a successful send.
 
 ## Deletion behavior
 

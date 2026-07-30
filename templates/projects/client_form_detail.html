@@ -32,6 +32,17 @@
     {% endif %}
   </div>
 </section>
+{% if project_form.email_deliveries.all %}
+<section class="content-card">
+  <h2>Email delivery history</h2>
+  {% for delivery in project_form.email_deliveries.all %}
+    <div class="detail-row">
+      <span><strong>{{ delivery.recipient_email }}</strong><small>{{ delivery.get_purpose_display }} · {{ delivery.created_at|date:'M j, Y g:i a' }}</small></span>
+      <span>{{ delivery.get_status_display }}{% if delivery.provider %}<small>{{ delivery.get_provider_display }}{% if delivery.provider_message_id %} · {{ delivery.provider_message_id }}{% endif %}</small>{% endif %}{% if delivery.error_code %}<small>{{ delivery.failure_message }}</small>{% endif %}</span>
+    </div>
+  {% endfor %}
+</section>
+{% endif %}
 {% for section, answers in answer_sections %}
 <section class="content-card">
   <h2>{{ section }}</h2>

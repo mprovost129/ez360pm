@@ -11,9 +11,9 @@ FOLLOW_UP_LABELS = dict(DocumentDelivery.FollowUpKind.choices)
 
 def _outcome_for(delivery):
     document = delivery.document
-    if delivery.status == DocumentDelivery.Status.FAILED:
+    if delivery.status in DocumentDelivery.failed_statuses():
         return "failed", "Delivery failed", None
-    if delivery.status != DocumentDelivery.Status.SENT or delivery.sent_at is None:
+    if delivery.status not in DocumentDelivery.successful_statuses() or delivery.sent_at is None:
         return "pending", "Pending delivery", None
 
     if document.doc_type == Document.Type.PROPOSAL:
@@ -85,12 +85,12 @@ def follow_up_metrics(user, *, days=90):
     sent = sum(
         1
         for row in rows
-        if row["delivery"].status == DocumentDelivery.Status.SENT
+        if row["delivery"].status in DocumentDelivery.successful_statuses()
     )
     failed = sum(
         1
         for row in rows
-        if row["delivery"].status == DocumentDelivery.Status.FAILED
+        if row["delivery"].status in DocumentDelivery.failed_statuses()
     )
     outcomes = Counter(row["outcome"] for row in rows)
     kind_counts = Counter(row["delivery"].follow_up_kind for row in rows)

@@ -2,7 +2,7 @@ from dataclasses import asdict, dataclass
 from datetime import timedelta
 from decimal import Decimal
 
-from django.db.models import QuerySet
+from django.db.models import Q, QuerySet
 from django.utils import timezone
 
 from documents.models import Document, DocumentDelivery, InvoiceCredit
@@ -271,7 +271,10 @@ def _delivery_issues(company_id=None, pending_minutes=15):
         created_at__lt=cutoff,
     )
     if company_id is not None:
-        queryset = queryset.filter(document__company_id=company_id)
+        queryset = queryset.filter(
+            Q(document__company_id=company_id)
+            | Q(project_form__company_id=company_id)
+        )
     return [
         AuditIssue(
             "warning",

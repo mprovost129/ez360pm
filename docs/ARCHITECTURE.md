@@ -23,8 +23,8 @@ improving the single-user product.
 | `accounts` | Company identity, owner account, initial setup | `Company`, `User` |
 | `intake` | Fast unstructured capture and archive workflow | `Note` |
 | `clients` | Billing party and contacts | `Client`, `Contact` |
-| `projects` | Job lifecycle and durable work tracking | `Project`, `TimeEntry` |
-| `documents` | Proposals, invoices, credits, payments, delivery, PDF/public views | `Document`, `LineItem`, `InvoiceCredit`, `Payment`, `DocumentDelivery` |
+| `projects` | Job lifecycle, client specifications, and durable work tracking | `Project`, `TimeEntry`, `ClientFormTemplate`, `ProjectClientForm` |
+| `documents` | Proposals, invoices, credits, payments, delivery, PDF/public views | `Document`, `LineItem`, `InvoiceCredit`, `Payment`, `DocumentDelivery`, `EmailWebhookEvent` |
 | `core` | Dashboard, application shell, shared presentation utilities | no business models |
 
 The starter's `users` app was renamed before the first migration. The implemented
@@ -185,10 +185,12 @@ link metadata, and PDF output. This prevents the preview and client copy from
 drifting. Proposal rich text is sanitized on input or before persistence and is
 treated as already-sanitized at rendering time.
 
-`DocumentDelivery` is a small supporting model needed by the specified “send
-history” screen. It records recipients and the result of every delivery attempt;
-`Document.sent_at` records public issue; `DocumentDelivery.sent_at` records a
-confirmed email delivery.
+`DocumentDelivery` is the durable attempt record for document and client-form
+email. Application services call one provider-neutral transport; production uses
+the Resend HTTPS adapter and Django framework email uses the matching backend.
+`Document.sent_at` records public issue, `DocumentDelivery.sent_at` records API
+acceptance, and signed `EmailWebhookEvent` rows advance the trustworthy provider
+state without assuming webhook order or exactly-once delivery.
 
 PDF generation sits behind an adapter so the HTML-to-PDF library can be selected
 after a deployment-compatibility spike. Generated PDFs do not become the source

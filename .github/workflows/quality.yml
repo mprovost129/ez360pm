@@ -52,6 +52,7 @@ jobs:
       CSRF_TRUSTED_ORIGINS: https://app.example.test
       PUBLIC_BASE_URL: https://app.example.test
       REDIS_URL: redis://127.0.0.1:6379/1
+      EMAIL_PROVIDER: django
       EMAIL_BACKEND: django.core.mail.backends.locmem.EmailBackend
       DEFAULT_FROM_EMAIL: EZ360PM CI <noreply@example.test>
     steps:

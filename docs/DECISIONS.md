@@ -27,6 +27,7 @@ locked decision requires an explicit update to the product specification.
 | Use a modular server-rendered Django monolith | best fit for a solo operational tool and current starter |
 | Use explicit transactional services, not signals, for financial/state changes | makes ordering, locking, repetition, and tests visible |
 | Add `DocumentDelivery` in Phase 5 (implemented) | recipient selection and provider-backed send history otherwise have no durable representation; Phase 4 only activates the public link |
+| Use the Resend HTTPS API for production transactional email in Phase 8 (implemented) | keeps Gmail/Google Workspace focused on human correspondence, provides restricted credentials and provider delivery events, and creates one observable transport for every application email; the company mailbox remains `Reply-To` |
 | Use a locked sequence record for generated numbers | avoids collision-prone `max + 1` logic and remains SaaS-safe |
 | Add `TimeEntry.line_item` with the Phase 3 documents migration (implemented) | avoided a premature cross-app placeholder; Phase 2 exposed no invoicing action |
 | Use ReportLab behind the invoice PDF adapter (implemented) | produces deployment-friendly real PDFs without native rendering dependencies |

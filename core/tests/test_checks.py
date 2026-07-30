@@ -30,3 +30,36 @@ class ProductionConfigurationCheckTests(SimpleTestCase):
         issues = check_production_email_identity(None)
 
         self.assertEqual(issues, [])
+
+    @override_settings(
+        DEBUG=False,
+        DEFAULT_FROM_EMAIL="Studio <notifications@mail.example.com>",
+        PUBLIC_BASE_URL="https://app.example.com",
+        EMAIL_PROVIDER="resend",
+        EMAIL_BACKEND="django.core.mail.backends.smtp.EmailBackend",
+        RESEND_API_KEY="",
+        RESEND_WEBHOOK_SECRET="",
+        STRIPE_SECRET_KEY="",
+        STRIPE_WEBHOOK_SECRET="",
+    )
+    def test_incomplete_resend_configuration_is_reported(self):
+        issues = check_production_email_identity(None)
+        ids = {issue.id for issue in issues}
+
+        self.assertTrue({"ez360pm.W008", "ez360pm.W009", "ez360pm.W010"} <= ids)
+
+    @override_settings(
+        DEBUG=False,
+        DEFAULT_FROM_EMAIL="Studio <notifications@mail.example.com>",
+        PUBLIC_BASE_URL="https://app.example.com",
+        EMAIL_PROVIDER="resend",
+        EMAIL_BACKEND="core.email_backends.ResendEmailBackend",
+        RESEND_API_KEY="re_configured",
+        RESEND_WEBHOOK_SECRET="whsec_configured",
+        STRIPE_SECRET_KEY="",
+        STRIPE_WEBHOOK_SECRET="",
+    )
+    def test_complete_resend_configuration_has_no_ez360pm_warnings(self):
+        issues = check_production_email_identity(None)
+
+        self.assertEqual(issues, [])

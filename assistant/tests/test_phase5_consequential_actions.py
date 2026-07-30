@@ -188,7 +188,7 @@ class AssistantPhaseFiveConsequentialActionTests(TestCase):
         )
 
         with patch(
-            "documents.delivery_services.EmailMultiAlternatives.send",
+            "core.emailing.EmailMultiAlternatives.send",
             side_effect=TimeoutError("mail timeout"),
         ):
             result = registry.execute_attempt(attempt=attempt)

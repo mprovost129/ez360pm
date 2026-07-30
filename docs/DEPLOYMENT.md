@@ -77,28 +77,51 @@ seconds in production and Django validates a persistent connection before reuse.
 
 ## Email
 
-Configure Django's email environment values:
+Production uses the Resend HTTPS API for transactional email. Configure:
 
 ```text
-EMAIL_BACKEND=django.core.mail.backends.smtp.EmailBackend
-EMAIL_HOST=<provider SMTP host>
-EMAIL_PORT=587
+EMAIL_PROVIDER=resend
+EMAIL_BACKEND=core.email_backends.ResendEmailBackend
 EMAIL_TIMEOUT=10
-EMAIL_HOST_USER=<provider username>
-EMAIL_HOST_PASSWORD=<provider credential>
-DEFAULT_FROM_EMAIL=Provost Home Design <verified-sender@example.com>
+DEFAULT_FROM_EMAIL=Provost Home Design <notifications@mail.example.com>
+DEFAULT_REPLY_TO_EMAIL=office@example.com
+RESEND_API_KEY=re_...
+RESEND_WEBHOOK_SECRET=whsec_...
 ```
 
-Render Free web services block outbound connections to SMTP ports 25, 465, and
-587. SMTP delivery therefore requires a paid Render web service; on the Free
-plan, use an email backend/provider that sends through an HTTPS API instead.
-`EMAIL_TIMEOUT` limits an unreachable SMTP attempt so the request fails cleanly
-before Gunicorn terminates the worker.
+Verify a dedicated sending subdomain in Resend and publish the exact SPF and DKIM
+records Resend provides. Add DMARC deliberately after SPF/DKIM verify. Register
+this webhook endpoint and subscribe to `email.sent`, `email.delivered`,
+`email.delivery_delayed`, `email.failed`, `email.bounced`, `email.complained`,
+and `email.suppressed`:
 
-The Company email is used as Reply-To. Development may retain the console email
-backend. Every client-document or internal-acceptance attempt creates a
-`DocumentDelivery` row before contacting the backend; success or a safe failure
-category is then recorded without storing credentials or message bodies.
+```text
+https://<public-host>/webhooks/resend/
+```
+
+The webhook signing secret is endpoint-specific. Verification uses the raw body
+and Resend's Svix signature headers; duplicate `svix-id` values are ignored and
+older events cannot regress a newer delivery state. Never paste an API key or
+webhook secret into Company settings or source control.
+
+The Render Basic service can use SMTP, but HTTPS remains the primary transport
+for provider IDs and delivery events. During the cutover window, Gmail/Google
+Workspace SMTP remains a manual rollback: set `EMAIL_PROVIDER=django`, set
+`EMAIL_BACKEND=django.core.mail.backends.smtp.EmailBackend`, and restore
+`EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_HOST_USER`, and `EMAIL_HOST_PASSWORD`. Never
+run both providers for the same customer message.
+
+The Company email is preferred as Reply-To; `DEFAULT_REPLY_TO_EMAIL` covers
+framework and internal messages. Development retains `EMAIL_PROVIDER=django`
+with the console backend. Every document, client-form, and internal notification
+attempt creates a `DocumentDelivery` row before contacting the provider. API
+acceptance, provider ID, delivery events, or a safe failure category are recorded
+without storing credentials or rendered message bodies.
+
+Before removing the Gmail application credential, send controlled proposal,
+invoice, client-form, internal-notification, and password-reset messages; confirm
+their Resend IDs appear in EZ360PM; replay one webhook; rotate the Resend API key;
+and exercise the SMTP rollback once.
 
 ## Stripe Checkout
 

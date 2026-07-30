@@ -5,7 +5,11 @@ from django.views import View
 from django.views.generic import FormView
 
 from .delivery_forms import DocumentDeliveryForm
-from .delivery_services import public_document_url, send_document_email
+from .delivery_services import (
+    public_document_url,
+    resend_delivery_attempt,
+    send_document_email,
+)
 from .models import Document, DocumentDelivery
 
 
@@ -69,12 +73,7 @@ class DocumentDeliveryResendView(LoginRequiredMixin, View):
             document__company=request.user.company,
             purpose=DocumentDelivery.Purpose.CLIENT_DOCUMENT,
         )
-        repeated = send_document_email(
-            document=delivery.document,
-            recipient_name=delivery.recipient_name,
-            recipient_email=delivery.recipient_email,
-            document_url=public_document_url(delivery.document),
-        )
+        repeated = resend_delivery_attempt(delivery=delivery)
         if repeated.status == DocumentDelivery.Status.SENT:
             messages.success(request, f"Email resent to {repeated.recipient_email}.")
         else:

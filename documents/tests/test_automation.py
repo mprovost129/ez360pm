@@ -149,7 +149,7 @@ class DeliveryAndStripeTests(TestCase):
     def test_provider_failure_is_preserved_without_sensitive_error_text(self):
         invoice = self.make_invoice()
         with patch(
-            "documents.delivery_services.EmailMultiAlternatives.send",
+            "core.emailing.EmailMultiAlternatives.send",
             side_effect=RuntimeError("credential contents must not be stored"),
         ):
             delivery = send_document_email(
@@ -166,7 +166,7 @@ class DeliveryAndStripeTests(TestCase):
     def test_provider_timeout_is_recorded_as_a_safe_delivery_failure(self):
         invoice = self.make_invoice()
         with patch(
-            "documents.delivery_services.EmailMultiAlternatives.send",
+            "core.emailing.EmailMultiAlternatives.send",
             side_effect=TimeoutError("SMTP connection timed out"),
         ):
             delivery = send_document_email(
@@ -222,7 +222,7 @@ class DeliveryAndStripeTests(TestCase):
     def test_failed_delivery_retry_preserves_failed_attempt(self):
         invoice = self.make_invoice()
         with patch(
-            "documents.delivery_services.EmailMultiAlternatives.send",
+            "core.emailing.EmailMultiAlternatives.send",
             side_effect=RuntimeError("temporary failure"),
         ):
             failed = send_document_email(
@@ -248,6 +248,38 @@ class DeliveryAndStripeTests(TestCase):
                 purpose=DocumentDelivery.Purpose.CLIENT_DOCUMENT,
             ).count(),
             2,
+        )
+        self.assertEqual(len(mail.outbox), 1)
+
+    def test_uncertain_delivery_retry_reuses_attempt_and_idempotency_identity(self):
+        invoice = self.make_invoice()
+        with patch(
+            "core.emailing.EmailMultiAlternatives.send",
+            side_effect=TimeoutError("provider acknowledgement timed out"),
+        ):
+            uncertain = send_document_email(
+                document=invoice,
+                recipient_name="Alex Smith",
+                recipient_email="alex@example.com",
+                document_url="https://app.example.com/d/original/",
+            )
+
+        response = self.client.post(
+            reverse("documents:delivery-resend", args=(invoice.pk, uncertain.pk))
+        )
+
+        self.assertRedirects(
+            response,
+            reverse("documents:invoice-detail", args=(invoice.pk,)),
+        )
+        uncertain.refresh_from_db()
+        self.assertEqual(uncertain.status, DocumentDelivery.Status.SENT)
+        self.assertEqual(
+            DocumentDelivery.objects.filter(
+                document=invoice,
+                purpose=DocumentDelivery.Purpose.CLIENT_DOCUMENT,
+            ).count(),
+            1,
         )
         self.assertEqual(len(mail.outbox), 1)
 

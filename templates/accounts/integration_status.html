@@ -8,7 +8,8 @@
     <section class="content-card">
         <h2>Email delivery</h2>
         <p class="integration-state integration-state--{% if email_status.configured %}ready{% else %}off{% endif %}">{% if email_status.configured %}Configured{% else %}Not configured{% endif %}</p>
-        <p><strong>Backend:</strong> {{ email_status.backend }}<br><strong>From:</strong> {{ email_status.from_email }}</p>
+        <p><strong>Provider:</strong> {{ email_status.provider|title }}<br><strong>Backend:</strong> {{ email_status.backend }}<br><strong>From:</strong> {{ email_status.from_email }}{% if email_status.reply_to_email %}<br><strong>Default reply-to:</strong> {{ email_status.reply_to_email }}{% endif %}</p>
+        {% if email_status.provider == 'resend' %}<p>API key: {% if email_status.api_key %}present{% else %}missing{% endif %}<br>Webhook signing secret: {% if email_status.webhook_secret %}present{% else %}missing{% endif %}</p>{% endif %}
     </section>
     <section class="content-card">
         <h2>Stripe Checkout</h2>

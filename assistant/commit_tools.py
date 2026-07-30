@@ -447,7 +447,7 @@ def preview_send_document_follow_up(context, arguments):
     latest = (
         document.deliveries.filter(
             purpose=DocumentDelivery.Purpose.CLIENT_FOLLOW_UP,
-            status=DocumentDelivery.Status.SENT,
+            status__in=DocumentDelivery.successful_statuses(),
         )
         .order_by("-sent_at", "-pk")
         .first()

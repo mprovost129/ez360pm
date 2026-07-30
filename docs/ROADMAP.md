@@ -56,7 +56,7 @@ The architecture, relationships, and screen map are detailed in:
 
 ## Delivery map
 
-### V1 status - 2026-07-24
+### V1 status - 2026-07-30
 
 - **Phases 0-7 code: complete and tested.** The account, isolation,
   intake, client/contact, project, timer/time-entry, invoice, proposal,
@@ -80,8 +80,10 @@ The architecture, relationships, and screen map are detailed in:
   The remaining V1 evidence is provider-level rather than application code:
   complete the first isolated backup restore and Stripe webhook replay drills,
   then keep logging recurring friction during real use.
-- **Next milestone:** freeze speculative V1 feature work, complete the first
-  restore/replay drills, and prioritize only evidence from the real-use log.
+- **Next milestone:** complete the first restore/replay drills and the Phase 8
+  Resend production cutover: verify DNS, add Render secrets, register the signed
+  webhook, run controlled delivery tests, and exercise the SMTP rollback. Phase
+  9 remains the next planned code phase.
 
 ### Current Phase 7 backlog - 2026-07-23
 
@@ -378,6 +380,96 @@ defines the evidence threshold for product changes.
 - Exercise backup/restore, production monitoring, webhook replay, and document
   audit recovery.
 - Revisit SaaS onboarding only after the personal workflow is stable.
+
+### Phase 8 - Resend transactional email and delivery observability (code complete; production cutover pending)
+
+**Goal:** move application-generated email to a purpose-built transactional
+provider while keeping Gmail/Google Workspace as the human mailbox for client
+replies.
+
+This is a reliability and operations upgrade, not a workaround for Render Free.
+Production runs on Render Basic, where SMTP is available, but the Resend HTTPS
+API is the preferred long-term transport because it supports restricted API
+credentials, provider message identifiers, delivery events, and clearer failure
+diagnostics.
+
+Implementation completed on 2026-07-30: the shared transport, Resend Django
+backend, durable client-form/document attempts, provider event ledger, signed
+idempotent webhook, out-of-order protection, provider IDs, UI/readiness status,
+Render/development environment templates, rollback documentation, migration, and
+regression tests are present. The exit gate remains open until the Resend account,
+DNS, Render secrets, live webhook, controlled sends, and rollback drill are
+completed in production.
+
+- Introduce one provider-neutral outbound email service for documents, client
+  forms, internal notifications, and future transactional messages. Keep Django's
+  console/locmem backends as the safe development and test defaults.
+- Configure Resend only through production environment variables. Use a verified
+  sending subdomain with SPF and DKIM, add DMARC deliberately, and keep the normal
+  Gmail/Google Workspace address as `Reply-To`.
+- Preserve the existing branded HTML/text templates, public links, recipient
+  validation, retry rules, and deduplication behavior during the transport change.
+- Record the provider message ID for every send and consolidate durable delivery
+  history across document and client-form email paths without weakening existing
+  financial or project audit records.
+- Add a signed, idempotent Resend webhook endpoint for delivered, delayed,
+  bounced, failed, and complained events. Handle duplicate and out-of-order events
+  safely and expose actionable status in the application without treating opens
+  or clicks as proof that a client completed an action.
+- Add configuration/readiness checks that distinguish development capture,
+  production API readiness, verified sender identity, webhook readiness, and
+  reply-to configuration without exposing credentials.
+- Roll out behind an explicit provider setting, validate sending to controlled
+  addresses first, and retain the existing Gmail SMTP configuration as a manual
+  rollback option during the cutover. Never dual-send a customer message.
+- Update Render production variables, deployment documentation, operational
+  checks, and secret-rotation instructions. Remove the Gmail application
+  credential from production only after the Resend cutover and rollback window
+  succeed.
+
+**Exit gate**
+
+Every business-workflow email uses the shared service, creates one durable attempt
+record, exposes its Resend provider ID and latest trustworthy delivery state,
+handles repeated webhook events without duplicate side effects, and sends client
+replies to the normal Gmail/Google Workspace inbox. Django-owned account email
+uses the same Resend transport and provider log without storing recovery content
+in the business delivery ledger. Development and tests cannot send real email
+accidentally, and a documented production smoke test plus rollback drill pass on
+Render Basic.
+
+### Phase 9 - End-to-end verification and test governance (planned)
+
+**Goal:** make every prominent product behavior traceable to an expected result
+and add real-browser proof for the workflows that server-side tests cannot fully
+exercise.
+
+- Maintain a feature-to-test matrix covering normal behavior, validation,
+  permissions, failure paths, and regression history for every key workflow.
+- Establish measured statement and branch-coverage baselines, then prevent
+  unreviewed coverage regressions without treating 100 percent coverage as the
+  product goal.
+- Add Playwright browser journeys for inquiry-to-project conversion, project
+  change capture, client-form submission and upload, proposal-to-deposit-to-final
+  invoicing, time tracking, and payment completion.
+- Keep provider behavior deterministic in ordinary CI. Use mocked Stripe,
+  Resend, and OpenAI boundaries, with separately invoked live smoke tests that
+  cannot send customer mail or create charges accidentally.
+- Split backend, AI, and browser checks into parallel GitHub Actions jobs while
+  preserving the complete pull-request gate and a convenient fast local suite.
+- Add automated accessibility checks to the critical browser journeys and retain
+  manual responsive, print/PDF, backup, restore, and production-provider drills
+  where automation cannot establish the real outcome.
+- Require every bug fix to add a regression test that fails before the fix and
+  passes afterward.
+
+**Exit gate**
+
+Every prominent feature appears in the test matrix with an owner and verification
+method; every high-value customer journey has a passing browser test; backend,
+AI, and browser checks run as required pull-request gates; coverage regressions
+are visible and reviewed; and documented live-provider/manual drills cover the
+remaining behavior that deterministic CI intentionally does not perform.
 
 ## Quality gates used in every phase
 

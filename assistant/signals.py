@@ -51,7 +51,11 @@ def track_ai_credit_change(sender, instance, **kwargs):
 @receiver(post_save, sender=DocumentDelivery)
 def track_ai_document_delivery(sender, instance, **kwargs):
     del sender, kwargs
-    if _tracking_enabled() and instance.status == DocumentDelivery.Status.SENT:
+    if (
+        _tracking_enabled()
+        and instance.document_id
+        and instance.status == DocumentDelivery.Status.SENT
+    ):
         schedule_delivery_state(instance.document_id, sent_at=instance.sent_at)
 
 

@@ -1,15 +1,22 @@
 import logging
 
 from django.conf import settings
-from django.core.mail import EmailMultiAlternatives
 from django.core.validators import validate_email
 from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils import timezone
 
+from core.emailing import (
+    EmailDeliveryError,
+    TransactionalEmail,
+    send_transactional_email,
+)
+
 from .models import Document, DocumentDelivery, Payment
 
 logger = logging.getLogger(__name__)
+
+UNCERTAIN_DELIVERY_ERROR_TOKENS = ("timeout", "connection", "socket", "interrupted")
 
 
 def public_document_url(document):
@@ -18,20 +25,33 @@ def public_document_url(document):
 
 
 def email_configuration_status():
+    provider = settings.EMAIL_PROVIDER.strip().lower()
     backend = settings.EMAIL_BACKEND
-    if backend.endswith("smtp.EmailBackend"):
+    if provider == "resend":
+        configured = bool(
+            settings.RESEND_API_KEY
+            and backend == "core.email_backends.ResendEmailBackend"
+            and settings.DEFAULT_FROM_EMAIL != "webmaster@localhost"
+        )
+    elif provider == "django" and backend.endswith("smtp.EmailBackend"):
         configured = bool(
             settings.EMAIL_HOST
             and settings.EMAIL_HOST_USER
             and settings.EMAIL_HOST_PASSWORD
             and settings.DEFAULT_FROM_EMAIL != "webmaster@localhost"
         )
-    else:
+    elif provider == "django":
         configured = bool(backend)
+    else:
+        configured = False
     return {
         "configured": configured,
+        "provider": provider,
         "backend": backend.rsplit(".", 1)[-1],
         "from_email": settings.DEFAULT_FROM_EMAIL,
+        "reply_to_email": settings.DEFAULT_REPLY_TO_EMAIL,
+        "api_key": bool(settings.RESEND_API_KEY),
+        "webhook_secret": bool(settings.RESEND_WEBHOOK_SECRET),
     }
 
 
@@ -42,38 +62,65 @@ def _mark_failed(delivery, error_code):
     return delivery
 
 
-def _send_delivery(*, delivery, subject, document_url, template_base, context):
+def deliver_transactional_email(
+    *, delivery, subject, text_body, html_body, reply_to=()
+):
     if not email_configuration_status()["configured"]:
         return _mark_failed(delivery, "email_not_configured")
-    context = {**context, "document_url": document_url}
-    message = EmailMultiAlternatives(
-        subject=subject,
-        body=render_to_string(f"documents/email/{template_base}.txt", context),
-        from_email=settings.DEFAULT_FROM_EMAIL,
-        to=[delivery.recipient_email],
-        reply_to=[delivery.document.company.email] if delivery.document.company.email else None,
-    )
-    message.attach_alternative(
-        render_to_string(f"documents/email/{template_base}.html", context),
-        "text/html",
-    )
     try:
-        sent_count = message.send(fail_silently=False)
-    except Exception as exc:  # provider exceptions vary by configured backend
-        logger.warning(
-            "Document delivery failed document_id=%s delivery_id=%s error=%s",
-            delivery.document_id,
-            delivery.pk,
-            exc.__class__.__name__,
+        result = send_transactional_email(
+            TransactionalEmail(
+                subject=subject,
+                text_body=text_body,
+                html_body=html_body,
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                to=(delivery.recipient_email,),
+                reply_to=tuple(reply_to),
+                idempotency_key=f"delivery/{delivery.pk}",
+            )
         )
-        return _mark_failed(delivery, exc.__class__.__name__.lower())
-    if sent_count != 1:
-        return _mark_failed(delivery, "provider_did_not_confirm_send")
+    except EmailDeliveryError as exc:
+        logger.warning(
+            "Email delivery failed document_id=%s project_form_id=%s delivery_id=%s error=%s",
+            delivery.document_id,
+            delivery.project_form_id,
+            delivery.pk,
+            exc.code,
+        )
+        return _mark_failed(delivery, exc.code)
     delivery.status = DocumentDelivery.Status.SENT
     delivery.sent_at = timezone.now()
     delivery.error_code = ""
-    delivery.save(update_fields=["status", "sent_at", "error_code"])
+    delivery.provider = result.provider
+    delivery.provider_message_id = result.message_id
+    delivery.save(
+        update_fields=[
+            "status",
+            "sent_at",
+            "error_code",
+            "provider",
+            "provider_message_id",
+        ]
+    )
     return delivery
+
+
+def delivery_error_is_uncertain(delivery):
+    code = delivery.error_code.lower()
+    return any(token in code for token in UNCERTAIN_DELIVERY_ERROR_TOKENS)
+
+
+def _send_delivery(*, delivery, subject, document_url, template_base, context):
+    context = {**context, "document_url": document_url}
+    company_email = delivery.document.company.email
+    reply_to = company_email or settings.DEFAULT_REPLY_TO_EMAIL
+    return deliver_transactional_email(
+        delivery=delivery,
+        subject=subject,
+        text_body=render_to_string(f"documents/email/{template_base}.txt", context),
+        html_body=render_to_string(f"documents/email/{template_base}.html", context),
+        reply_to=(reply_to,) if reply_to else (),
+    )
 
 
 def send_document_email(
@@ -271,6 +318,21 @@ def resend_delivery_attempt(*, delivery):
     if delivery.purpose == DocumentDelivery.Purpose.CLIENT_DOCUMENT:
         if delivery.status == DocumentDelivery.Status.PENDING:
             _mark_failed(delivery, "interrupted_before_provider_confirmation")
+        if delivery_error_is_uncertain(delivery):
+            return _send_delivery(
+                delivery=delivery,
+                subject=delivery.subject or (
+                    f"{document.get_doc_type_display()} {document.number} "
+                    f"from {document.company.name}"
+                ),
+                document_url=public_document_url(document),
+                template_base="document_delivery",
+                context={
+                    "document": document,
+                    "recipient_name": delivery.recipient_name,
+                    "custom_message": delivery.message,
+                },
+            )
         return send_document_email(
             document=document,
             recipient_name=delivery.recipient_name,

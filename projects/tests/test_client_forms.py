@@ -106,6 +106,8 @@ class ClientFormWorkflowTests(TestCase):
 
         self.assertEqual(project_form.status, ProjectClientForm.Status.SENT)
         self.assertEqual(project_form.email_status, ProjectClientForm.EmailStatus.SENT)
+        self.assertEqual(project_form.email_deliveries.count(), 1)
+        self.assertEqual(project_form.email_deliveries.get().provider, "django")
         self.assertEqual(project_form.questions.count(), 2)
         self.assertEqual(len(mail.outbox), 1)
         self.assertIn("Provost Home Design", mail.outbox[0].alternatives[0].content)

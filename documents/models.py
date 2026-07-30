@@ -359,12 +359,20 @@ class Payment(models.Model):
 
 
 class DocumentDelivery(models.Model):
+    """Durable attempt history for every transactional application email.
+
+    The historical name is retained for migration and API compatibility. New
+    deliveries may target either a financial document or a project client form.
+    """
+
     class Purpose(models.TextChoices):
         CLIENT_DOCUMENT = "client_document", "Client document"
         CLIENT_FOLLOW_UP = "client_follow_up", "Client follow-up"
         ACCEPTANCE_NOTIFICATION = "acceptance_notification", "Acceptance notification"
         DECLINE_NOTIFICATION = "decline_notification", "Decline notification"
         PAYMENT_NOTIFICATION = "payment_notification", "Payment notification"
+        CLIENT_FORM = "client_form", "Client form"
+        CLIENT_FORM_SUBMISSION = "client_form_submission", "Form submission notification"
 
     class FollowUpKind(models.TextChoices):
         PROPOSAL = "proposal", "Proposal follow-up"
@@ -375,12 +383,30 @@ class DocumentDelivery(models.Model):
     class Status(models.TextChoices):
         PENDING = "pending", "Pending"
         SENT = "sent", "Sent"
+        DELIVERED = "delivered", "Delivered"
+        DELAYED = "delayed", "Delivery delayed"
+        BOUNCED = "bounced", "Bounced"
+        COMPLAINED = "complained", "Marked as spam"
+        SUPPRESSED = "suppressed", "Suppressed"
         FAILED = "failed", "Failed"
+
+    class Provider(models.TextChoices):
+        DJANGO = "django", "Django email backend"
+        RESEND = "resend", "Resend"
 
     document = models.ForeignKey(
         Document,
         on_delete=models.PROTECT,
         related_name="deliveries",
+        blank=True,
+        null=True,
+    )
+    project_form = models.ForeignKey(
+        "projects.ProjectClientForm",
+        on_delete=models.PROTECT,
+        related_name="email_deliveries",
+        blank=True,
+        null=True,
     )
     purpose = models.CharField(
         max_length=30,
@@ -402,24 +428,74 @@ class DocumentDelivery(models.Model):
         default=Status.PENDING,
     )
     provider_message_id = models.CharField(max_length=255, blank=True)
+    provider = models.CharField(max_length=20, choices=Provider.choices, blank=True)
     dedupe_key = models.CharField(max_length=255, blank=True)
     error_code = models.CharField(max_length=100, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     sent_at = models.DateTimeField(blank=True, null=True)
+    last_event_at = models.DateTimeField(blank=True, null=True)
 
     class Meta:
         ordering = ("-created_at", "-pk")
-        indexes = [models.Index(fields=("document", "status"))]
+        indexes = [
+            models.Index(fields=("document", "status")),
+            models.Index(fields=("project_form", "status")),
+        ]
         constraints = [
             models.UniqueConstraint(
                 fields=("dedupe_key",),
                 condition=~Q(dedupe_key=""),
                 name="documents_delivery_dedupe_key_unique",
-            )
+            ),
+            models.UniqueConstraint(
+                fields=("provider", "provider_message_id"),
+                condition=~Q(provider_message_id=""),
+                name="documents_delivery_provider_message_unique",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    Q(document__isnull=False, project_form__isnull=True)
+                    | Q(document__isnull=True, project_form__isnull=False)
+                ),
+                name="documents_delivery_has_one_target",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    Q(
+                        project_form__isnull=False,
+                        purpose__in=("client_form", "client_form_submission"),
+                    )
+                    | Q(
+                        document__isnull=False,
+                        purpose__in=(
+                            "client_document",
+                            "client_follow_up",
+                            "acceptance_notification",
+                            "decline_notification",
+                            "payment_notification",
+                        ),
+                    )
+                ),
+                name="documents_delivery_purpose_matches_target",
+            ),
         ]
 
     def __str__(self):
-        return f"{self.document.number} to {self.recipient_email}: {self.status}"
+        target = self.document.number if self.document_id else self.project_form.title
+        return f"{target} to {self.recipient_email}: {self.status}"
+
+    @classmethod
+    def successful_statuses(cls):
+        return (cls.Status.SENT, cls.Status.DELIVERED, cls.Status.DELAYED)
+
+    @classmethod
+    def failed_statuses(cls):
+        return (
+            cls.Status.FAILED,
+            cls.Status.BOUNCED,
+            cls.Status.COMPLAINED,
+            cls.Status.SUPPRESSED,
+        )
 
     @property
     def failure_message(self):
@@ -430,6 +506,18 @@ class DocumentDelivery(models.Model):
         code = self.error_code.lower()
         if code == "email_not_configured":
             return "Email is not configured. Review the email settings and try again."
+        if code in {"resend_api_key_missing", "email_provider_invalid"}:
+            return "Resend is not fully configured. Review the email integration settings."
+        if code.startswith("resend_http_401") or code.startswith("resend_http_403"):
+            return "Resend rejected the API credentials or sending domain configuration."
+        if code.startswith("resend_http_429"):
+            return "Resend temporarily rate-limited this message. Wait and try again."
+        if self.status == self.Status.BOUNCED:
+            return "The recipient's mail server permanently rejected this email."
+        if self.status == self.Status.COMPLAINED:
+            return "The recipient marked this message as spam. Confirm the address before sending again."
+        if self.status == self.Status.SUPPRESSED:
+            return "Resend suppressed this address because of prior delivery problems."
         if "authentication" in code:
             return "The email provider rejected the login. Check the SMTP username and password."
         if any(token in code for token in ("timeout", "connection", "socket")):
@@ -439,6 +527,41 @@ class DocumentDelivery(models.Model):
         if code == "interrupted_before_provider_confirmation":
             return "The send was interrupted before delivery was confirmed. Try again."
         return "The email provider rejected the message. Review the email settings and try again."
+
+
+class EmailWebhookEvent(models.Model):
+    """One verified provider event, retained for replay and ordering safety."""
+
+    delivery = models.ForeignKey(
+        DocumentDelivery,
+        on_delete=models.CASCADE,
+        related_name="provider_events",
+        blank=True,
+        null=True,
+    )
+    provider = models.CharField(
+        max_length=20,
+        choices=DocumentDelivery.Provider.choices,
+        default=DocumentDelivery.Provider.RESEND,
+    )
+    event_id = models.CharField(max_length=255)
+    event_type = models.CharField(max_length=50)
+    provider_message_id = models.CharField(max_length=255, blank=True)
+    occurred_at = models.DateTimeField()
+    received_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("-occurred_at", "-pk")
+        indexes = [models.Index(fields=("provider", "provider_message_id"))]
+        constraints = [
+            models.UniqueConstraint(
+                fields=("provider", "event_id"),
+                name="documents_email_event_provider_id_unique",
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.event_type}: {self.provider_message_id or self.event_id}"
 
 
 class InvoiceCredit(models.Model):

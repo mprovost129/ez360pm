@@ -1,15 +1,18 @@
-import logging
+from copy import copy
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
-from django.core.mail import EmailMultiAlternatives
 from django.db import transaction
 from django.db.models import Max
 from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils import timezone
 
-from documents.delivery_services import email_configuration_status
+from documents.delivery_services import (
+    deliver_transactional_email,
+    delivery_error_is_uncertain,
+)
+from documents.models import DocumentDelivery
 
 from .models import (
     ClientFormQuestion,
@@ -18,8 +21,6 @@ from .models import (
     ProjectFormQuestion,
     ProjectFormUpload,
 )
-
-logger = logging.getLogger(__name__)
 
 
 @transaction.atomic
@@ -108,16 +109,34 @@ def send_project_client_form(*, project_form):
     ).get(pk=project_form.pk)
     if project_form.status == ProjectClientForm.Status.SUBMITTED:
         raise ValidationError("Submitted forms cannot be resent.")
-    if not email_configuration_status()["configured"]:
-        project_form.email_status = ProjectClientForm.EmailStatus.FAILED
-        project_form.email_error = "email_not_configured"
-        project_form.save(update_fields=["email_status", "email_error", "updated_at"])
-        return project_form
     subject = project_form.email_subject.strip() or (
         f"{project_form.title} for {project_form.project.name} from {project_form.company.name}"
     )
+    delivery = project_form.email_deliveries.order_by("-created_at", "-pk").first()
+    uncertain_retry = bool(
+        delivery
+        and delivery.purpose == DocumentDelivery.Purpose.CLIENT_FORM
+        and delivery.status == DocumentDelivery.Status.FAILED
+        and delivery_error_is_uncertain(delivery)
+    )
+    if uncertain_retry:
+        subject = delivery.subject
+        email_form = copy(project_form)
+        email_form.recipient_name = delivery.recipient_name
+        email_form.recipient_email = delivery.recipient_email
+        email_form.email_message = delivery.message
+    else:
+        delivery = DocumentDelivery.objects.create(
+            project_form=project_form,
+            purpose=DocumentDelivery.Purpose.CLIENT_FORM,
+            recipient_name=project_form.recipient_name,
+            recipient_email=project_form.recipient_email,
+            subject=subject,
+            message=project_form.email_message,
+        )
+        email_form = project_form
     context = {
-        "project_form": project_form,
+        "project_form": email_form,
         "form_url": public_project_form_url(project_form),
         "company_logo_url": (
             f"{settings.PUBLIC_BASE_URL}{project_form.company.logo.url}"
@@ -125,33 +144,23 @@ def send_project_client_form(*, project_form):
             else ""
         ),
     }
-    message = EmailMultiAlternatives(
+    reply_to = project_form.company.email or settings.DEFAULT_REPLY_TO_EMAIL
+    delivery = deliver_transactional_email(
+        delivery=delivery,
         subject=subject,
-        body=render_to_string("projects/email/client_form.txt", context),
-        from_email=settings.DEFAULT_FROM_EMAIL,
-        to=[project_form.recipient_email],
-        reply_to=[project_form.company.email] if project_form.company.email else None,
+        text_body=render_to_string("projects/email/client_form.txt", context),
+        html_body=render_to_string("projects/email/client_form.html", context),
+        reply_to=(reply_to,) if reply_to else (),
     )
-    message.attach_alternative(
-        render_to_string("projects/email/client_form.html", context),
-        "text/html",
-    )
-    try:
-        sent_count = message.send(fail_silently=False)
-    except Exception as exc:
-        logger.warning("Project form email failed form_id=%s error=%s", project_form.pk, exc.__class__.__name__)
-        project_form.email_status = ProjectClientForm.EmailStatus.FAILED
-        project_form.email_error = exc.__class__.__name__.lower()[:100]
+    if delivery.status == DocumentDelivery.Status.SENT:
+        project_form.email_status = ProjectClientForm.EmailStatus.SENT
+        project_form.email_error = ""
+        project_form.status = ProjectClientForm.Status.SENT
+        project_form.sent_at = delivery.sent_at
+        project_form.revoked_at = None
     else:
-        if sent_count == 1:
-            project_form.email_status = ProjectClientForm.EmailStatus.SENT
-            project_form.email_error = ""
-            project_form.status = ProjectClientForm.Status.SENT
-            project_form.sent_at = timezone.now()
-            project_form.revoked_at = None
-        else:
-            project_form.email_status = ProjectClientForm.EmailStatus.FAILED
-            project_form.email_error = "provider_did_not_confirm_send"
+        project_form.email_status = ProjectClientForm.EmailStatus.FAILED
+        project_form.email_error = delivery.error_code
     project_form.save(
         update_fields=[
             "email_status",
@@ -241,7 +250,7 @@ def send_project_form_submission_notification(*, project_form):
         .values_list("email", flat=True)
         .first()
     )
-    if not recipient or not email_configuration_status()["configured"]:
+    if not recipient:
         return False
     context = {
         "project_form": project_form,
@@ -250,26 +259,34 @@ def send_project_form_submission_notification(*, project_form):
             f"{reverse('projects:client-form-detail', args=(project_form.project_id, project_form.pk))}"
         ),
     }
-    message = EmailMultiAlternatives(
-        subject=f"Form submitted: {project_form.title} — {project_form.project.name}",
-        body=render_to_string("projects/email/client_form_submitted.txt", context),
-        from_email=settings.DEFAULT_FROM_EMAIL,
-        to=[recipient],
+    subject = f"Form submitted: {project_form.title} - {project_form.project.name}"
+    delivery, created = DocumentDelivery.objects.get_or_create(
+        dedupe_key=f"project-form-submission:{project_form.pk}",
+        defaults={
+            "project_form": project_form,
+            "purpose": DocumentDelivery.Purpose.CLIENT_FORM_SUBMISSION,
+            "recipient_name": project_form.company.name,
+            "recipient_email": recipient,
+            "subject": subject,
+        },
     )
-    message.attach_alternative(
-        render_to_string("projects/email/client_form_submitted.html", context),
-        "text/html",
+    if not created and delivery.status not in {
+        DocumentDelivery.Status.PENDING,
+        DocumentDelivery.Status.FAILED,
+    }:
+        return True
+    delivery = deliver_transactional_email(
+        delivery=delivery,
+        subject=subject,
+        text_body=render_to_string("projects/email/client_form_submitted.txt", context),
+        html_body=render_to_string("projects/email/client_form_submitted.html", context),
+        reply_to=(
+            (settings.DEFAULT_REPLY_TO_EMAIL,)
+            if settings.DEFAULT_REPLY_TO_EMAIL
+            else ()
+        ),
     )
-    try:
-        sent_count = message.send(fail_silently=False)
-    except Exception as exc:
-        logger.warning(
-            "Project form submission notification failed form_id=%s error=%s",
-            project_form.pk,
-            exc.__class__.__name__,
-        )
-        return False
-    if sent_count != 1:
+    if delivery.status != DocumentDelivery.Status.SENT:
         return False
     ProjectClientForm.objects.filter(
         pk=project_form.pk,

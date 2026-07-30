@@ -1,6 +1,11 @@
 from django.contrib import admin
 
-from .models import Document, DocumentDelivery, DocumentNumberSequence
+from .models import (
+    Document,
+    DocumentDelivery,
+    DocumentNumberSequence,
+    EmailWebhookEvent,
+)
 
 
 @admin.register(Document)
@@ -42,24 +47,60 @@ admin.site.register(DocumentNumberSequence)
 class DocumentDeliveryAdmin(admin.ModelAdmin):
     list_display = (
         "document",
+        "project_form",
         "purpose",
         "recipient_email",
+        "provider",
         "status",
         "created_at",
         "sent_at",
     )
-    list_filter = ("purpose", "status")
-    search_fields = ("document__number", "recipient_email")
+    list_filter = ("provider", "purpose", "status")
+    search_fields = ("document__number", "project_form__title", "recipient_email")
     readonly_fields = (
         "document",
+        "project_form",
         "purpose",
         "recipient_name",
         "recipient_email",
         "status",
         "provider_message_id",
+        "provider",
         "error_code",
         "created_at",
         "sent_at",
+        "last_event_at",
+    )
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(EmailWebhookEvent)
+class EmailWebhookEventAdmin(admin.ModelAdmin):
+    list_display = (
+        "event_type",
+        "provider_message_id",
+        "delivery",
+        "occurred_at",
+        "received_at",
+    )
+    list_filter = ("provider", "event_type")
+    search_fields = ("event_id", "provider_message_id", "delivery__recipient_email")
+    readonly_fields = (
+        "delivery",
+        "provider",
+        "event_id",
+        "event_type",
+        "provider_message_id",
+        "occurred_at",
+        "received_at",
     )
 
     def has_add_permission(self, request):

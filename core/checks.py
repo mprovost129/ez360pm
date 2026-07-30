@@ -42,6 +42,7 @@ def check_runtime_server_configuration(app_configs, **kwargs):
 @checks.register(checks.Tags.security, deploy=True)
 def check_production_email_identity(app_configs, **kwargs):
     issues = []
+    email_provider = settings.EMAIL_PROVIDER.strip().lower()
     if not settings.DEBUG and settings.DEFAULT_FROM_EMAIL == "webmaster@localhost":
         issues.append(
             checks.Warning(
@@ -70,10 +71,43 @@ def check_production_email_identity(app_configs, **kwargs):
         issues.append(
             checks.Warning(
                 "The console email backend is enabled in production.",
-                hint="Configure the production SMTP email backend before launch.",
+                hint="Configure the Resend or SMTP production email backend before launch.",
                 id="ez360pm.W005",
             )
         )
+    if not settings.DEBUG and email_provider not in {"django", "resend"}:
+        issues.append(
+            checks.Warning(
+                "EMAIL_PROVIDER is not recognized.",
+                hint="Use 'resend' for production or 'django' for console, test, and SMTP backends.",
+                id="ez360pm.W007",
+            )
+        )
+    if not settings.DEBUG and email_provider == "resend":
+        if settings.EMAIL_BACKEND != "core.email_backends.ResendEmailBackend":
+            issues.append(
+                checks.Warning(
+                    "Resend is selected but Django is using a different email backend.",
+                    hint="Set EMAIL_BACKEND=core.email_backends.ResendEmailBackend so password recovery also uses Resend.",
+                    id="ez360pm.W008",
+                )
+            )
+        if not settings.RESEND_API_KEY:
+            issues.append(
+                checks.Warning(
+                    "Resend is selected without an API key.",
+                    hint="Set RESEND_API_KEY in the Render environment.",
+                    id="ez360pm.W009",
+                )
+            )
+        if not settings.RESEND_WEBHOOK_SECRET:
+            issues.append(
+                checks.Warning(
+                    "Resend delivery webhooks are not configured.",
+                    hint="Register /webhooks/resend/ in Resend and set RESEND_WEBHOOK_SECRET.",
+                    id="ez360pm.W010",
+                )
+            )
     stripe_values = (settings.STRIPE_SECRET_KEY, settings.STRIPE_WEBHOOK_SECRET)
     if any(stripe_values) and not all(stripe_values):
         issues.append(
