@@ -79,6 +79,13 @@ where `projects.0007` created the column normally. Its reverse operation does
 not remove the field because the field remains part of model state and migration
 `0007`.
 
+Inspection then confirmed that deployed migration `projects.0007` had been
+edited after production recorded its original version. The follow-up
+`projects.0009_repair_client_form_upload_schema` idempotently restores the other
+post-deployment additions: `submission_notified_at` and the complete
+`ProjectFormUpload` table. Never modify a numbered migration after it has been
+deployed; represent every later model change with a new migration.
+
 `.dockerignore` excludes `.env`, repository metadata, local virtualenvs, logs,
 media, test output, and other workstation files from the build context. Never
 pass runtime secrets as Docker build arguments or copy `.env` into an image.

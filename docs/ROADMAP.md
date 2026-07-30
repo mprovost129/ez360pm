@@ -415,6 +415,11 @@ was marked applied while the physical `revoked_at` column was absent. The
 idempotent `projects.0008` repair adds that column only when missing and preserves
 it on reverse migration; ordinary databases treat the repair as a no-op.
 
+Git history confirmed the cause: `projects.0007` was edited after its original
+version had reached production. Repair `projects.0009` restores the remaining
+post-deployment additions (`submission_notified_at` and `ProjectFormUpload`) and
+establishes the permanent rule that deployed numbered migrations are immutable.
+
 - Introduce one provider-neutral outbound email service for documents, client
   forms, internal notifications, and future transactional messages. Keep Django's
   console/locmem backends as the safe development and test defaults.
