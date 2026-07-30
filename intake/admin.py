@@ -1,6 +1,12 @@
 from django.contrib import admin
 
-from .models import Note
+from .models import Note, NoteAttachment
+
+
+class NoteAttachmentInline(admin.TabularInline):
+    model = NoteAttachment
+    extra = 0
+    readonly_fields = ("original_name", "content_type", "size", "uploaded_by", "created_at")
 
 
 @admin.register(Note)
@@ -12,10 +18,12 @@ class NoteAdmin(admin.ModelAdmin):
         "company",
         "client",
         "project",
+        "activity_type",
+        "status",
         "is_archived",
         "created_at",
     )
-    list_filter = ("company", "is_archived")
+    list_filter = ("company", "activity_type", "source_type", "status", "is_archived")
     search_fields = (
         "body",
         "contact_first_name",
@@ -24,7 +32,8 @@ class NoteAdmin(admin.ModelAdmin):
         "client__company_name",
         "project__name",
     )
-    readonly_fields = ("created_at", "updated_at")
+    readonly_fields = ("created_at", "updated_at", "resolved_at")
+    inlines = (NoteAttachmentInline,)
 
     @admin.display(description="Note")
     def short_body(self, obj):

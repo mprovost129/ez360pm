@@ -1,0 +1,23 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ note }} | EZ360PM{% endblock %}
+
+{% block content %}
+<div class="page-heading">
+  <div><p class="eyebrow">{{ note.get_activity_type_display }} · {{ note.get_source_type_display }}</p><h1>{{ note.title|default:'Project activity' }}</h1></div>
+  <div class="button-group"><a class="btn btn-light" href="{% url 'intake:update' note.pk %}">Edit / add file</a>{% if note.project %}<a class="btn btn-light" href="{% url 'projects:detail' note.project.pk %}">Project</a>{% endif %}</div>
+</div>
+<section class="content-card">
+  <div class="detail-row"><span><strong>Status</strong><small>{% if note.follow_up_on %}Follow up {{ note.follow_up_on|date:'M j, Y' }}{% endif %}</small></span><span>{{ note.get_status_display }}</span></div>
+  <div class="detail-row"><span><strong>Attached to</strong></span><span>{% if note.project %}<a href="{% url 'projects:detail' note.project.pk %}">{{ note.project.number }} · {{ note.project.name }}</a>{% elif note.client %}<a href="{% url 'clients:detail' note.client.pk %}">{{ note.client.display_name }}</a>{% else %}Intake{% endif %}</span></div>
+  <div class="detail-row"><span><strong>Source</strong><small>{{ note.contact_first_name }} {{ note.contact_last_name }}{% if note.prospect_company_name %} · {{ note.prospect_company_name }}{% endif %}{% if note.source_email %} · <a href="mailto:{{ note.source_email }}">{{ note.source_email }}</a>{% endif %}</small></span><span>{{ note.source_reference }}</span></div>
+  <div class="detail-row"><span><strong>Recorded</strong><small>{% if note.created_by %}by {{ note.created_by.email }}{% endif %}</small></span><span>{{ note.created_at|date:'M j, Y g:i a' }}</span></div>
+</section>
+<section class="content-card"><h2>Update</h2><div class="note-body">{{ note.body|linebreaksbr }}</div></section>
+{% if note.original_content %}<section class="content-card"><details><summary><strong>Original source content</strong></summary><div class="note-body" style="margin-top:1rem;white-space:pre-wrap;">{{ note.original_content }}</div></details></section>{% endif %}
+<section class="content-card">
+  <div class="section-heading"><h2>Attachments</h2><a href="{% url 'intake:update' note.pk %}">Add attachment</a></div>
+  {% for attachment in note.attachments.all %}<div class="detail-row"><span><a href="{% url 'intake:attachment-download' attachment.pk %}">{{ attachment.original_name }}</a><small>{{ attachment.content_type|default:'File' }} · {{ attachment.size|filesizeformat }}</small></span><form method="post" action="{% url 'intake:attachment-delete' note.pk attachment.pk %}" data-confirm="Remove this attachment?">{% csrf_token %}<button class="btn btn-sm btn-light" type="submit">Remove</button></form></div>{% empty %}<p class="muted">No attachments.</p>{% endfor %}
+</section>
+<section class="content-card"><div class="button-group">{% if note.status != 'action_required' %}<form method="post" action="{% url 'intake:update-status' note.pk 'action_required' %}">{% csrf_token %}<button class="btn btn-light" type="submit">Mark action required</button></form>{% endif %}{% if note.status != 'waiting_client' %}<form method="post" action="{% url 'intake:update-status' note.pk 'waiting_client' %}">{% csrf_token %}<button class="btn btn-light" type="submit">Waiting on client</button></form>{% endif %}{% if note.status != 'resolved' %}<form method="post" action="{% url 'intake:update-status' note.pk 'resolved' %}">{% csrf_token %}<button class="btn btn-success" type="submit">Resolve</button></form>{% else %}<form method="post" action="{% url 'intake:update-status' note.pk 'open' %}">{% csrf_token %}<button class="btn btn-light" type="submit">Reopen</button></form>{% endif %}</div></section>
+{% endblock %}

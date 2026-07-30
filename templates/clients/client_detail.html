@@ -115,7 +115,8 @@
             <div class="tab-pane fade" id="tab-notes" role="tabpanel" aria-labelledby="tab-btn-notes" tabindex="0">
                 {% for note in notes %}
                 <div class="note-row">
-                    <div class="note-body">{{ note.body|linebreaksbr }}</div>
+                    <strong><a href="{% url 'intake:detail' note.pk %}">{{ note.title|default:note.body|truncatechars:100 }}</a></strong>
+                    <div class="note-body">{{ note.body|truncatechars:300|linebreaksbr }}</div>
                     <small class="muted">{{ note.created_at|date:'M j, Y g:i a' }}{% if note.project %} · {{ note.project.number }}{% endif %}</small>
                 </div>
                 {% empty %}<p class="empty-state">No notes attached.</p>{% endfor %}

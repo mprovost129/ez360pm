@@ -87,6 +87,15 @@ class ProjectDetailView(LoginRequiredMixin, CompanyScopedQuerysetMixin, DetailVi
             document for document in documents if document.doc_type == "invoice"
         ]
         context["client_forms"] = list(self.object.client_forms.all())
+        context["project_activities"] = list(
+            self.object.notes.select_related("created_by", "resolved_by")
+            .prefetch_related("attachments")
+            .order_by("-created_at", "-pk")
+        )
+        context["open_activity_count"] = sum(
+            activity.status not in {"resolved", "reference"}
+            for activity in context["project_activities"]
+        )
         active_final_exists = any(
             invoice.invoice_kind == "final" and invoice.status != "void"
             for invoice in context["invoices"]

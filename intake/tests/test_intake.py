@@ -1,17 +1,33 @@
-from django.test import TestCase
+import tempfile
+
+from django.core.files.uploadedfile import SimpleUploadedFile
+from django.test import TestCase, override_settings
 from django.urls import reverse
 
 from accounts.models import Company, User
 from clients.models import Client
 from clients.tests.test_clients import create_client
 from intake.forms import NoteForm
-from intake.models import Note
+from intake.models import Note, NoteAttachment
 from projects.models import Project
 from projects.services import create_project
 from projects.tests.test_projects import project_data
 
 
 class NoteWorkflowTests(TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls._media_directory = tempfile.TemporaryDirectory()
+        cls._media_settings = override_settings(MEDIA_ROOT=cls._media_directory.name)
+        cls._media_settings.enable()
+        super().setUpClass()
+
+    @classmethod
+    def tearDownClass(cls):
+        super().tearDownClass()
+        cls._media_settings.disable()
+        cls._media_directory.cleanup()
+
     def setUp(self):
         self.company = Company.objects.create(name="Provost Home Design")
         self.other_company = Company.objects.create(name="Other Company")
@@ -101,11 +117,11 @@ class NoteWorkflowTests(TestCase):
         )
 
         self.assertEqual(list(open_response.context["notes"]), [open_note])
-        self.assertContains(open_response, "Intake notes")
+        self.assertContains(open_response, "Activity &amp; notes")
         self.assertContains(open_response, "Show archived")
         self.assertNotContains(open_response, "Archived inquiry")
         self.assertEqual(list(archived_response.context["notes"]), [archived_note])
-        self.assertContains(archived_response, "Archived notes")
+        self.assertContains(archived_response, "Archived activity")
         self.assertContains(archived_response, "Show open")
         self.assertNotContains(archived_response, "Open inquiry")
         self.assertNotContains(archived_response, "Other company archive")
@@ -339,3 +355,138 @@ class NoteWorkflowTests(TestCase):
         self.assertEqual(edit_response.status_code, 404)
         self.assertEqual(client_response.status_code, 404)
         self.assertEqual(project_response.status_code, 404)
+
+    def test_quick_email_change_is_structured_and_attached_directly_to_project(self):
+        client_record = create_client(self.company, company_name="Arruda Household")
+        project = create_project(
+            company=self.company,
+            client=client_record,
+            project_data=project_data(number="ARRUDA-1"),
+        )
+        email_body = "Use a four-panel slider where the four windows are."
+
+        response = self.client.post(
+            reverse("intake:quick-add"),
+            {
+                "project": project.pk,
+                "activity_type": Note.ActivityType.CLIENT_CHANGE,
+                "source_type": Note.SourceType.EMAIL,
+                "contact_first_name": "Rob",
+                "contact_last_name": "Arruda",
+                "prospect_company_name": "Marchon Eyewear, Inc",
+                "source_email": "rob@example.com",
+                "source_reference": "Materials-side walkout changes",
+                "body": email_body,
+                "next": reverse("projects:detail", args=(project.pk,)),
+            },
+        )
+
+        self.assertRedirects(response, reverse("projects:detail", args=(project.pk,)))
+        note = Note.objects.get()
+        self.assertEqual(note.project, project)
+        self.assertEqual(note.client, client_record)
+        self.assertEqual(note.created_by, self.user)
+        self.assertEqual(note.status, Note.Status.ACTION_REQUIRED)
+        self.assertEqual(note.title, "Materials-side walkout changes")
+        self.assertEqual(note.original_content, email_body)
+
+        project_page = self.client.get(reverse("projects:detail", args=(project.pk,)))
+        self.assertContains(project_page, "Project activity")
+        self.assertContains(project_page, "Materials-side walkout changes")
+        self.assertContains(project_page, "Action required")
+
+    def test_quick_project_options_are_loaded_lazily_and_company_scoped(self):
+        visible_client = create_client(self.company, company_name="Visible client")
+        visible = create_project(
+            company=self.company,
+            client=visible_client,
+            project_data=project_data(number="VISIBLE-1"),
+        )
+        hidden_client = create_client(self.other_company, company_name="Hidden client")
+        hidden = create_project(
+            company=self.other_company,
+            client=hidden_client,
+            project_data=project_data(number="HIDDEN-1"),
+        )
+
+        page = self.client.get(reverse("accounts:settings"))
+        self.assertNotContains(page, visible.number)
+        response = self.client.get(reverse("intake:project-options"))
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()["projects"]
+        self.assertEqual([item["id"] for item in payload], [visible.pk])
+        self.assertNotIn(hidden.number, str(payload))
+
+    def test_project_activity_attachment_is_private_and_company_scoped(self):
+        client_record = create_client(self.company)
+        project = create_project(
+            company=self.company,
+            client=client_record,
+            project_data=project_data(number="FILES-1"),
+        )
+        response = self.client.post(
+            reverse("intake:create"),
+            {
+                "title": "Revised client sketch",
+                "activity_type": Note.ActivityType.CLIENT_CHANGE,
+                "status": Note.Status.ACTION_REQUIRED,
+                "source_type": Note.SourceType.DOCUMENT,
+                "body": "Review the revised opening layout.",
+                "client": client_record.pk,
+                "project": project.pk,
+                "attachment": SimpleUploadedFile(
+                    "Revised Layout.pdf",
+                    b"%PDF-1.4 revised layout",
+                    content_type="application/pdf",
+                ),
+            },
+        )
+        note = Note.objects.get()
+        self.assertRedirects(response, reverse("intake:detail", args=(note.pk,)))
+        attachment = NoteAttachment.objects.get(note=note)
+        self.assertEqual(attachment.original_name, "Revised Layout.pdf")
+        self.assertNotIn("Revised Layout", attachment.file.name)
+        self.assertEqual(attachment.uploaded_by, self.user)
+
+        download_url = reverse("intake:attachment-download", args=(attachment.pk,))
+        self.client.logout()
+        self.assertEqual(self.client.get(download_url).status_code, 302)
+
+        other_user = User.objects.create_user(
+            "other-files@example.com",
+            "Strong-Test-Password-483!",
+            company=self.other_company,
+        )
+        self.client.force_login(other_user)
+        self.assertEqual(self.client.get(download_url).status_code, 404)
+
+        self.client.force_login(self.user)
+        downloaded = self.client.get(download_url)
+        self.assertEqual(downloaded.status_code, 200)
+        self.assertEqual(downloaded["X-Content-Type-Options"], "nosniff")
+        self.assertIn("attachment", downloaded["Content-Disposition"])
+        self.assertEqual(
+            b"".join(downloaded.streaming_content),
+            b"%PDF-1.4 revised layout",
+        )
+
+    def test_activity_resolution_records_actor_and_can_be_reopened(self):
+        note = Note.objects.create(
+            company=self.company,
+            body="Confirm whether the existing door remains.",
+            status=Note.Status.ACTION_REQUIRED,
+        )
+        resolved = self.client.post(
+            reverse("intake:update-status", args=(note.pk, Note.Status.RESOLVED))
+        )
+        self.assertRedirects(resolved, reverse("intake:detail", args=(note.pk,)))
+        note.refresh_from_db()
+        self.assertEqual(note.status, Note.Status.RESOLVED)
+        self.assertEqual(note.resolved_by, self.user)
+        self.assertIsNotNone(note.resolved_at)
+
+        self.client.post(reverse("intake:update-status", args=(note.pk, Note.Status.OPEN)))
+        note.refresh_from_db()
+        self.assertEqual(note.status, Note.Status.OPEN)
+        self.assertIsNone(note.resolved_by)
+        self.assertIsNone(note.resolved_at)

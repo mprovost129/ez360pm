@@ -1,35 +1,33 @@
 {% extends 'base.html' %}
 
-{% block title %}Notes | EZ360PM{% endblock %}
+{% block title %}Activity & notes | EZ360PM{% endblock %}
 
 {% block content %}
 <div class="page-heading">
-    <h1>{% if request.GET.archived == '1' %}Archived notes{% else %}Intake notes{% endif %}</h1>
-    {% if request.GET.archived == '1' %}<a class="btn btn-light" href="{% url 'intake:list' %}">Show open</a>{% else %}<a class="btn btn-light" href="{% url 'intake:list' %}?archived=1">Show archived</a>{% endif %}
+    <div><p class="eyebrow">Project intelligence</p><h1>{% if request.GET.archived == '1' %}Archived activity{% else %}Activity &amp; notes{% endif %}</h1></div>
+    <div class="button-group"><a class="btn btn-primary" href="{% url 'intake:create' %}">New activity</a>{% if request.GET.archived == '1' %}<a class="btn btn-light" href="{% url 'intake:list' %}">Show open</a>{% else %}<a class="btn btn-light" href="{% url 'intake:list' %}?archived=1">Show archived</a>{% endif %}</div>
 </div>
+<form method="get" class="content-card filter-bar">
+    {% if request.GET.archived == '1' %}<input type="hidden" name="archived" value="1">{% endif %}
+    <label>Search<input type="search" name="q" value="{{ search_query }}" placeholder="Message, sender, source, or project"></label>
+    <label>Status<select name="status"><option value="">All statuses</option>{% for value, label in status_choices %}<option value="{{ value }}"{% if selected_status == value %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+    <label>Type<select name="type"><option value="">All types</option>{% for value, label in activity_type_choices %}<option value="{{ value }}"{% if selected_type == value %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+    <label>Project<select name="project"><option value="">All projects</option>{% for project in projects %}<option value="{{ project.pk }}"{% if selected_project == project.pk|stringformat:'s' %} selected{% endif %}>{{ project }}</option>{% endfor %}</select></label>
+    <button class="btn btn-light" type="submit">Filter</button>
+</form>
 <section class="content-card">
     {% for note in notes %}
     <article class="note-row{% if note.is_archived %} note-row--archived{% endif %}">
-        {% if note.contact_first_name or note.contact_last_name or note.prospect_company_name %}
-        <div class="note-lead">
-            {% if note.contact_first_name or note.contact_last_name %}<strong>{{ note.contact_first_name }} {{ note.contact_last_name }}</strong>{% endif %}
-            {% if note.prospect_company_name %}<span>{{ note.prospect_company_name }}</span>{% endif %}
+        <div class="section-heading">
+            <div><p class="eyebrow">{{ note.get_activity_type_display }} · {{ note.get_source_type_display }}</p><h2><a href="{% url 'intake:detail' note.pk %}">{{ note.title|default:note.body|truncatechars:100 }}</a></h2></div>
+            <span class="badge text-bg-light">{{ note.get_status_display }}</span>
         </div>
-        {% endif %}
-        <div class="note-body">{{ note.body|linebreaksbr }}</div>
-        <div class="note-meta">
-            <span>{{ note.created_at|date:'M j, Y g:i a' }}</span>
-            {% if note.project %}<a href="{% url 'projects:detail' note.project.pk %}">{{ note.project.number }}</a>{% elif note.client %}<a href="{% url 'clients:detail' note.client.pk %}">{{ note.client.display_name }}</a>{% endif %}
-        </div>
-        <div class="button-group">
-            <a class="btn btn-sm btn-light" href="{% url 'intake:update' note.pk %}">Edit / attach</a>
-            {% if not note.project %}
-                {% if note.client %}<a class="btn btn-sm btn-primary" href="{% url 'intake:create-project' note.pk %}">Create project</a>{% else %}<a class="btn btn-sm btn-primary" href="{% url 'intake:create-client' note.pk %}">Create client / project</a>{% endif %}
-            {% endif %}
-            <form method="post" action="{% url 'intake:toggle-archive' note.pk %}">{% csrf_token %}<button class="btn btn-sm btn-light" type="submit">{% if note.is_archived %}Restore{% else %}Archive{% endif %}</button></form>
-        </div>
+        {% if note.contact_first_name or note.contact_last_name or note.prospect_company_name %}<div class="note-lead">{% if note.contact_first_name or note.contact_last_name %}<strong>{{ note.contact_first_name }} {{ note.contact_last_name }}</strong>{% endif %}{% if note.prospect_company_name %}<span>{{ note.prospect_company_name }}</span>{% endif %}</div>{% endif %}
+        <div class="note-body">{{ note.body|truncatechars:350|linebreaksbr }}</div>
+        <div class="note-meta"><span>{{ note.created_at|date:'M j, Y g:i a' }}</span>{% if note.follow_up_on %}<span>Follow up {{ note.follow_up_on|date:'M j, Y' }}</span>{% endif %}{% if note.project %}<a href="{% url 'projects:detail' note.project.pk %}">{{ note.project.number }} · {{ note.project.name }}</a>{% elif note.client %}<a href="{% url 'clients:detail' note.client.pk %}">{{ note.client.display_name }}</a>{% endif %}</div>
+        <div class="button-group"><a class="btn btn-sm btn-light" href="{% url 'intake:detail' note.pk %}">Open</a><a class="btn btn-sm btn-light" href="{% url 'intake:update' note.pk %}">Edit</a>{% if not note.project %}{% if note.client %}<a class="btn btn-sm btn-primary" href="{% url 'intake:create-project' note.pk %}">Create project</a>{% else %}<a class="btn btn-sm btn-primary" href="{% url 'intake:create-client' note.pk %}">Create client / project</a>{% endif %}{% endif %}<form method="post" action="{% url 'intake:toggle-archive' note.pk %}">{% csrf_token %}<button class="btn btn-sm btn-light" type="submit">{% if note.is_archived %}Restore{% else %}Archive{% endif %}</button></form></div>
     </article>
-    {% empty %}<div class="empty-state">No notes in this view.</div>{% endfor %}
+    {% empty %}<div class="empty-state">No activity in this view.</div>{% endfor %}
 </section>
 {% include 'shared/_pagination.html' %}
 {% endblock %}

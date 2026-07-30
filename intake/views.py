@@ -1,13 +1,16 @@
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.db.models import Q
+from django.http import FileResponse, Http404, JsonResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_POST
-from django.views.generic import FormView, ListView, UpdateView
+from django.views.generic import CreateView, DetailView, FormView, ListView, UpdateView
 
 from core.mixins import CompanyScopedQuerysetMixin
+from projects.models import Project
 
 from .forms import (
     ClientFromNoteForm,
@@ -16,7 +19,24 @@ from .forms import (
     ProjectFromNoteForm,
     QuickNoteForm,
 )
-from .models import Note
+from .models import Note, NoteAttachment
+from .services import add_note_attachment
+
+
+@login_required
+def project_options(request):
+    projects = (
+        Project.objects.for_company(request.user.company)
+        .select_related("client")
+        .order_by("-updated_at", "number")[:200]
+    )
+    return JsonResponse(
+        {
+            "projects": [
+                {"id": project.pk, "label": str(project)} for project in projects
+            ]
+        }
+    )
 
 
 @login_required
@@ -24,9 +44,22 @@ from .models import Note
 def quick_add(request):
     form = QuickNoteForm(request.POST, company=request.user.company)
     if form.is_valid():
-        form.save()
+        note = form.save(commit=False)
+        note.created_by = request.user
+        note.title = note.source_reference or next(
+            (line.strip() for line in note.body.splitlines() if line.strip()),
+            "",
+        )[:255]
+        if note.source_type == Note.SourceType.EMAIL:
+            note.original_content = note.body
+        if note.activity_type == Note.ActivityType.CLIENT_CHANGE:
+            note.status = Note.Status.ACTION_REQUIRED
+        note.save()
         request.session.pop("quick_note_draft", None)
-        messages.success(request, "Note captured.")
+        messages.success(
+            request,
+            "Project update captured." if note.project_id else "Note captured.",
+        )
     else:
         request.session["quick_note_draft"] = {
             name: request.POST.get(name, "") for name in form.fields
@@ -50,28 +83,164 @@ class NoteListView(LoginRequiredMixin, CompanyScopedQuerysetMixin, ListView):
     paginate_by = 50
 
     def get_queryset(self):
-        queryset = super().get_queryset().select_related("client", "project")
+        queryset = super().get_queryset().select_related("client", "project", "created_by")
         show_archived = self.request.GET.get("archived") == "1"
-        return queryset.filter(is_archived=show_archived)
+        queryset = queryset.filter(is_archived=show_archived)
+        status = self.request.GET.get("status", "")
+        if status in Note.Status.values:
+            queryset = queryset.filter(status=status)
+        activity_type = self.request.GET.get("type", "")
+        if activity_type in Note.ActivityType.values:
+            queryset = queryset.filter(activity_type=activity_type)
+        project_id = self.request.GET.get("project", "")
+        if project_id.isdigit():
+            queryset = queryset.filter(project_id=project_id)
+        query = self.request.GET.get("q", "").strip()
+        if query:
+            queryset = queryset.filter(
+                Q(title__icontains=query)
+                | Q(body__icontains=query)
+                | Q(original_content__icontains=query)
+                | Q(source_reference__icontains=query)
+                | Q(contact_first_name__icontains=query)
+                | Q(contact_last_name__icontains=query)
+                | Q(project__number__icontains=query)
+                | Q(project__name__icontains=query)
+            )
+        return queryset
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context.update(
+            status_choices=Note.Status.choices,
+            activity_type_choices=Note.ActivityType.choices,
+            projects=Project.objects.for_company(self.request.user.company).order_by(
+                "-updated_at", "number"
+            ),
+            selected_status=self.request.GET.get("status", ""),
+            selected_type=self.request.GET.get("type", ""),
+            selected_project=self.request.GET.get("project", ""),
+            search_query=self.request.GET.get("q", ""),
+        )
+        return context
+
+
+class NoteFormViewMixin:
+    form_class = NoteForm
+    template_name = "intake/note_form.html"
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs.update(company=self.request.user.company, actor=self.request.user)
+        return kwargs
+
+    def form_valid(self, form):
+        if not form.instance.pk:
+            form.instance.created_by = self.request.user
+        response = super().form_valid(form)
+        uploaded_file = form.cleaned_data.get("attachment")
+        if uploaded_file:
+            add_note_attachment(
+                note=self.object,
+                uploaded_file=uploaded_file,
+                uploaded_by=self.request.user,
+            )
+        messages.success(self.request, "Project activity saved.")
+        return response
+
+    def get_success_url(self):
+        return reverse("intake:detail", args=(self.object.pk,))
+
+
+class NoteCreateView(LoginRequiredMixin, NoteFormViewMixin, CreateView):
+    model = Note
+    extra_context = {"page_title": "New project activity", "submit_label": "Save activity"}
+
+    def get_initial(self):
+        initial = super().get_initial()
+        project_id = self.request.GET.get("project")
+        if project_id:
+            project = Project.objects.for_company(self.request.user.company).filter(pk=project_id).first()
+            if project:
+                initial.update(project=project, client=project.client)
+        return initial
+
+
+class NoteDetailView(LoginRequiredMixin, CompanyScopedQuerysetMixin, DetailView):
+    model = Note
+    context_object_name = "note"
+    template_name = "intake/note_detail.html"
+
+    def get_queryset(self):
+        return super().get_queryset().select_related(
+            "client", "project", "created_by", "resolved_by"
+        ).prefetch_related("attachments")
 
 
 class NoteUpdateView(
     LoginRequiredMixin,
     CompanyScopedQuerysetMixin,
+    NoteFormViewMixin,
     UpdateView,
 ):
     model = Note
-    form_class = NoteForm
-    template_name = "shared/form.html"
-    extra_context = {"page_title": "Edit note", "submit_label": "Save note"}
+    extra_context = {"page_title": "Edit project activity", "submit_label": "Save activity"}
 
-    def get_form_kwargs(self):
-        kwargs = super().get_form_kwargs()
-        kwargs["company"] = self.request.user.company
-        return kwargs
 
-    def get_success_url(self):
-        return reverse("intake:list")
+@login_required
+@require_POST
+def update_status(request, pk, status):
+    note = get_object_or_404(Note.objects.for_company(request.user.company), pk=pk)
+    if status not in Note.Status.values:
+        raise Http404
+    note.mark_status(status, user=request.user)
+    note.full_clean()
+    note.save(update_fields=["status", "resolved_at", "resolved_by", "updated_at"])
+    messages.success(request, f"Activity marked {note.get_status_display().lower()}.")
+    next_url = request.POST.get("next", "")
+    if not url_has_allowed_host_and_scheme(
+        next_url,
+        allowed_hosts={request.get_host()},
+        require_https=request.is_secure(),
+    ):
+        next_url = reverse("intake:detail", args=(note.pk,))
+    return redirect(next_url)
+
+
+class NoteAttachmentDownloadView(LoginRequiredMixin, DetailView):
+    model = NoteAttachment
+
+    def get_queryset(self):
+        return NoteAttachment.objects.filter(note__company=self.request.user.company)
+
+    def get(self, request, *args, **kwargs):
+        attachment = self.get_object()
+        try:
+            file_handle = attachment.file.open("rb")
+        except (FileNotFoundError, OSError):
+            raise Http404 from None
+        response = FileResponse(
+            file_handle,
+            as_attachment=True,
+            filename=attachment.original_name,
+            content_type=attachment.content_type or "application/octet-stream",
+        )
+        response["X-Content-Type-Options"] = "nosniff"
+        response["Cache-Control"] = "private, no-store"
+        return response
+
+
+@login_required
+@require_POST
+def delete_attachment(request, pk, attachment_pk):
+    attachment = get_object_or_404(
+        NoteAttachment.objects.filter(note__company=request.user.company),
+        pk=attachment_pk,
+        note_id=pk,
+    )
+    attachment.delete()
+    messages.success(request, "Attachment removed.")
+    return redirect("intake:detail", pk=pk)
 
 
 @login_required

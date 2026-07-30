@@ -1,0 +1,14 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ page_title }} | EZ360PM{% endblock %}
+
+{% block content %}
+<div class="page-heading"><div><p class="eyebrow">Project intelligence</p><h1>{{ page_title }}</h1></div>{% if object %}<a class="btn btn-light" href="{% url 'intake:detail' object.pk %}">Cancel</a>{% endif %}</div>
+<form method="post" enctype="multipart/form-data" class="content-card structured-form" novalidate>
+    {% csrf_token %}
+    {% if form.errors %}<div class="form-error-summary" role="alert" tabindex="-1"><strong>Please correct the highlighted fields.</strong>{{ form.non_field_errors }}</div>{% endif %}
+    {% for heading, fields in form.grouped_fields %}<fieldset class="form-section form-grid"><legend>{{ heading }}</legend>{% for field in fields %}{% include 'shared/_form_field.html' with field=field %}{% endfor %}</fieldset>{% endfor %}
+    <div class="form-actions"><button class="btn btn-primary" type="submit">{{ submit_label }}</button></div>
+</form>
+{% if object and object.attachments.exists %}<section class="content-card"><h2>Existing attachments</h2>{% for attachment in object.attachments.all %}<div class="detail-row"><a href="{% url 'intake:attachment-download' attachment.pk %}">{{ attachment.original_name }}</a><span>{{ attachment.size|filesizeformat }}</span></div>{% endfor %}</section>{% endif %}
+{% endblock %}

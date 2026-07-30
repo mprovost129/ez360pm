@@ -292,6 +292,25 @@ def project_summary(context, arguments):
                 "answers": answers,
             }
         )
+    project_activities = [
+        {
+            "title": activity.title,
+            "type": activity.get_activity_type_display(),
+            "source": activity.get_source_type_display(),
+            "status": activity.get_status_display(),
+            "summary": activity.body,
+            "source_reference": activity.source_reference,
+            "follow_up_on": (
+                activity.follow_up_on.isoformat() if activity.follow_up_on else None
+            ),
+            "attachment_count": activity.attachments.count(),
+            "created_at": activity.created_at.isoformat(),
+        }
+        for activity in Note.objects.for_company(context.company)
+        .filter(project=project)
+        .prefetch_related("attachments")
+        .order_by("-created_at", "-pk")[:20]
+    ]
     return {
         "project": {
             "number": project.number,
@@ -320,6 +339,7 @@ def project_summary(context, arguments):
             "hours": _hours(sum((item.duration for item in unbilled), timedelta())),
         },
         "specifications": {"forms": specification_forms},
+        "activities": project_activities,
         "links": [_project_link(project)]
         + [_document_link(item) for item in documents[:5]],
     }
@@ -550,6 +570,10 @@ def search_notes(context, arguments):
         Note.objects.for_company(context.company)
         .filter(
             Q(body__icontains=query)
+            | Q(title__icontains=query)
+            | Q(original_content__icontains=query)
+            | Q(source_reference__icontains=query)
+            | Q(source_email__icontains=query)
             | Q(contact_first_name__icontains=query)
             | Q(contact_last_name__icontains=query)
             | Q(prospect_company_name__icontains=query)
@@ -566,6 +590,11 @@ def search_notes(context, arguments):
                 ),
                 "company": note.prospect_company_name,
                 "snippet": note.body[:240],
+                "title": note.title,
+                "activity_type": note.get_activity_type_display(),
+                "source_type": note.get_source_type_display(),
+                "status": note.get_status_display(),
+                "follow_up_on": note.follow_up_on.isoformat() if note.follow_up_on else None,
                 "archived": note.is_archived,
                 "client": note.client.display_name if note.client else None,
                 "project": str(note.project) if note.project else None,
@@ -620,7 +649,9 @@ def execute_create_note(context, arguments):
     form = QuickNoteForm(arguments, company=context.company)
     if not form.is_valid():
         raise ValidationError(form.errors.as_text())
-    note = form.save()
+    note = form.save(commit=False)
+    note.created_by = context.user
+    note.save()
     return {
         "message": "Note created.",
         "record_id": note.pk,

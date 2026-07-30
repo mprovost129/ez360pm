@@ -312,10 +312,27 @@ button[type="submit"]:not(.btn):active {
     font-size: 0.85rem;
 }
 
-.quick-note input[type="text"] {
+.quick-note input[type="text"],
+.quick-note input[type="email"],
+.quick-note select {
     width: 100%;
     margin-bottom: 0.4rem;
     font-size: 0.85rem;
+}
+
+.quick-note label,
+.quick-note summary {
+    color: #56697b;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.quick-note details {
+    margin: 0.2rem 0 0.5rem;
+}
+
+.quick-note details[open] summary {
+    margin-bottom: 0.4rem;
 }
 
 .quick-note__name {

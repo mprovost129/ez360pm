@@ -78,6 +78,39 @@ function initializeProjectBillingFields() {
 
 initializeProjectBillingFields();
 
+function initializeQuickNoteProjectSelector() {
+    const select = document.querySelector("[data-quick-note-project]");
+    const container = select?.closest("[data-project-options-url]");
+    if (!select || !container) return;
+
+    let loaded = false;
+    const loadProjects = async () => {
+        if (loaded) return;
+        loaded = true;
+        try {
+            const response = await fetch(container.dataset.projectOptionsUrl, {
+                headers: { Accept: "application/json" },
+                credentials: "same-origin",
+            });
+            if (!response.ok) throw new Error("Project lookup failed");
+            const payload = await response.json();
+            (payload.projects || []).forEach((project) => {
+                const option = document.createElement("option");
+                option.value = String(project.id);
+                option.textContent = project.label;
+                select.appendChild(option);
+            });
+        } catch (_error) {
+            loaded = false;
+        }
+    };
+
+    select.addEventListener("focus", loadProjects, { once: true });
+    select.addEventListener("pointerdown", loadProjects, { once: true });
+}
+
+initializeQuickNoteProjectSelector();
+
 function initializeProtectedForms() {
     document.addEventListener("submit", (event) => {
         const form = event.target;

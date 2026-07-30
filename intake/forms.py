@@ -8,21 +8,32 @@ from projects.forms import ProjectForm
 from projects.models import Project
 
 from .models import Note
+from .upload_security import validate_note_attachment
 
 
 class QuickNoteForm(CompanyScopedModelForm):
     class Meta:
         model = Note
         fields = (
+            "project",
+            "activity_type",
+            "source_type",
             "contact_first_name",
             "contact_last_name",
             "prospect_company_name",
+            "source_email",
+            "source_reference",
             "body",
         )
         labels = {
+            "project": "Existing project (optional)",
+            "activity_type": "Update type",
+            "source_type": "Received by",
             "contact_first_name": "First name",
             "contact_last_name": "Last name",
             "prospect_company_name": "Company name",
+            "source_email": "Sender email",
+            "source_reference": "Email subject / source",
         }
         widgets = {
             "contact_first_name": forms.TextInput(
@@ -34,33 +45,77 @@ class QuickNoteForm(CompanyScopedModelForm):
             "prospect_company_name": forms.TextInput(
                 attrs={"placeholder": "Company name", "aria-label": "Customer company name"}
             ),
+            "source_email": forms.EmailInput(
+                attrs={"placeholder": "Sender email", "aria-label": "Sender email"}
+            ),
+            "source_reference": forms.TextInput(
+                attrs={"placeholder": "Email subject or source", "aria-label": "Source reference"}
+            ),
             "body": forms.Textarea(
                 attrs={
-                    "rows": 3,
-                    "placeholder": "What are they calling about?",
+                    "rows": 5,
+                    "placeholder": "Paste the message or capture the update…",
                     "aria-label": "Quick note",
                 }
             )
         }
 
+    def __init__(self, *args, company=None, **kwargs):
+        if args and args[0] is not None:
+            data = args[0].copy()
+            data.setdefault("activity_type", Note.ActivityType.GENERAL)
+            data.setdefault("source_type", Note.SourceType.INTERNAL)
+            args = (data, *args[1:])
+        super().__init__(*args, company=company, **kwargs)
+        project_queryset = (
+            Project.objects.for_company(self.company)
+            .select_related("client")
+            .order_by("-updated_at", "number")
+        )
+        self.fields["project"].queryset = project_queryset if self.is_bound else project_queryset.none()
+        self.fields["project"].empty_label = "No project — keep in intake"
+        self.fields["project"].widget.attrs["data-quick-note-project"] = ""
+
 
 class NoteForm(CompanyScopedModelForm):
+    attachment = forms.FileField(
+        required=False,
+        validators=[validate_note_attachment],
+        help_text="Optional email, PDF, Office document, text file, or image up to 20 MB.",
+    )
     field_groups = (
+        ("Activity", ("title", "activity_type", "status", "body", "follow_up_on")),
         (
-            "Caller",
-            ("contact_first_name", "contact_last_name", "prospect_company_name"),
+            "Source",
+            (
+                "source_type",
+                "contact_first_name",
+                "contact_last_name",
+                "prospect_company_name",
+                "source_email",
+                "source_reference",
+                "original_content",
+            ),
         ),
-        ("Note", ("body",)),
         ("Attach to", ("client", "project")),
+        ("Files", ("attachment",)),
     )
 
     class Meta:
         model = Note
         fields = (
+            "title",
+            "activity_type",
+            "status",
             "contact_first_name",
             "contact_last_name",
             "prospect_company_name",
+            "source_type",
+            "source_email",
+            "source_reference",
             "body",
+            "original_content",
+            "follow_up_on",
             "client",
             "project",
         )
@@ -69,9 +124,20 @@ class NoteForm(CompanyScopedModelForm):
             "contact_last_name": "Last name",
             "prospect_company_name": "Company name",
         }
-        widgets = {"body": forms.Textarea(attrs={"rows": 5})}
+        widgets = {
+            "body": forms.Textarea(attrs={"rows": 6}),
+            "original_content": forms.Textarea(attrs={"rows": 10}),
+            "follow_up_on": forms.DateInput(attrs={"type": "date"}),
+        }
 
-    def __init__(self, *args, company=None, **kwargs):
+    def __init__(self, *args, company=None, actor=None, **kwargs):
+        self.actor = actor
+        if args and args[0] is not None:
+            data = args[0].copy()
+            data.setdefault("activity_type", Note.ActivityType.GENERAL)
+            data.setdefault("source_type", Note.SourceType.INTERNAL)
+            data.setdefault("status", Note.Status.OPEN)
+            args = (data, *args[1:])
         super().__init__(*args, company=company, **kwargs)
         self.fields["client"].queryset = Client.objects.for_company(
             self.company
@@ -88,6 +154,14 @@ class NoteForm(CompanyScopedModelForm):
             cleaned["client"] = project.client
             self.instance.client = project.client
         return cleaned
+
+    def save(self, commit=True):
+        note = super().save(commit=False)
+        note.mark_status(self.cleaned_data["status"], user=self.actor)
+        if commit:
+            note.save()
+            self.save_m2m()
+        return note
 
 
 class ClientFromNoteForm(ClientCreateForm):
