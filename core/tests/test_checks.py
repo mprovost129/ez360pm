@@ -8,6 +8,7 @@ class ProductionConfigurationCheckTests(SimpleTestCase):
         DEBUG=False,
         DEFAULT_FROM_EMAIL="Studio <office@example.com>",
         PUBLIC_BASE_URL="http://app.example.com",
+        ALLOWED_HOSTS=["app.example.com"],
         EMAIL_BACKEND="django.core.mail.backends.console.EmailBackend",
         STRIPE_SECRET_KEY="",
         STRIPE_WEBHOOK_SECRET="",
@@ -22,6 +23,7 @@ class ProductionConfigurationCheckTests(SimpleTestCase):
         DEBUG=False,
         DEFAULT_FROM_EMAIL="Studio <office@example.com>",
         PUBLIC_BASE_URL="https://app.example.com",
+        ALLOWED_HOSTS=["app.example.com"],
         EMAIL_BACKEND="django.core.mail.backends.smtp.EmailBackend",
         STRIPE_SECRET_KEY="",
         STRIPE_WEBHOOK_SECRET="",
@@ -35,6 +37,7 @@ class ProductionConfigurationCheckTests(SimpleTestCase):
         DEBUG=False,
         DEFAULT_FROM_EMAIL="Studio <notifications@mail.example.com>",
         PUBLIC_BASE_URL="https://app.example.com",
+        ALLOWED_HOSTS=["app.example.com"],
         EMAIL_PROVIDER="resend",
         EMAIL_BACKEND="django.core.mail.backends.smtp.EmailBackend",
         RESEND_API_KEY="",
@@ -52,6 +55,7 @@ class ProductionConfigurationCheckTests(SimpleTestCase):
         DEBUG=False,
         DEFAULT_FROM_EMAIL="Studio <notifications@mail.example.com>",
         PUBLIC_BASE_URL="https://app.example.com",
+        ALLOWED_HOSTS=["app.example.com"],
         EMAIL_PROVIDER="resend",
         EMAIL_BACKEND="core.email_backends.ResendEmailBackend",
         RESEND_API_KEY="re_configured",
@@ -60,6 +64,48 @@ class ProductionConfigurationCheckTests(SimpleTestCase):
         STRIPE_WEBHOOK_SECRET="",
     )
     def test_complete_resend_configuration_has_no_ez360pm_warnings(self):
+        issues = check_production_email_identity(None)
+
+        self.assertEqual(issues, [])
+
+    @override_settings(
+        DEBUG=False,
+        DEFAULT_FROM_EMAIL="Studio <office@example.com>",
+        PUBLIC_BASE_URL="https://www.ez360pm.com/client-links",
+        ALLOWED_HOSTS=["www.ez360pm.com"],
+        EMAIL_BACKEND="django.core.mail.backends.smtp.EmailBackend",
+        STRIPE_SECRET_KEY="",
+        STRIPE_WEBHOOK_SECRET="",
+    )
+    def test_public_base_url_must_be_an_origin(self):
+        issues = check_production_email_identity(None)
+
+        self.assertIn("ez360pm.E003", {issue.id for issue in issues})
+
+    @override_settings(
+        DEBUG=False,
+        DEFAULT_FROM_EMAIL="Studio <office@example.com>",
+        PUBLIC_BASE_URL="https://www.ez360pm.com",
+        ALLOWED_HOSTS=["ez360pm.com", "ez360pm.onrender.com"],
+        EMAIL_BACKEND="django.core.mail.backends.smtp.EmailBackend",
+        STRIPE_SECRET_KEY="",
+        STRIPE_WEBHOOK_SECRET="",
+    )
+    def test_public_base_url_host_must_be_allowed(self):
+        issues = check_production_email_identity(None)
+
+        self.assertIn("ez360pm.E004", {issue.id for issue in issues})
+
+    @override_settings(
+        DEBUG=False,
+        DEFAULT_FROM_EMAIL="Studio <office@example.com>",
+        PUBLIC_BASE_URL="https://www.ez360pm.com",
+        ALLOWED_HOSTS=[".ez360pm.com"],
+        EMAIL_BACKEND="django.core.mail.backends.smtp.EmailBackend",
+        STRIPE_SECRET_KEY="",
+        STRIPE_WEBHOOK_SECRET="",
+    )
+    def test_public_base_url_accepts_django_subdomain_pattern(self):
         issues = check_production_email_identity(None)
 
         self.assertEqual(issues, [])

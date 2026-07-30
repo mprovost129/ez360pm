@@ -1,3 +1,5 @@
+from urllib.parse import urlsplit
+
 from django.conf import settings
 from django.core import checks
 
@@ -43,6 +45,8 @@ def check_runtime_server_configuration(app_configs, **kwargs):
 def check_production_email_identity(app_configs, **kwargs):
     issues = []
     email_provider = settings.EMAIL_PROVIDER.strip().lower()
+    public_base_url = settings.PUBLIC_BASE_URL
+    public_url = urlsplit(public_base_url)
     if not settings.DEBUG and settings.DEFAULT_FROM_EMAIL == "webmaster@localhost":
         issues.append(
             checks.Warning(
@@ -51,7 +55,7 @@ def check_production_email_identity(app_configs, **kwargs):
                 id="ez360pm.W001",
             )
         )
-    if not settings.DEBUG and "localhost" in settings.PUBLIC_BASE_URL:
+    if not settings.DEBUG and "localhost" in public_base_url:
         issues.append(
             checks.Warning(
                 "PUBLIC_BASE_URL still points to localhost.",
@@ -59,12 +63,39 @@ def check_production_email_identity(app_configs, **kwargs):
                 id="ez360pm.W002",
             )
         )
-    if not settings.DEBUG and not settings.PUBLIC_BASE_URL.startswith("https://"):
+    if not settings.DEBUG and not public_base_url.startswith("https://"):
         issues.append(
             checks.Warning(
                 "PUBLIC_BASE_URL is not HTTPS.",
                 hint="Set PUBLIC_BASE_URL to the public HTTPS application origin.",
                 id="ez360pm.W004",
+            )
+        )
+    if not settings.DEBUG and (
+        not public_url.hostname
+        or public_url.username
+        or public_url.password
+        or public_url.path not in {"", "/"}
+        or public_url.query
+        or public_url.fragment
+    ):
+        issues.append(
+            checks.Error(
+                "PUBLIC_BASE_URL must be an origin without credentials, a path, query, or fragment.",
+                hint="Use the canonical form https://www.ez360pm.com.",
+                id="ez360pm.E003",
+            )
+        )
+    if (
+        not settings.DEBUG
+        and public_url.hostname
+        and not _host_is_allowed(public_url.hostname, settings.ALLOWED_HOSTS)
+    ):
+        issues.append(
+            checks.Error(
+                "PUBLIC_BASE_URL is not served by ALLOWED_HOSTS.",
+                hint="Add the PUBLIC_BASE_URL hostname to ALLOWED_HOSTS before deployment.",
+                id="ez360pm.E004",
             )
         )
     if not settings.DEBUG and settings.EMAIL_BACKEND.endswith("console.EmailBackend"):
@@ -118,3 +149,16 @@ def check_production_email_identity(app_configs, **kwargs):
             )
         )
     return issues
+
+
+def _host_is_allowed(hostname, allowed_hosts):
+    hostname = hostname.lower().rstrip(".")
+    for allowed in allowed_hosts:
+        allowed = allowed.lower().rstrip(".")
+        if allowed == "*" or allowed == hostname:
+            return True
+        if allowed.startswith(".") and (
+            hostname == allowed[1:] or hostname.endswith(allowed)
+        ):
+            return True
+    return False

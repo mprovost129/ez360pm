@@ -38,8 +38,10 @@ Development and Render values are intentionally separated. Use `.env.example`
 only for development and use `.env.render.example` as the Render Environment-page
 checklist. See `docs/ENVIRONMENT.md` for the two-section handoff.
 
-Set `PUBLIC_BASE_URL` to the public HTTPS origin with no trailing slash. Public
-document links in email and Stripe redirects are built from this value.
+Set `PUBLIC_BASE_URL=https://www.ez360pm.com`. Public document links in email
+and Stripe redirects are built from this canonical origin. The deployment check
+fails if the value contains a path/query or its hostname is absent from
+`ALLOWED_HOSTS`.
 
 ## Container and reverse-proxy requirements
 
@@ -83,8 +85,8 @@ Production uses the Resend HTTPS API for transactional email. Configure:
 EMAIL_PROVIDER=resend
 EMAIL_BACKEND=core.email_backends.ResendEmailBackend
 EMAIL_TIMEOUT=10
-DEFAULT_FROM_EMAIL=Provost Home Design <notifications@mail.example.com>
-DEFAULT_REPLY_TO_EMAIL=office@example.com
+DEFAULT_FROM_EMAIL=Provost Home Design <notifications@verified-sending-domain>
+DEFAULT_REPLY_TO_EMAIL=office@provosthomedesign.com
 RESEND_API_KEY=re_...
 RESEND_WEBHOOK_SECRET=whsec_...
 ```
@@ -96,13 +98,18 @@ this webhook endpoint and subscribe to `email.sent`, `email.delivered`,
 and `email.suppressed`:
 
 ```text
-https://<public-host>/webhooks/resend/
+https://www.ez360pm.com/webhooks/resend/
 ```
 
 The webhook signing secret is endpoint-specific. Verification uses the raw body
 and Resend's Svix signature headers; duplicate `svix-id` values are ignored and
 older events cannot regress a newer delivery state. Never paste an API key or
 webhook secret into Company settings or source control.
+
+The root domain `ez360pm.com` redirects to `www`, but provider callbacks use the
+canonical `www` URL directly so delivery does not depend on redirect behavior.
+DNS uses the Render apex A record `216.24.57.1` and a `www` CNAME to
+`ez360pm.onrender.com`; remove conflicting apex AAAA records.
 
 The Render Basic service can use SMTP, but HTTPS remains the primary transport
 for provider IDs and delivery events. During the cutover window, Gmail/Google
@@ -135,7 +142,7 @@ STRIPE_WEBHOOK_SECRET=whsec_...
 Create the Stripe webhook endpoint at:
 
 ```text
-https://<public-host>/webhooks/stripe/
+https://www.ez360pm.com/webhooks/stripe/
 ```
 
 Subscribe it to:

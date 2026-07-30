@@ -381,7 +381,7 @@ defines the evidence threshold for product changes.
   audit recovery.
 - Revisit SaaS onboarding only after the personal workflow is stable.
 
-### Phase 8 - Resend transactional email and delivery observability (code complete; production cutover pending)
+### Phase 8 - Resend transactional email and delivery observability (production validation in progress)
 
 **Goal:** move application-generated email to a purpose-built transactional
 provider while keeping Gmail/Google Workspace as the human mailbox for client
@@ -397,9 +397,11 @@ Implementation completed on 2026-07-30: the shared transport, Resend Django
 backend, durable client-form/document attempts, provider event ledger, signed
 idempotent webhook, out-of-order protection, provider IDs, UI/readiness status,
 Render/development environment templates, rollback documentation, migration, and
-regression tests are present. The exit gate remains open until the Resend account,
-DNS, Render secrets, live webhook, controlled sends, and rollback drill are
-completed in production.
+regression tests are present. Production root/www DNS, HTTPS health, the live
+webhook route, and its Render signing secret were verified on 2026-07-30. The
+exit gate remains open only for verified sending-domain evidence, controlled
+document/form/password-reset sends with delivered events, webhook replay, and
+the SMTP rollback drill.
 
 - Introduce one provider-neutral outbound email service for documents, client
   forms, internal notifications, and future transactional messages. Keep Django's

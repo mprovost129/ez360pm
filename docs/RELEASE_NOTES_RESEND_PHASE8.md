@@ -23,15 +23,20 @@ console backend and Gmail/Google Workspace SMTP remains an explicit rollback.
 - Updated development and Render environment templates, deployment instructions,
   data-model/architecture notes, and the production rollback procedure.
 
-## Production cutover still required
+## Production cutover status
 
-1. Create the Resend account and verify a dedicated sending subdomain.
-2. Publish Resend's SPF and DKIM records, then add DMARC deliberately.
-3. Add the Phase 8 email values from `.env.render.example` to Render.
-4. Register `https://<public-host>/webhooks/resend/` for the documented events.
-5. Deploy, run controlled document/form/password-reset sends, and verify provider
+The Render service, root/www DNS, webhook route, and webhook signing secret were
+verified in production on 2026-07-30. The canonical callback is
+`https://www.ez360pm.com/webhooks/resend/`; it returns 405 for GET and rejects an
+unsigned POST with 400.
+
+Remaining exit-gate work:
+
+1. Confirm the dedicated sending domain shows verified SPF and DKIM in Resend,
+   then add DMARC deliberately.
+2. Run controlled document/form/password-reset sends and verify provider
    IDs plus delivered events in EZ360PM.
-6. Replay one webhook and exercise the Gmail SMTP rollback before removing its
+3. Replay one webhook and exercise the Gmail SMTP rollback before removing its
    production credential.
 
 Official setup references: [Resend domains](https://resend.com/docs/dashboard/domains/introduction),
@@ -40,6 +45,6 @@ and [event types](https://resend.com/docs/webhooks/event-types).
 
 ## Validation
 
-- 241 core business tests pass.
+- 244 core business tests pass.
 - 190 AI tests pass.
 - Ruff, dependency integrity, migration-drift, and whitespace checks pass.

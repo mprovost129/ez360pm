@@ -33,6 +33,11 @@ The production email section uses Resend. Replace the API key, webhook signing
 secret, verified sender, and Google Workspace reply-to values. These are Render
 environment values; do not add them to `.env` or GitHub Actions.
 
+The checked-in non-secret Render values use `https://www.ez360pm.com` as the
+canonical origin, while allowing the root and Render service hosts. Keep the
+Resend endpoint at `https://www.ez360pm.com/webhooks/resend/` even though the
+root domain redirects to `www`.
+
 Render supplies `PORT`; do not set it manually. `USE_S3_MEDIA=False` requires a
 persistent disk mounted at `/app/media`. To use private S3 instead, set
 `USE_S3_MEDIA=True` and fill all four AWS values.
