@@ -114,6 +114,11 @@ def attention_summary(context, arguments):
             f"{data['unbilled_count']} unbilled time entries "
             f"({data['unbilled_hours']} hours)"
         )
+    if data["activity_followup_count"]:
+        items.append(
+            f"{data['activity_followup_count']} project follow-up(s) due within 7 days "
+            f"({data['overdue_activity_followup_count']} overdue)"
+        )
     return {
         "summary": items or ["No urgent workflow items were found."],
         "counts": {
@@ -124,6 +129,8 @@ def attention_summary(context, arguments):
             "outstanding_invoices": data["unpaid_count"],
             "overdue_invoices": data["overdue_count"],
             "unbilled_entries": data["unbilled_count"],
+            "project_followups": data["activity_followup_count"],
+            "overdue_project_followups": data["overdue_activity_followup_count"],
         },
         "month_revenue": _money(data["month_revenue"]),
         "links": [
@@ -133,6 +140,7 @@ def attention_summary(context, arguments):
                 "url": reverse("documents:outstanding-list"),
             },
             {"label": "Time entries", "url": reverse("projects:time-list")},
+            {"label": "Project activity", "url": reverse("intake:list")},
         ],
     }
 
@@ -304,11 +312,21 @@ def project_summary(context, arguments):
                 activity.follow_up_on.isoformat() if activity.follow_up_on else None
             ),
             "attachment_count": activity.attachments.count(),
+            "action_items": [
+                {
+                    "type": item.get_item_type_display(),
+                    "title": item.title,
+                    "detail": item.detail,
+                    "status": item.get_status_display(),
+                    "due_on": item.due_on.isoformat() if item.due_on else None,
+                }
+                for item in activity.action_items.all()
+            ],
             "created_at": activity.created_at.isoformat(),
         }
         for activity in Note.objects.for_company(context.company)
         .filter(project=project)
-        .prefetch_related("attachments")
+        .prefetch_related("attachments", "action_items")
         .order_by("-created_at", "-pk")[:20]
     ]
     return {

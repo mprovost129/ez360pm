@@ -15,6 +15,19 @@
 </section>
 <section class="content-card"><h2>Update</h2><div class="note-body">{{ note.body|linebreaksbr }}</div></section>
 {% if note.original_content %}<section class="content-card"><details><summary><strong>Original source content</strong></summary><div class="note-body" style="margin-top:1rem;white-space:pre-wrap;">{{ note.original_content }}</div></details></section>{% endif %}
+<section class="content-card" id="action-items">
+  <div class="section-heading"><div><h2>Action items</h2><p class="muted">Track each change, question, decision, or task separately.</p></div></div>
+  {% for item in note.action_items.all %}
+    <div class="detail-row">
+      <span><strong>{{ item.title }}</strong><small>{{ item.get_item_type_display }} · {{ item.get_status_display }}{% if item.due_on %} · Due {{ item.due_on|date:'M j, Y' }}{% if item.due_on < today and item.status != 'resolved' and item.status != 'cancelled' %} · Overdue{% endif %}{% endif %}</small>{% if item.detail %}<small>{{ item.detail|linebreaksbr }}</small>{% endif %}</span>
+      <span class="button-group"><a class="btn btn-sm btn-light" href="{% url 'intake:item-update' note.pk item.pk %}">Edit</a>{% if item.status != 'resolved' %}<form method="post" action="{% url 'intake:item-status' note.pk item.pk 'resolved' %}">{% csrf_token %}<button class="btn btn-sm btn-success" type="submit">Resolve</button></form>{% else %}<form method="post" action="{% url 'intake:item-status' note.pk item.pk 'open' %}">{% csrf_token %}<button class="btn btn-sm btn-light" type="submit">Reopen</button></form>{% endif %}</span>
+    </div>
+  {% empty %}<p class="muted">No action items yet.</p>{% endfor %}
+  <details{% if item_form.errors %} open{% endif %}>
+    <summary><strong>Add action item</strong></summary>
+    <form method="post" action="{% url 'intake:item-add' note.pk %}" class="structured-form" style="margin-top:1rem;" novalidate>{% csrf_token %}{% if item_form.errors %}<div class="form-error-summary" role="alert">Please correct the highlighted fields.</div>{% endif %}<fieldset class="form-section form-grid">{% for field in item_form %}{% include 'shared/_form_field.html' with field=field %}{% endfor %}</fieldset><button class="btn btn-primary" type="submit">Add item</button></form>
+  </details>
+</section>
 <section class="content-card">
   <div class="section-heading"><h2>Attachments</h2><a href="{% url 'intake:update' note.pk %}">Add attachment</a></div>
   {% for attachment in note.attachments.all %}<div class="detail-row"><span><a href="{% url 'intake:attachment-download' attachment.pk %}">{{ attachment.original_name }}</a><small>{{ attachment.content_type|default:'File' }} · {{ attachment.size|filesizeformat }}</small></span><form method="post" action="{% url 'intake:attachment-delete' note.pk attachment.pk %}" data-confirm="Remove this attachment?">{% csrf_token %}<button class="btn btn-sm btn-light" type="submit">Remove</button></form></div>{% empty %}<p class="muted">No attachments.</p>{% endfor %}

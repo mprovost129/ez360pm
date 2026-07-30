@@ -1,14 +1,16 @@
 import tempfile
+from datetime import timedelta
 
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 from django.urls import reverse
+from django.utils import timezone
 
 from accounts.models import Company, User
 from clients.models import Client
 from clients.tests.test_clients import create_client
 from intake.forms import NoteForm
-from intake.models import Note, NoteAttachment
+from intake.models import ActivityItem, Note, NoteAttachment
 from projects.models import Project
 from projects.services import create_project
 from projects.tests.test_projects import project_data
@@ -490,3 +492,63 @@ class NoteWorkflowTests(TestCase):
         self.assertEqual(note.status, Note.Status.OPEN)
         self.assertIsNone(note.resolved_by)
         self.assertIsNone(note.resolved_at)
+
+    def test_activity_action_items_are_independent_and_surface_when_due(self):
+        client_record = create_client(self.company)
+        project = create_project(
+            company=self.company,
+            client=client_record,
+            project_data=project_data(number="ACTIONS-1"),
+        )
+        note = Note.objects.create(
+            company=self.company,
+            project=project,
+            client=client_record,
+            title="Client walkout changes",
+            body="Several changes and questions from the client.",
+            activity_type=Note.ActivityType.CLIENT_CHANGE,
+            status=Note.Status.ACTION_REQUIRED,
+        )
+        due_on = timezone.localdate() - timedelta(days=1)
+
+        added = self.client.post(
+            reverse("intake:item-add", args=(note.pk,)),
+            {
+                "item_type": ActivityItem.ItemType.CHANGE,
+                "title": "Replace four windows with a four-panel slider",
+                "detail": "Confirm the rough opening before design development.",
+                "status": ActivityItem.Status.OPEN,
+                "due_on": due_on.isoformat(),
+            },
+        )
+        self.assertRedirects(
+            added,
+            f"{reverse('intake:detail', args=(note.pk,))}#action-items",
+        )
+        item = ActivityItem.objects.get(note=note)
+        self.assertEqual(item.created_by, self.user)
+        self.assertEqual(item.order, 1)
+
+        dashboard = self.client.get(reverse("core:home"))
+        self.assertEqual(dashboard.context["activity_followup_count"], 1)
+        self.assertEqual(dashboard.context["overdue_activity_followup_count"], 1)
+        self.assertContains(dashboard, item.title)
+
+        project_page = self.client.get(reverse("projects:detail", args=(project.pk,)))
+        self.assertContains(project_page, "1 open action item")
+
+        resolved = self.client.post(
+            reverse(
+                "intake:item-status",
+                args=(note.pk, item.pk, ActivityItem.Status.RESOLVED),
+            )
+        )
+        self.assertRedirects(
+            resolved,
+            f"{reverse('intake:detail', args=(note.pk,))}#action-items",
+        )
+        item.refresh_from_db()
+        self.assertEqual(item.resolved_by, self.user)
+        self.assertIsNotNone(item.resolved_at)
+        dashboard = self.client.get(reverse("core:home"))
+        self.assertEqual(dashboard.context["activity_followup_count"], 0)

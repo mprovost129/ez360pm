@@ -178,3 +178,76 @@ class NoteAttachment(models.Model):
         super().clean()
         if self.uploaded_by_id and self.uploaded_by.company_id != self.note.company_id:
             raise ValidationError({"uploaded_by": "Uploader must belong to the same company."})
+
+
+class ActivityItem(models.Model):
+    class ItemType(models.TextChoices):
+        CHANGE = "change", "Change"
+        TASK = "task", "Task"
+        QUESTION = "question", "Question"
+        DECISION = "decision", "Decision"
+
+    class Status(models.TextChoices):
+        OPEN = "open", "Open"
+        WAITING = "waiting", "Waiting"
+        RESOLVED = "resolved", "Resolved"
+        CANCELLED = "cancelled", "Cancelled"
+
+    note = models.ForeignKey(Note, on_delete=models.CASCADE, related_name="action_items")
+    item_type = models.CharField(
+        max_length=20,
+        choices=ItemType.choices,
+        default=ItemType.TASK,
+    )
+    title = models.CharField(max_length=500)
+    detail = models.TextField(blank=True)
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.OPEN,
+    )
+    due_on = models.DateField(blank=True, null=True)
+    order = models.PositiveSmallIntegerField(default=1)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="created_activity_items",
+        blank=True,
+        null=True,
+    )
+    resolved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="resolved_activity_items",
+        blank=True,
+        null=True,
+    )
+    resolved_at = models.DateTimeField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("order", "pk")
+        indexes = [models.Index(fields=("status", "due_on"))]
+
+    def clean(self):
+        super().clean()
+        errors = {}
+        if self.created_by_id and self.created_by.company_id != self.note.company_id:
+            errors["created_by"] = "Creator must belong to the activity's company."
+        if self.resolved_by_id and self.resolved_by.company_id != self.note.company_id:
+            errors["resolved_by"] = "Resolver must belong to the activity's company."
+        if errors:
+            raise ValidationError(errors)
+
+    def mark_status(self, status, *, user=None):
+        self.status = status
+        if status == self.Status.RESOLVED:
+            self.resolved_at = self.resolved_at or timezone.now()
+            self.resolved_by = user
+        else:
+            self.resolved_at = None
+            self.resolved_by = None
+
+    def __str__(self):
+        return self.title

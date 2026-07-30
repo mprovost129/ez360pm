@@ -3,8 +3,9 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db.models import Q
 from django.http import FileResponse, Http404, JsonResponse
-from django.shortcuts import get_object_or_404, redirect
+from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+from django.utils import timezone
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_POST
 from django.views.generic import CreateView, DetailView, FormView, ListView, UpdateView
@@ -13,14 +14,15 @@ from core.mixins import CompanyScopedQuerysetMixin
 from projects.models import Project
 
 from .forms import (
+    ActivityItemForm,
     ClientFromNoteForm,
     ExistingClientFromNoteForm,
     NoteForm,
     ProjectFromNoteForm,
     QuickNoteForm,
 )
-from .models import Note, NoteAttachment
-from .services import add_note_attachment
+from .models import ActivityItem, Note, NoteAttachment
+from .services import add_note_attachment, create_activity_item
 
 
 @login_required
@@ -174,7 +176,13 @@ class NoteDetailView(LoginRequiredMixin, CompanyScopedQuerysetMixin, DetailView)
     def get_queryset(self):
         return super().get_queryset().select_related(
             "client", "project", "created_by", "resolved_by"
-        ).prefetch_related("attachments")
+        ).prefetch_related("attachments", "action_items__created_by", "action_items__resolved_by")
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context.setdefault("item_form", ActivityItemForm(actor=self.request.user))
+        context["today"] = timezone.localdate()
+        return context
 
 
 class NoteUpdateView(
@@ -185,6 +193,72 @@ class NoteUpdateView(
 ):
     model = Note
     extra_context = {"page_title": "Edit project activity", "submit_label": "Save activity"}
+
+
+@login_required
+@require_POST
+def add_activity_item(request, pk):
+    note = get_object_or_404(
+        Note.objects.for_company(request.user.company).prefetch_related(
+            "attachments", "action_items"
+        ),
+        pk=pk,
+    )
+    form = ActivityItemForm(request.POST, actor=request.user)
+    if form.is_valid():
+        create_activity_item(
+            note=note,
+            data={field: form.cleaned_data[field] for field in form.Meta.fields},
+            created_by=request.user,
+        )
+        messages.success(request, "Action item added.")
+        return redirect(f"{reverse('intake:detail', args=(note.pk,))}#action-items")
+    return render(
+        request,
+        "intake/note_detail.html",
+        {"note": note, "item_form": form, "today": timezone.localdate()},
+        status=400,
+    )
+
+
+class ActivityItemUpdateView(LoginRequiredMixin, UpdateView):
+    model = ActivityItem
+    form_class = ActivityItemForm
+    template_name = "shared/form.html"
+    pk_url_kwarg = "item_pk"
+    extra_context = {"page_title": "Edit action item", "submit_label": "Save item"}
+
+    def get_queryset(self):
+        return ActivityItem.objects.filter(
+            note_id=self.kwargs["pk"],
+            note__company=self.request.user.company,
+        ).select_related("note")
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["actor"] = self.request.user
+        return kwargs
+
+    def get_success_url(self):
+        return f"{reverse('intake:detail', args=(self.object.note_id,))}#action-items"
+
+
+@login_required
+@require_POST
+def update_activity_item_status(request, pk, item_pk, status):
+    item = get_object_or_404(
+        ActivityItem.objects.select_related("note"),
+        pk=item_pk,
+        note_id=pk,
+        note__company=request.user.company,
+    )
+    if status not in ActivityItem.Status.values:
+        raise Http404
+    item.mark_status(status, user=request.user)
+    item.full_clean()
+    item.save(update_fields=["status", "resolved_at", "resolved_by", "updated_at"])
+    messages.success(request, f"Action item marked {item.get_status_display().lower()}.")
+    return redirect(f"{reverse('intake:detail', args=(pk,))}#action-items")
 
 
 @login_required

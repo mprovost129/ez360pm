@@ -89,12 +89,20 @@ class ProjectDetailView(LoginRequiredMixin, CompanyScopedQuerysetMixin, DetailVi
         context["client_forms"] = list(self.object.client_forms.all())
         context["project_activities"] = list(
             self.object.notes.select_related("created_by", "resolved_by")
-            .prefetch_related("attachments")
+            .prefetch_related("attachments", "action_items")
             .order_by("-created_at", "-pk")
         )
         context["open_activity_count"] = sum(
             activity.status not in {"resolved", "reference"}
             for activity in context["project_activities"]
+        )
+        for activity in context["project_activities"]:
+            activity.open_item_count = sum(
+                item.status not in {"resolved", "cancelled"}
+                for item in activity.action_items.all()
+            )
+        context["open_action_item_count"] = sum(
+            activity.open_item_count for activity in context["project_activities"]
         )
         active_final_exists = any(
             invoice.invoice_kind == "final" and invoice.status != "void"

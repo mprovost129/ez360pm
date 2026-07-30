@@ -6,7 +6,7 @@ from django.utils import timezone
 
 from documents.models import Document, Payment
 from documents.reporting import outstanding_invoices
-from intake.models import Note
+from intake.models import ActivityItem, Note
 from projects.models import Project, TimeEntry
 
 
@@ -56,6 +56,7 @@ def dashboard_context(company):
     )
     unpaid = outstanding_invoices(company).prefetch_related("payments")
     today = timezone.localdate()
+    follow_up_cutoff = today + timedelta(days=7)
     month_start = today.replace(day=1)
     next_month = (month_start.replace(day=28) + timedelta(days=4)).replace(day=1)
     revenue = (
@@ -83,10 +84,51 @@ def dashboard_context(company):
         ),
     )
     unbilled_duration = unbilled["duration"] or timedelta()
+    note_followups = list(
+        Note.objects.for_company(company)
+        .filter(follow_up_on__isnull=False, follow_up_on__lte=follow_up_cutoff)
+        .exclude(status__in=(Note.Status.RESOLVED, Note.Status.REFERENCE))
+        .select_related("project", "client")
+    )
+    item_followups = list(
+        ActivityItem.objects.filter(
+            note__company=company,
+            due_on__isnull=False,
+            due_on__lte=follow_up_cutoff,
+        )
+        .exclude(status__in=(ActivityItem.Status.RESOLVED, ActivityItem.Status.CANCELLED))
+        .select_related("note", "note__project", "note__client")
+    )
+    activity_followups = [
+        {
+            "kind": "activity",
+            "title": note.title or note.body[:100],
+            "due_on": note.follow_up_on,
+            "note": note,
+            "project": note.project,
+        }
+        for note in note_followups
+    ] + [
+        {
+            "kind": "item",
+            "title": item.title,
+            "due_on": item.due_on,
+            "note": item.note,
+            "project": item.note.project,
+        }
+        for item in item_followups
+    ]
+    activity_followups.sort(key=lambda item: (item["due_on"], item["title"]))
     return {
         "recent_notes": Note.objects.for_company(company)
         .filter(is_archived=False)
+        .exclude(status__in=(Note.Status.RESOLVED, Note.Status.REFERENCE))
         .order_by("created_at", "pk")[:5],
+        "activity_followups": activity_followups[:10],
+        "activity_followup_count": len(activity_followups),
+        "overdue_activity_followup_count": sum(
+            item["due_on"] < today for item in activity_followups
+        ),
         "lead_projects": leads[:8],
         "lead_count": leads.count(),
         "approved_projects": approved[:8],
@@ -106,4 +148,5 @@ def dashboard_context(company):
         "month_revenue": revenue,
         "revenue_month": month_start,
         "dashboard_today": today,
+        "follow_up_cutoff": follow_up_cutoff,
     }

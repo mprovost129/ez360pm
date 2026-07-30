@@ -7,7 +7,7 @@ from core.forms import CompanyScopedModelForm
 from projects.forms import ProjectForm
 from projects.models import Project
 
-from .models import Note
+from .models import ActivityItem, Note
 from .upload_security import validate_note_attachment
 
 
@@ -162,6 +162,27 @@ class NoteForm(CompanyScopedModelForm):
             note.save()
             self.save_m2m()
         return note
+
+
+class ActivityItemForm(forms.ModelForm):
+    class Meta:
+        model = ActivityItem
+        fields = ("item_type", "title", "detail", "status", "due_on")
+        widgets = {
+            "detail": forms.Textarea(attrs={"rows": 3}),
+            "due_on": forms.DateInput(attrs={"type": "date"}),
+        }
+
+    def __init__(self, *args, actor=None, **kwargs):
+        self.actor = actor
+        super().__init__(*args, **kwargs)
+
+    def save(self, commit=True):
+        item = super().save(commit=False)
+        item.mark_status(self.cleaned_data["status"], user=self.actor)
+        if commit:
+            item.save()
+        return item
 
 
 class ClientFromNoteForm(ClientCreateForm):

@@ -1,12 +1,18 @@
 from django.contrib import admin
 
-from .models import Note, NoteAttachment
+from .models import ActivityItem, Note, NoteAttachment
 
 
 class NoteAttachmentInline(admin.TabularInline):
     model = NoteAttachment
     extra = 0
     readonly_fields = ("original_name", "content_type", "size", "uploaded_by", "created_at")
+
+
+class ActivityItemInline(admin.TabularInline):
+    model = ActivityItem
+    extra = 0
+    ordering = ("order", "pk")
 
 
 @admin.register(Note)
@@ -33,7 +39,7 @@ class NoteAdmin(admin.ModelAdmin):
         "project__name",
     )
     readonly_fields = ("created_at", "updated_at", "resolved_at")
-    inlines = (NoteAttachmentInline,)
+    inlines = (ActivityItemInline, NoteAttachmentInline)
 
     @admin.display(description="Note")
     def short_body(self, obj):

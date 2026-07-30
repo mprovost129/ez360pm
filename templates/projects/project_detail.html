@@ -68,12 +68,12 @@
         {% if project.description %}<p>{{ project.description|linebreaksbr }}</p>{% else %}<p class="muted">No description.</p>{% endif %}
     </section>
     <section class="content-card detail-wide" id="project-activity">
-        <div class="section-heading"><div><h2>Project activity</h2><p class="muted">{{ open_activity_count }} open item{{ open_activity_count|pluralize }}</p></div><a class="btn btn-sm btn-primary" href="{% url 'intake:create' %}?project={{ project.pk }}">Add update</a></div>
+        <div class="section-heading"><div><h2>Project activity</h2><p class="muted">{{ open_activity_count }} open update{{ open_activity_count|pluralize }} · {{ open_action_item_count }} open action item{{ open_action_item_count|pluralize }}</p></div><a class="btn btn-sm btn-primary" href="{% url 'intake:create' %}?project={{ project.pk }}">Add update</a></div>
         {% for activity in project_activities %}
         <article class="note-row">
             <div class="detail-row"><span><strong><a href="{% url 'intake:detail' activity.pk %}">{{ activity.title|default:activity.body|truncatechars:100 }}</a></strong><small>{{ activity.get_activity_type_display }} · {{ activity.get_source_type_display }}{% if activity.contact_first_name or activity.contact_last_name %} · {{ activity.contact_first_name }} {{ activity.contact_last_name }}{% endif %}</small></span><span>{{ activity.get_status_display }}<small>{{ activity.created_at|date:'M j, Y g:i a' }}</small></span></div>
             <div>{{ activity.body|truncatechars:350|linebreaksbr }}</div>
-            {% if activity.attachments.exists %}<small>{{ activity.attachments.count }} attachment{{ activity.attachments.count|pluralize }}</small>{% endif %}
+            {% if activity.attachments.exists or activity.open_item_count %}<small>{% if activity.open_item_count %}{{ activity.open_item_count }} open action item{{ activity.open_item_count|pluralize }}{% endif %}{% if activity.attachments.exists %}{% if activity.open_item_count %} · {% endif %}{{ activity.attachments.count }} attachment{{ activity.attachments.count|pluralize }}{% endif %}</small>{% endif %}
         </article>
         {% empty %}<p class="muted">No project activity has been recorded.</p>{% endfor %}
     </section>
