@@ -16,6 +16,9 @@
     </div>
     {% include 'shared/_running_timer.html' %}
     <div class="d-flex align-items-center gap-3">
+        <button class="btn btn-sm btn-outline-primary quick-note-open-button d-xxl-none" type="button" data-bs-toggle="offcanvas" data-bs-target="#quickNoteRail" aria-controls="quickNoteRail">
+            <i class="bi bi-pencil-square" aria-hidden="true"></i> <span class="d-none d-md-inline">Quick note</span>
+        </button>
         {% if ai_assistant_enabled %}
         <button class="btn btn-sm btn-outline-primary assistant-open-button" type="button" data-bs-toggle="offcanvas" data-bs-target="#assistantDrawer" aria-controls="assistantDrawer">
             <i class="bi bi-stars" aria-hidden="true"></i> <span class="d-none d-md-inline">Assistant</span>

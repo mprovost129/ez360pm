@@ -1,0 +1,23 @@
+<form class="quick-note" method="post" action="{% url 'intake:quick-add' %}">
+    {% csrf_token %}
+    {% if quick_note_form.errors %}<div class="quick-note__error" role="alert">Please review the highlighted update fields.</div>{% endif %}
+    <label for="{{ quick_note_form.project.id_for_label }}">Project</label>
+    <div class="{% if quick_note_form.project.errors %}form-field--error{% endif %}" data-project-options-url="{% url 'intake:project-options' %}">{{ quick_note_form.project }}{{ quick_note_form.project.errors }}</div>
+    <div class="quick-note__name">
+        <div><label for="{{ quick_note_form.activity_type.id_for_label }}">Type</label>{{ quick_note_form.activity_type }}</div>
+        <div><label for="{{ quick_note_form.source_type.id_for_label }}">Source</label>{{ quick_note_form.source_type }}</div>
+    </div>
+    <details>
+        <summary>Sender and source details</summary>
+        <div class="quick-note__name">
+            <div class="{% if quick_note_form.contact_first_name.errors %}form-field--error{% endif %}">{{ quick_note_form.contact_first_name }}{{ quick_note_form.contact_first_name.errors }}</div>
+            <div class="{% if quick_note_form.contact_last_name.errors %}form-field--error{% endif %}">{{ quick_note_form.contact_last_name }}{{ quick_note_form.contact_last_name.errors }}</div>
+        </div>
+        <div class="{% if quick_note_form.prospect_company_name.errors %}form-field--error{% endif %}">{{ quick_note_form.prospect_company_name }}{{ quick_note_form.prospect_company_name.errors }}</div>
+        <div class="{% if quick_note_form.source_email.errors %}form-field--error{% endif %}">{{ quick_note_form.source_email }}{{ quick_note_form.source_email.errors }}</div>
+        <div class="{% if quick_note_form.source_reference.errors %}form-field--error{% endif %}">{{ quick_note_form.source_reference }}{{ quick_note_form.source_reference.errors }}</div>
+    </details>
+    <div class="{% if quick_note_form.body.errors %}form-field--error{% endif %}">{{ quick_note_form.body }}{{ quick_note_form.body.errors }}</div>
+    <input type="hidden" name="next" value="{{ request.get_full_path }}">
+    <button class="btn btn-primary btn-sm" type="submit">Save update</button>
+</form>

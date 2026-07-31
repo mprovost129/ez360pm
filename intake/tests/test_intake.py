@@ -90,6 +90,7 @@ class NoteWorkflowTests(TestCase):
         self.assertEqual(form["contact_last_name"].value(), "Taylor")
         self.assertEqual(form["prospect_company_name"].value(), "Taylor Household")
         self.assertIn("body", form.errors)
+        self.assertContains(response, "data-quick-note-errors")
 
     def test_quick_add_rejects_external_next_url(self):
         response = self.client.post(

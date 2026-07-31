@@ -1,0 +1,12 @@
+<aside class="app-utility-rail offcanvas-xxl offcanvas-end" tabindex="-1" id="quickNoteRail" aria-labelledby="quickNoteHeading"{% if quick_note_form.errors %} data-quick-note-errors{% endif %}>
+    <div class="offcanvas-header quick-note-rail__header">
+        <div>
+            <h2 id="quickNoteHeading">Quick note</h2>
+            <p>Capture an update without leaving this page.</p>
+        </div>
+        <button class="btn-close d-xxl-none" type="button" data-bs-dismiss="offcanvas" data-bs-target="#quickNoteRail" aria-label="Close quick note"></button>
+    </div>
+    <div class="offcanvas-body quick-note-rail__body">
+        {% include 'shared/_quick_note.html' %}
+    </div>
+</aside>

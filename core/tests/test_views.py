@@ -51,6 +51,17 @@ class DashboardViewTests(TestCase):
         self.assertContains(response, "images/favicon.ico")
         self.assertContains(response, "site.webmanifest")
 
+    def test_quick_note_is_a_single_right_rail_after_main_content(self):
+        self.client.force_login(self.user)
+
+        response = self.client.get(reverse("core:home"))
+        content = response.content.decode()
+
+        self.assertEqual(content.count('class="quick-note"'), 1)
+        self.assertLess(content.index('class="app-main"'), content.index('id="quickNoteRail"'))
+        self.assertContains(response, 'data-bs-target="#quickNoteRail"')
+        self.assertContains(response, "Capture an update without leaving this page.")
+
     def test_logout_requires_post(self):
         self.client.force_login(self.user)
 

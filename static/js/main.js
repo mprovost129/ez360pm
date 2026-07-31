@@ -111,6 +111,21 @@ function initializeQuickNoteProjectSelector() {
 
 initializeQuickNoteProjectSelector();
 
+function initializeQuickNoteRail() {
+    const rail = document.querySelector("#quickNoteRail[data-quick-note-errors]");
+    const Offcanvas = window.bootstrap?.Offcanvas;
+    if (!rail || !Offcanvas || window.matchMedia("(min-width: 1400px)").matches) return;
+
+    rail.addEventListener("shown.bs.offcanvas", () => {
+        rail.querySelector(
+            ".form-field--error input, .form-field--error select, .form-field--error textarea",
+        )?.focus();
+    }, { once: true });
+    Offcanvas.getOrCreateInstance(rail).show();
+}
+
+initializeQuickNoteRail();
+
 function initializeProtectedForms() {
     document.addEventListener("submit", (event) => {
         const form = event.target;
