@@ -438,7 +438,8 @@ button[type="submit"]:not(.btn):active {
     }
 
     .quick-note-rail__body {
-        padding: 0 1rem 1.25rem;
+        /* Match the first content-card row beneath the standard page heading. */
+        padding: 7.5rem 1rem 1.25rem;
         overflow: visible;
     }
 }
