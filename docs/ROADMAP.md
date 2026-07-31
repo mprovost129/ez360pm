@@ -463,6 +463,13 @@ Render Basic.
 and add real-browser proof for the workflows that server-side tests cannot fully
 exercise.
 
+Payment-system baseline completed on 2026-07-31: the focused safety suite and
+`PAYMENT_TEST_MATRIX.md` cover server-owned Checkout amounts, deposit collection,
+configuration failure, real local signature verification, event rejection,
+replay idempotency, partial and full payment state, provider-fee behavior,
+notification failure, rate limiting, and protection of Stripe-created financial
+history without contacting Stripe or using production credentials.
+
 - Maintain a feature-to-test matrix covering normal behavior, validation,
   permissions, failure paths, and regression history for every key workflow.
 - Establish measured statement and branch-coverage baselines, then prevent
