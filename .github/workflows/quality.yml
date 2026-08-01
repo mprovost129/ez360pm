@@ -56,7 +56,7 @@ jobs:
       EMAIL_BACKEND: django.core.mail.backends.locmem.EmailBackend
       DEFAULT_FROM_EMAIL: EZ360PM CI <noreply@example.test>
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
@@ -111,7 +111,7 @@ jobs:
       DEFAULT_FROM_EMAIL: EZ360PM Browser CI <noreply@example.test>
       PLAYWRIGHT_HEADLESS: "1"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
