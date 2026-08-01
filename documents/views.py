@@ -21,6 +21,7 @@ from .forms import (
     InvoiceFilterForm,
     LineItemForm,
     PaymentForm,
+    PaymentRefundForm,
     TimeAttachmentForm,
     VoidInvoiceForm,
 )
@@ -482,6 +483,17 @@ class PaymentUpdateView(PaymentViewMixin, UpdateView):
     template_name = "shared/form.html"
     pk_url_kwarg = "payment_pk"
     extra_context = {"page_title": "Edit payment", "submit_label": "Save payment"}
+
+    def get_queryset(self):
+        return self.invoice.payments.exclude(method=Payment.Method.STRIPE)
+
+
+class PaymentRefundView(PaymentViewMixin, UpdateView):
+    model = Payment
+    form_class = PaymentRefundForm
+    template_name = "shared/form.html"
+    pk_url_kwarg = "payment_pk"
+    extra_context = {"page_title": "Record refund", "submit_label": "Save refund"}
 
     def get_queryset(self):
         return self.invoice.payments.exclude(method=Payment.Method.STRIPE)

@@ -9,7 +9,7 @@ from django.utils import timezone
 
 from .delivery_services import send_payment_notification
 from .models import Document, Payment
-from .services import money, recalculate_payment_status, record_payment
+from .services import money, record_payment, record_refund
 
 logger = logging.getLogger(__name__)
 
@@ -159,9 +159,7 @@ def _apply_charge_refund(charge):
     refunded_cents = _value(charge, "amount_refunded") or 0
     refunded = min(money(Decimal(refunded_cents) / Decimal("100")), payment.amount)
     if payment.refunded_amount != refunded:
-        payment.refunded_amount = refunded
-        payment.save(update_fields=["refunded_amount"])
-        recalculate_payment_status(invoice=payment.document)
+        payment = record_refund(payment=payment, refunded_amount=refunded)
         logger.info(
             "Stripe refund applied intent=%s refunded=%s",
             payment_intent_id,

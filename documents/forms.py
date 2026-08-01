@@ -9,7 +9,13 @@ from core.forms import CompanyScopedModelForm
 from projects.models import Project, TimeEntry
 
 from .models import Document, LineItem, Payment
-from .services import create_invoice, record_payment, save_line_item, update_payment
+from .services import (
+    create_invoice,
+    record_payment,
+    record_refund,
+    save_line_item,
+    update_payment,
+)
 
 
 class InvoiceCreateForm(CompanyScopedModelForm):
@@ -279,6 +285,38 @@ class PaymentForm(forms.ModelForm):
             self.instance = update_payment(payment=self.instance, payment_data=data)
         else:
             self.instance = record_payment(invoice=self.invoice, payment_data=data)
+        return self.instance
+
+
+class PaymentRefundForm(forms.ModelForm):
+    class Meta:
+        model = Payment
+        fields = ("refunded_amount",)
+        labels = {"refunded_amount": "Total refunded to date"}
+        help_texts = {
+            "refunded_amount": (
+                "Enter the cumulative amount refunded for this payment so far, "
+                "not just this refund."
+            ),
+        }
+
+    def __init__(self, *args, invoice, **kwargs):
+        self.invoice = invoice
+        super().__init__(*args, **kwargs)
+
+    def clean_refunded_amount(self):
+        refunded_amount = self.cleaned_data["refunded_amount"]
+        if refunded_amount > self.instance.amount:
+            raise forms.ValidationError("Refund cannot exceed the payment amount.")
+        return refunded_amount
+
+    def save(self, commit=True):
+        if not commit:
+            raise ValueError("PaymentRefundForm must be saved with commit=True.")
+        self.instance = record_refund(
+            payment=self.instance,
+            refunded_amount=self.cleaned_data["refunded_amount"],
+        )
         return self.instance
 
 

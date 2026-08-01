@@ -1,5 +1,15 @@
 # Revenue and Fee Reporting — V1.1 Status
 
+> **STATUS: shelved, not implemented (2026-08-01).** This document describes a
+> `PaymentAdjustment`/`Company.books_closed_through` reporting layer and
+> `documents/revenue_reporting.py` service that were built and then reverted;
+> neither exists in the current schema or codebase. It is kept only as a
+> historical record of the design. The live revenue report is the simpler
+> `core.views.RevenueView` (`/revenue/`), which aggregates `Payment` rows
+> directly, including refunds via `Payment.refunded_amount` (see
+> [DECISIONS.md](DECISIONS.md)). Do not treat the checklist below as current
+> behavior.
+
 ## Purpose
 
 This milestone is the reporting and audit layer required before EZ360PM becomes

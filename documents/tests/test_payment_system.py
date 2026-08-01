@@ -422,3 +422,70 @@ class PaymentSystemSafetyTests(TestCase):
 
         self.assertEqual(responses[-1].status_code, 429)
         self.assertEqual(create.call_count, 10)
+
+    def test_manual_refund_reduces_balance_and_reopens_invoice(self):
+        invoice = self.make_invoice(amount="100.00")
+        payment = record_payment(
+            invoice=invoice,
+            payment_data={
+                "amount": Decimal("100.00"),
+                "method": Payment.Method.CHECK,
+                "received_at": date.today(),
+                "reference": "Check #1042",
+            },
+        )
+        invoice.refresh_from_db()
+        self.assertEqual(invoice.status, Document.Status.PAID)
+
+        response = self.client.post(
+            reverse("documents:payment-refund", args=(invoice.pk, payment.pk)),
+            {"refunded_amount": "40.00"},
+        )
+
+        self.assertRedirects(
+            response, reverse("documents:invoice-detail", args=(invoice.pk,))
+        )
+        payment.refresh_from_db()
+        invoice.refresh_from_db()
+        self.assertEqual(payment.refunded_amount, Decimal("40.00"))
+        self.assertEqual(invoice.status, Document.Status.PARTIALLY_PAID)
+        self.assertEqual(invoice.outstanding_balance, Decimal("40.00"))
+
+    def test_manual_refund_rejects_amount_over_payment(self):
+        invoice = self.make_invoice(amount="100.00")
+        payment = record_payment(
+            invoice=invoice,
+            payment_data={
+                "amount": Decimal("100.00"),
+                "method": Payment.Method.CASH,
+                "received_at": date.today(),
+                "reference": "",
+            },
+        )
+
+        response = self.client.post(
+            reverse("documents:payment-refund", args=(invoice.pk, payment.pk)),
+            {"refunded_amount": "150.00"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "cannot exceed the payment amount")
+        payment.refresh_from_db()
+        self.assertEqual(payment.refunded_amount, Decimal("0.00"))
+
+    def test_stripe_payments_cannot_be_refunded_through_manual_view(self):
+        invoice = self.make_invoice()
+        payment = process_stripe_event(event=self.stripe_event(invoice))
+
+        get_response = self.client.get(
+            reverse("documents:payment-refund", args=(invoice.pk, payment.pk))
+        )
+        post_response = self.client.post(
+            reverse("documents:payment-refund", args=(invoice.pk, payment.pk)),
+            {"refunded_amount": "10.00"},
+        )
+
+        self.assertEqual(get_response.status_code, 404)
+        self.assertEqual(post_response.status_code, 404)
+        payment.refresh_from_db()
+        self.assertEqual(payment.refunded_amount, Decimal("0.00"))

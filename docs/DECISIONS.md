@@ -51,7 +51,8 @@ assumption if no different product decision is made by the deadline.
 | 3 | What are proposal and invoice number formats? | independent company sequences, `P-YY-####` and `I-YY-####` |
 | 3 | What currency and tax rounding policy apply? | USD; round each line total and each line's tax half-up to cents |
 | 3 | What default invoice terms/due interval applies? | no implicit terms; require due date when preparing an invoice for send |
-| 3 | May manual payments exceed outstanding balance? | reject accidental overpayment; no refund/credit-balance workflow in MVP |
+| 3 | May manual payments exceed outstanding balance? | reject accidental overpayment |
+| 3 | How are refunds represented? | implemented (2026-08-01): `Payment.refunded_amount` tracks the cumulative amount refunded against a payment, bounded by a database constraint at or below the payment amount; Stripe `charge.refunded` webhooks update it automatically, and non-Stripe payments support manual entry through the same `record_refund` service. There is no separate refund/credit-balance ledger. |
 | 4 | What exactly makes a retainer “required” for automatic activation? | a created/sent retainer is required; otherwise activation is explicit |
 | 4 | Can multiple proposal recipients sign? | first valid acceptance is final; delivery may have multiple recipients |
 | 5 | Which outbound email provider and reply-to address are used? | implemented through Django's configured email backend; reply-to Company email |

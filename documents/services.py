@@ -443,3 +443,22 @@ def delete_payment(*, payment):
     invoice = payment.document
     payment.delete()
     recalculate_payment_status(invoice=invoice)
+
+
+@transaction.atomic
+def record_refund(*, payment, refunded_amount):
+    """Set the cumulative amount refunded against a payment.
+
+    `refunded_amount` is the total refunded to date, not an incremental
+    amount, matching how Stripe reports `charge.refunded`.
+    """
+    payment = Payment.objects.select_for_update().select_related("document").get(pk=payment.pk)
+    refunded_amount = money(refunded_amount)
+    if refunded_amount > payment.amount:
+        raise ValidationError("Refund cannot exceed the payment amount.")
+    if payment.refunded_amount != refunded_amount:
+        payment.refunded_amount = refunded_amount
+        payment.full_clean()
+        payment.save(update_fields=["refunded_amount"])
+        recalculate_payment_status(invoice=payment.document)
+    return payment
