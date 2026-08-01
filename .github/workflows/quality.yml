@@ -57,7 +57,7 @@ jobs:
       DEFAULT_FROM_EMAIL: EZ360PM CI <noreply@example.test>
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.13"
           cache: pip
@@ -112,7 +112,7 @@ jobs:
       PLAYWRIGHT_HEADLESS: "1"
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.13"
           cache: pip
