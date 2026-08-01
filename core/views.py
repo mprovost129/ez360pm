@@ -4,7 +4,7 @@ from decimal import Decimal
 
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db import connection
-from django.db.models import Sum
+from django.db.models import DecimalField, F, Sum
 from django.http import JsonResponse
 from django.utils import timezone
 from django.views import View
@@ -51,16 +51,25 @@ class RevenueView(LoginRequiredMixin, ListView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context["selected_month"] = self.month
-        context["revenue_total"] = self.object_list.aggregate(value=Sum("amount"))[
-            "value"
-        ] or Decimal("0.00")
+        context["revenue_total"] = self.object_list.aggregate(
+            value=Sum(
+                F("amount") - F("refunded_amount"),
+                output_field=DecimalField(max_digits=12, decimal_places=2),
+            )
+        )["value"] or Decimal("0.00")
+        context["refund_total"] = self.object_list.aggregate(
+            value=Sum("refunded_amount")
+        )["value"] or Decimal("0.00")
         context["fee_total"] = self.object_list.aggregate(value=Sum("fee_amount"))[
             "value"
         ] or Decimal("0.00")
         context["net_total"] = context["revenue_total"] - context["fee_total"]
         context["pending_fee_count"] = self.object_list.filter(fee_pending=True).count()
         context["method_totals"] = self.object_list.values("method").annotate(
-            total=Sum("amount")
+            total=Sum(
+                F("amount") - F("refunded_amount"),
+                output_field=DecimalField(max_digits=12, decimal_places=2),
+            )
         )
         context["method_totals"] = [
             {

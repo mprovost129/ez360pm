@@ -210,7 +210,12 @@ class Document(CompanyOwnedModel):
 
     @property
     def amount_paid(self):
-        return self.payments.aggregate(value=Sum("amount"))["value"] or Decimal("0.00")
+        return self.payments.aggregate(
+            value=Sum(
+                F("amount") - F("refunded_amount"),
+                output_field=models.DecimalField(max_digits=12, decimal_places=2),
+            )
+        )["value"] or Decimal("0.00")
 
     @property
     def gross_total(self):
@@ -316,6 +321,13 @@ class Payment(models.Model):
         validators=[MinValueValidator(Decimal("0"))],
         help_text="Processing fee withheld by the provider (0 for manual payments).",
     )
+    refunded_amount = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=Decimal("0.00"),
+        validators=[MinValueValidator(Decimal("0"))],
+        help_text="Total refunded back to the client for this payment.",
+    )
     fee_pending = models.BooleanField(
         default=False,
         help_text="Stripe has not yet supplied the final processing fee.",
@@ -342,6 +354,10 @@ class Payment(models.Model):
                 condition=Q(fee_amount__gte=0),
                 name="documents_payment_fee_nonnegative",
             ),
+            models.CheckConstraint(
+                condition=Q(refunded_amount__gte=0) & Q(refunded_amount__lte=F("amount")),
+                name="documents_payment_refund_within_amount",
+            ),
         ]
         indexes = [models.Index(fields=("document", "received_at"))]
 
@@ -354,8 +370,12 @@ class Payment(models.Model):
         return f"{self.get_method_display()} payment of {self.amount}"
 
     @property
+    def collected_amount(self):
+        return self.amount - self.refunded_amount
+
+    @property
     def net_amount(self):
-        return self.amount - self.fee_amount
+        return self.collected_amount - self.fee_amount
 
 
 class DocumentDelivery(models.Model):

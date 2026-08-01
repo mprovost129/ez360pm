@@ -5,7 +5,7 @@ from decimal import ROUND_HALF_UP, Decimal
 
 from django.core.exceptions import ValidationError
 from django.db import transaction
-from django.db.models import Max, Sum
+from django.db.models import DecimalField, F, Max, Sum
 from django.utils import timezone
 
 from accounts.models import Company
@@ -366,7 +366,12 @@ def recalculate_payment_status(*, invoice):
     invoice = Document.objects.select_for_update().get(pk=invoice.pk)
     if invoice.status == Document.Status.VOID:
         return invoice
-    amount_paid = invoice.payments.aggregate(value=Sum("amount"))["value"] or Decimal("0")
+    amount_paid = invoice.payments.aggregate(
+        value=Sum(
+            F("amount") - F("refunded_amount"),
+            output_field=DecimalField(max_digits=12, decimal_places=2),
+        )
+    )["value"] or Decimal("0")
     if amount_paid > 0 and amount_paid >= invoice.amount_due:
         status = Document.Status.PAID
     elif amount_paid > 0:

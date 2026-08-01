@@ -702,3 +702,51 @@ class DeliveryAndStripeTests(TestCase):
         self.assertContains(response, "Configured", count=2)
         self.assertNotContains(response, "sk_test_configured")
         self.assertNotContains(response, "whsec_test_configured")
+
+
+class StripeRefundTests(DeliveryAndStripeTests):
+    def test_refund_reopens_invoice_and_reduces_revenue(self):
+        invoice = self.make_invoice()
+        payment = process_stripe_event(event=self.stripe_event(invoice, intent="pi_refund"))
+        invoice.refresh_from_db()
+        self.assertEqual(invoice.status, Document.Status.PAID)
+
+        # Stripe sends charge.refunded with the cumulative refunded total.
+        partial = {
+            "type": "charge.refunded",
+            "data": {"object": {"payment_intent": "pi_refund", "amount_refunded": 4000}},
+        }
+        process_stripe_event(event=partial)
+        invoice.refresh_from_db()
+        payment.refresh_from_db()
+        self.assertEqual(payment.refunded_amount, Decimal("40.00"))
+        self.assertEqual(invoice.status, Document.Status.PARTIALLY_PAID)
+        self.assertEqual(invoice.outstanding_balance, Decimal("40.00"))
+
+        full = {
+            "type": "charge.refunded",
+            "data": {"object": {"payment_intent": "pi_refund", "amount_refunded": 10000}},
+        }
+        process_stripe_event(event=full)
+        invoice.refresh_from_db()
+        payment.refresh_from_db()
+        self.assertEqual(payment.refunded_amount, Decimal("100.00"))
+        self.assertEqual(invoice.status, Document.Status.SENT)
+        self.assertEqual(invoice.outstanding_balance, Decimal("100.00"))
+
+        revenue = self.client.get(
+            reverse("core:revenue"),
+            {"month": payment.received_at.strftime("%Y-%m")},
+        )
+        self.assertEqual(revenue.context["revenue_total"], Decimal("0.00"))
+        self.assertEqual(revenue.context["refund_total"], Decimal("100.00"))
+
+    def test_refund_for_unknown_intent_is_ignored(self):
+        self.assertIsNone(
+            process_stripe_event(
+                event={
+                    "type": "charge.refunded",
+                    "data": {"object": {"payment_intent": "pi_nope", "amount_refunded": 500}},
+                }
+            )
+        )

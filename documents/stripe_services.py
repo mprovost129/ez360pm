@@ -9,7 +9,7 @@ from django.utils import timezone
 
 from .delivery_services import send_payment_notification
 from .models import Document, Payment
-from .services import money, record_payment
+from .services import money, recalculate_payment_status, record_payment
 
 logger = logging.getLogger(__name__)
 
@@ -136,6 +136,40 @@ def _fee_from_charge(charge):
     return money(Decimal(fee_cents) / Decimal("100"))
 
 
+def _payment_intent_id(source):
+    payment_intent = _value(source, "payment_intent")
+    if isinstance(payment_intent, str):
+        return payment_intent
+    return _value(payment_intent, "id") if payment_intent else None
+
+
+@transaction.atomic
+def _apply_charge_refund(charge):
+    """Mirror Stripe's refunded total onto the local payment row."""
+    payment_intent_id = _payment_intent_id(charge)
+    if not payment_intent_id:
+        return None
+    payment = (
+        Payment.objects.select_for_update()
+        .filter(stripe_payment_intent_id=payment_intent_id)
+        .first()
+    )
+    if payment is None:
+        return None
+    refunded_cents = _value(charge, "amount_refunded") or 0
+    refunded = min(money(Decimal(refunded_cents) / Decimal("100")), payment.amount)
+    if payment.refunded_amount != refunded:
+        payment.refunded_amount = refunded
+        payment.save(update_fields=["refunded_amount"])
+        recalculate_payment_status(invoice=payment.document)
+        logger.info(
+            "Stripe refund applied intent=%s refunded=%s",
+            payment_intent_id,
+            refunded,
+        )
+    return payment
+
+
 def _reconcile_charge_fee(charge):
     payment_intent = _value(charge, "payment_intent")
     payment_intent_id = _value(payment_intent, "id") if payment_intent else None
@@ -161,6 +195,15 @@ def _reconcile_charge_fee(charge):
 def process_stripe_event(*, event):
     event_type = _value(event, "type")
     event_object = _value(_value(event, "data", {}), "object", {})
+    if event_type == "charge.refunded":
+        return _apply_charge_refund(event_object)
+    if event_type == "charge.dispute.created":
+        logger.warning(
+            "Stripe dispute opened charge=%s amount=%s - reconcile manually",
+            _value(event_object, "charge"),
+            _value(event_object, "amount"),
+        )
+        return None
     if event_type in {"charge.succeeded", "charge.updated"}:
         return _reconcile_charge_fee(event_object)
     if event_type not in {
