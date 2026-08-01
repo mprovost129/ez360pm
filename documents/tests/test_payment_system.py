@@ -15,15 +15,27 @@ from django.urls import reverse
 from accounts.models import Company, User
 from clients.tests.test_clients import create_client
 from core.emailing import EmailDeliveryError
-from documents.models import Document, DocumentDelivery, Payment
+from documents.models import (
+    Document,
+    DocumentDelivery,
+    Payment,
+    PaymentRefund,
+    StripeWebhookEvent,
+)
+from documents.proposal_services import apply_retainer_credit
 from documents.services import (
     create_invoice,
     issue_document,
     record_payment,
+    record_refund,
     save_line_item,
     void_invoice,
 )
-from documents.stripe_services import create_checkout_session, process_stripe_event
+from documents.stripe_services import (
+    StripeEventDependencyMissing,
+    create_checkout_session,
+    process_stripe_event,
+)
 from projects.services import create_project
 from projects.tests.test_projects import project_data
 
@@ -439,7 +451,11 @@ class PaymentSystemSafetyTests(TestCase):
 
         response = self.client.post(
             reverse("documents:payment-refund", args=(invoice.pk, payment.pk)),
-            {"refunded_amount": "40.00"},
+            {
+                "amount": "40.00",
+                "effective_at": date.today().isoformat(),
+                "reference": "Refunded by check",
+            },
         )
 
         self.assertRedirects(
@@ -465,11 +481,14 @@ class PaymentSystemSafetyTests(TestCase):
 
         response = self.client.post(
             reverse("documents:payment-refund", args=(invoice.pk, payment.pk)),
-            {"refunded_amount": "150.00"},
+            {
+                "amount": "150.00",
+                "effective_at": date.today().isoformat(),
+            },
         )
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "cannot exceed the payment amount")
+        self.assertContains(response, "cannot exceed the unrefunded payment amount")
         payment.refresh_from_db()
         self.assertEqual(payment.refunded_amount, Decimal("0.00"))
 
@@ -482,10 +501,133 @@ class PaymentSystemSafetyTests(TestCase):
         )
         post_response = self.client.post(
             reverse("documents:payment-refund", args=(invoice.pk, payment.pk)),
-            {"refunded_amount": "10.00"},
+            {"amount": "10.00", "effective_at": date.today().isoformat()},
         )
 
         self.assertEqual(get_response.status_code, 404)
         self.assertEqual(post_response.status_code, 404)
         payment.refresh_from_db()
         self.assertEqual(payment.refunded_amount, Decimal("0.00"))
+
+    def test_manual_refunds_are_incremental_append_only_history(self):
+        invoice = self.make_invoice()
+        payment = record_payment(
+            invoice=invoice,
+            payment_data={
+                "amount": Decimal("100.00"),
+                "method": Payment.Method.CHECK,
+                "received_at": date.today(),
+                "reference": "Check #2001",
+            },
+        )
+        url = reverse("documents:payment-refund", args=(invoice.pk, payment.pk))
+
+        for amount, reference in (("25.00", "Scope reduction"), ("10.00", "Courtesy")):
+            response = self.client.post(
+                url,
+                {
+                    "amount": amount,
+                    "effective_at": date.today().isoformat(),
+                    "reference": reference,
+                },
+            )
+            self.assertEqual(response.status_code, 302)
+
+        payment.refresh_from_db()
+        refunds = list(payment.refunds.order_by("created_at"))
+        self.assertEqual(payment.refunded_amount, Decimal("35.00"))
+        self.assertEqual([row.amount for row in refunds], [Decimal("25.00"), Decimal("10.00")])
+        self.assertEqual(refunds[0].created_by, self.user)
+        refunds[0].reference = "Changed history"
+        with self.assertRaises(ValidationError):
+            refunds[0].save()
+        with self.assertRaises(ValidationError):
+            payment.refunds.all().delete()
+
+    def test_manual_refund_cannot_undercollateralize_applied_retainer(self):
+        retainer = self.make_invoice(
+            amount="100.00",
+            invoice_kind=Document.InvoiceKind.RETAINER,
+            deposit_amount="100.00",
+        )
+        payment = record_payment(
+            invoice=retainer,
+            payment_data={
+                "amount": Decimal("100.00"),
+                "method": Payment.Method.CHECK,
+                "received_at": date.today(),
+                "reference": "Deposit",
+            },
+        )
+        final = self.make_invoice(
+            amount="100.00",
+            invoice_kind=Document.InvoiceKind.FINAL,
+            issue=False,
+        )
+        apply_retainer_credit(
+            source_invoice=retainer,
+            destination_invoice=final,
+            amount=Decimal("100.00"),
+        )
+
+        with self.assertRaisesMessage(ValidationError, "already applied"):
+            record_refund(payment=payment, amount=Decimal("1.00"))
+        self.assertFalse(PaymentRefund.objects.filter(payment=payment).exists())
+
+    def test_out_of_order_stripe_refund_retries_after_payment_arrives(self):
+        invoice = self.make_invoice()
+        refund_event = {
+            "id": "evt_refund_first",
+            "type": "charge.refunded",
+            "data": {
+                "object": {
+                    "id": "ch_refund_first",
+                    "payment_intent": "pi_refund_first",
+                    "amount_refunded": 2500,
+                }
+            },
+        }
+
+        with self.assertRaises(StripeEventDependencyMissing):
+            process_stripe_event(event=refund_event)
+        process_stripe_event(
+            event=self.stripe_event(
+                invoice,
+                intent="pi_refund_first",
+                event_id="evt_payment_second",
+            )
+        )
+        payment = process_stripe_event(event=refund_event)
+
+        payment.refresh_from_db()
+        event = StripeWebhookEvent.objects.get(event_id="evt_refund_first")
+        self.assertEqual(payment.refunded_amount, Decimal("25.00"))
+        self.assertEqual(event.status, StripeWebhookEvent.Status.PROCESSED)
+        self.assertEqual(event.attempt_count, 2)
+        self.assertEqual(payment.refunds.get().provider, PaymentRefund.Provider.STRIPE)
+
+    def test_stripe_dispute_is_retained_for_review(self):
+        invoice = self.make_invoice()
+        payment = process_stripe_event(
+            event=self.stripe_event(
+                invoice,
+                intent="pi_dispute_review",
+                event_id="evt_dispute_payment",
+            )
+        )
+        event = {
+            "id": "evt_dispute_review",
+            "type": "charge.dispute.created",
+            "data": {
+                "object": {
+                    "id": "dp_review",
+                    "payment_intent": "pi_dispute_review",
+                    "amount": 10000,
+                }
+            },
+        }
+
+        self.assertIsNone(process_stripe_event(event=event))
+        event_row = StripeWebhookEvent.objects.get(event_id="evt_dispute_review")
+        self.assertEqual(event_row.status, StripeWebhookEvent.Status.REQUIRES_REVIEW)
+        self.assertEqual(event_row.payment, payment)

@@ -470,6 +470,13 @@ replay idempotency, partial and full payment state, provider-fee behavior,
 notification failure, rate limiting, and protection of Stripe-created financial
 history without contacting Stripe or using production credentials.
 
+Financial stabilization completed on 2026-08-01: refunds now use an append-only,
+dated ledger with a reconciled payment cache; revenue uses refund effective dates;
+manual refunds protect applied retainer credits; verified Stripe events retain
+idempotent processed, retry, ignored, and review states; out-of-order refunds and
+disputes can no longer disappear silently; and the deployment data audit detects
+refund/cache drift and unresolved Stripe attention items.
+
 - Maintain a feature-to-test matrix covering normal behavior, validation,
   permissions, failure paths, and regression history for every key workflow.
 - Establish measured statement and branch-coverage baselines, then prevent

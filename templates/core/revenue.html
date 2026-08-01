@@ -3,12 +3,35 @@
 {% block title %}Revenue | EZ360PM{% endblock %}
 
 {% block content %}
-<div class="page-heading"><div><p class="eyebrow">Payments received</p><h1>Revenue · {{ selected_month|date:'F Y' }}</h1></div><strong class="page-total">${{ revenue_total }}</strong></div>
-{% if fee_total or pending_fee_count or refund_total %}<p class="revenue-breakdown muted">Stripe fees −${{ fee_total }} · Net deposited so far ${{ net_total }}{% if refund_total %} · Refunded ${{ refund_total }}{% endif %}{% if pending_fee_count %} · {{ pending_fee_count }} fee{{ pending_fee_count|pluralize }} awaiting Stripe{% endif %}</p>{% endif %}
-<nav class="month-nav" aria-label="Revenue month"><a href="?month={{ previous_month|date:'Y-m' }}">← {{ previous_month|date:'M Y' }}</a><form method="get"><label for="month">Month</label><input id="month" type="month" name="month" value="{{ selected_month|date:'Y-m' }}"><button class="btn btn-light" type="submit">View</button></form><a href="?month={{ next_month|date:'Y-m' }}">{{ next_month|date:'M Y' }} →</a></nav>
-<div class="metric-grid metric-grid--compact">{% for row in method_totals %}<div class="metric-card"><span>{{ row.label }}</span><strong>${{ row.total }}</strong></div>{% empty %}<div class="metric-card"><span>No payments</span><strong>$0.00</strong></div>{% endfor %}</div>
+<div class="page-heading">
+    <div><p class="eyebrow">Cash activity</p><h1>Revenue · {{ selected_month|date:'F Y' }}</h1></div>
+    <strong class="page-total">${{ revenue_total }}</strong>
+</div>
+<p class="revenue-breakdown muted">
+    Receipts ${{ receipt_total }} · Refunds −${{ refund_total }} · Stripe fees −${{ fee_total }} · Net deposited ${{ net_total }}
+    {% if pending_fee_count %} · {{ pending_fee_count }} fee{{ pending_fee_count|pluralize }} awaiting Stripe{% endif %}
+</p>
+<nav class="month-nav" aria-label="Revenue month">
+    <a href="?month={{ previous_month|date:'Y-m' }}">← {{ previous_month|date:'M Y' }}</a>
+    <form method="get"><label for="month">Month</label><input id="month" type="month" name="month" value="{{ selected_month|date:'Y-m' }}"><button class="btn btn-light" type="submit">View</button></form>
+    <a href="?month={{ next_month|date:'Y-m' }}">{{ next_month|date:'M Y' }} →</a>
+</nav>
+<div class="metric-grid metric-grid--compact">
+    {% for row in method_totals %}<div class="metric-card"><span>{{ row.label }}</span><strong>${{ row.total }}</strong></div>{% empty %}<div class="metric-card"><span>No cash activity</span><strong>$0.00</strong></div>{% endfor %}
+</div>
 <section class="content-card">
-    {% for payment in payments %}<a class="item-row" href="{% url 'documents:invoice-detail' payment.document.pk %}"><span><strong>{{ payment.received_at|date:'M j' }} · {{ payment.document.number }}</strong><small>{{ payment.document.project.client.display_name }} · {{ payment.get_method_display }}{% if payment.reference %} · {{ payment.reference }}{% endif %}{% if payment.refunded_amount %} · Refunded ${{ payment.refunded_amount }}{% endif %}</small></span><strong>${{ payment.collected_amount }}</strong></a>{% empty %}<p class="muted">No payments were received in this month.</p>{% endfor %}
+    <div class="section-heading"><h2>Payments received</h2></div>
+    {% for payment in payments %}
+        <a class="item-row" href="{% url 'documents:invoice-detail' payment.document.pk %}"><span><strong>{{ payment.received_at|date:'M j' }} · {{ payment.document.number }}</strong><small>{{ payment.document.project.client.display_name }} · {{ payment.get_method_display }}{% if payment.reference %} · {{ payment.reference }}{% endif %}</small></span><strong>${{ payment.amount }}</strong></a>
+    {% empty %}<p class="muted">No payments were received in this month.</p>{% endfor %}
 </section>
+{% if refunds %}
+<section class="content-card">
+    <div class="section-heading"><h2>Refunds recorded</h2></div>
+    {% for refund in refunds %}
+        <a class="item-row" href="{% url 'documents:invoice-detail' refund.payment.document.pk %}"><span><strong>{{ refund.effective_at|date:'M j' }} · {{ refund.payment.document.number }}</strong><small>{{ refund.payment.document.project.client.display_name }} · {{ refund.get_provider_display }}{% if refund.reference %} · {{ refund.reference }}{% endif %}</small></span><strong>−${{ refund.amount }}</strong></a>
+    {% endfor %}
+</section>
+{% endif %}
 {% include 'shared/_pagination.html' %}
 {% endblock %}

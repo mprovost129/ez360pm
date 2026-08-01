@@ -5,7 +5,12 @@ from decimal import Decimal
 from django.db.models import Q, QuerySet
 from django.utils import timezone
 
-from documents.models import Document, DocumentDelivery, InvoiceCredit
+from documents.models import (
+    Document,
+    DocumentDelivery,
+    InvoiceCredit,
+    StripeWebhookEvent,
+)
 from documents.services import money
 from projects.models import TimeEntry
 
@@ -25,8 +30,9 @@ class AuditIssue:
 def _documents(company_id=None) -> QuerySet:
     queryset = Document.objects.select_related("project").prefetch_related(
         "line_items",
-        "payments",
+        "payments__refunds",
         "credits_received",
+        "credits_given",
     )
     if company_id is not None:
         queryset = queryset.filter(company_id=company_id)
@@ -112,8 +118,22 @@ def _document_issues(document):
 
     if document.doc_type == Document.Type.INVOICE:
         amount_paid = money(
-            sum((payment.amount for payment in document.payments.all()), Decimal("0"))
+            sum((payment.collected_amount for payment in document.payments.all()), Decimal("0"))
         )
+        for payment in document.payments.all():
+            refund_total = money(
+                sum((refund.amount for refund in payment.refunds.all()), Decimal("0"))
+            )
+            if refund_total != payment.refunded_amount:
+                issues.append(
+                    AuditIssue(
+                        "error",
+                        "refund_cache",
+                        "Payment",
+                        payment.pk,
+                        f"Cached refund total is {payment.refunded_amount}; ledger total is {refund_total}.",
+                    )
+                )
         if amount_paid > document.amount_due:
             issues.append(
                 AuditIssue(
@@ -143,6 +163,20 @@ def _document_issues(document):
                         "Document",
                         document.pk,
                         f"Status is {document.status}; payments/timestamps imply {expected_status}.",
+                    )
+                )
+        if document.invoice_kind == Document.InvoiceKind.RETAINER:
+            applied = money(
+                sum((credit.amount for credit in document.credits_given.all()), Decimal("0"))
+            )
+            if applied > amount_paid:
+                issues.append(
+                    AuditIssue(
+                        "error",
+                        "retainer_credit_underfunded",
+                        "Document",
+                        document.pk,
+                        f"Applied credits total {applied}; collected retainer funds are {amount_paid}.",
                     )
                 )
     return issues
@@ -287,6 +321,27 @@ def _delivery_issues(company_id=None, pending_minutes=15):
     ]
 
 
+def _stripe_event_issues(company_id=None):
+    queryset = StripeWebhookEvent.objects.filter(
+        status__in=(
+            StripeWebhookEvent.Status.FAILED,
+            StripeWebhookEvent.Status.REQUIRES_REVIEW,
+        )
+    ).select_related("payment__document")
+    if company_id is not None:
+        queryset = queryset.filter(payment__document__company_id=company_id)
+    return [
+        AuditIssue(
+            "warning",
+            "stripe_event_attention",
+            "StripeWebhookEvent",
+            event.pk,
+            f"{event.event_type} is {event.get_status_display().lower()} ({event.error_code or 'review in Stripe'}).",
+        )
+        for event in queryset
+    ]
+
+
 def audit_data(*, company_id=None, pending_minutes=15):
     issues = []
     for document in _documents(company_id=company_id):
@@ -296,4 +351,5 @@ def audit_data(*, company_id=None, pending_minutes=15):
     issues.extend(
         _delivery_issues(company_id=company_id, pending_minutes=pending_minutes)
     )
+    issues.extend(_stripe_event_issues(company_id=company_id))
     return issues

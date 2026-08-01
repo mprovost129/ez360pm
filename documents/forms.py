@@ -270,6 +270,8 @@ class PaymentForm(forms.ModelForm):
 
     def clean_amount(self):
         amount = self.cleaned_data["amount"]
+        if self.instance.pk and amount < self.instance.refunded_amount:
+            raise forms.ValidationError("Payment cannot be less than its recorded refunds.")
         other_paid = self.invoice.amount_paid
         if self.instance.pk:
             other_paid -= self.instance.amount
@@ -288,36 +290,52 @@ class PaymentForm(forms.ModelForm):
         return self.instance
 
 
-class PaymentRefundForm(forms.ModelForm):
-    class Meta:
-        model = Payment
-        fields = ("refunded_amount",)
-        labels = {"refunded_amount": "Total refunded to date"}
-        help_texts = {
-            "refunded_amount": (
-                "Enter the cumulative amount refunded for this payment so far, "
-                "not just this refund."
-            ),
-        }
+class PaymentRefundForm(forms.Form):
+    amount = forms.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        min_value=Decimal("0.01"),
+        label="Refund amount",
+        help_text="Enter only the amount returned in this refund.",
+    )
+    effective_at = forms.DateField(
+        initial=timezone.localdate,
+        label="Refund date",
+        widget=forms.DateInput(attrs={"type": "date"}),
+    )
+    reference = forms.CharField(
+        max_length=255,
+        required=False,
+        help_text="Optional reason or external refund reference.",
+    )
 
-    def __init__(self, *args, invoice, **kwargs):
+    def __init__(self, *args, invoice, payment, **kwargs):
         self.invoice = invoice
+        self.payment = payment
         super().__init__(*args, **kwargs)
 
-    def clean_refunded_amount(self):
-        refunded_amount = self.cleaned_data["refunded_amount"]
-        if refunded_amount > self.instance.amount:
-            raise forms.ValidationError("Refund cannot exceed the payment amount.")
-        return refunded_amount
+    def clean_amount(self):
+        amount = self.cleaned_data["amount"]
+        if amount > self.payment.collected_amount:
+            raise forms.ValidationError("Refund cannot exceed the unrefunded payment amount.")
+        return amount
 
-    def save(self, commit=True):
-        if not commit:
-            raise ValueError("PaymentRefundForm must be saved with commit=True.")
-        self.instance = record_refund(
-            payment=self.instance,
-            refunded_amount=self.cleaned_data["refunded_amount"],
+    def clean_effective_at(self):
+        effective_at = self.cleaned_data["effective_at"]
+        if effective_at < self.payment.received_at:
+            raise forms.ValidationError("Refund date cannot be before the payment date.")
+        if effective_at > timezone.localdate():
+            raise forms.ValidationError("Refund date cannot be in the future.")
+        return effective_at
+
+    def save(self, *, actor=None):
+        return record_refund(
+            payment=self.payment,
+            amount=self.cleaned_data["amount"],
+            effective_at=self.cleaned_data["effective_at"],
+            reference=self.cleaned_data["reference"],
+            actor=actor,
         )
-        return self.instance
 
 
 class VoidInvoiceForm(forms.Form):

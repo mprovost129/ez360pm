@@ -1,6 +1,7 @@
 import uuid
 from decimal import Decimal
 
+from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.core.validators import MinValueValidator
 from django.db import models
@@ -376,6 +377,124 @@ class Payment(models.Model):
     @property
     def net_amount(self):
         return self.collected_amount - self.fee_amount
+
+
+class PaymentRefundQuerySet(models.QuerySet):
+    def update(self, **kwargs):
+        raise ValidationError("Refund records are permanent and cannot be edited.")
+
+    def delete(self):
+        raise ValidationError("Refund records are permanent and cannot be deleted.")
+
+
+class PaymentRefund(models.Model):
+    """An append-only record of money returned from one payment."""
+
+    class Provider(models.TextChoices):
+        MANUAL = "manual", "Recorded manually"
+        STRIPE = "stripe", "Stripe"
+        LEGACY = "legacy", "Migrated legacy total"
+
+    payment = models.ForeignKey(
+        Payment,
+        on_delete=models.PROTECT,
+        related_name="refunds",
+    )
+    amount = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        validators=[MinValueValidator(Decimal("0.01"))],
+    )
+    effective_at = models.DateField(default=timezone.localdate)
+    provider = models.CharField(
+        max_length=20,
+        choices=Provider.choices,
+        default=Provider.MANUAL,
+    )
+    provider_ref = models.CharField(max_length=255, blank=True)
+    reference = models.CharField(max_length=255, blank=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="recorded_payment_refunds",
+        blank=True,
+        null=True,
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    objects = PaymentRefundQuerySet.as_manager()
+
+    class Meta:
+        ordering = ("-effective_at", "-created_at", "-pk")
+        indexes = [
+            models.Index(fields=("payment", "effective_at")),
+            models.Index(fields=("effective_at",)),
+        ]
+        constraints = [
+            models.CheckConstraint(
+                condition=Q(amount__gt=0),
+                name="documents_refund_amount_positive",
+            ),
+            models.UniqueConstraint(
+                fields=("provider", "provider_ref"),
+                condition=~Q(provider_ref=""),
+                name="documents_refund_provider_ref_unique",
+            ),
+        ]
+
+    def save(self, *args, **kwargs):
+        if self.pk and type(self).objects.filter(pk=self.pk).exists():
+            raise ValidationError("Refund records are permanent and cannot be edited.")
+        return super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        raise ValidationError("Refund records are permanent and cannot be deleted.")
+
+    def __str__(self):
+        return f"Refund of {self.amount} for payment {self.payment_id}"
+
+
+class StripeWebhookEvent(models.Model):
+    """Durable, payload-free processing state for one verified Stripe event."""
+
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending"
+        PROCESSED = "processed", "Processed"
+        IGNORED = "ignored", "Ignored"
+        FAILED = "failed", "Retry required"
+        REQUIRES_REVIEW = "requires_review", "Needs review"
+
+    event_id = models.CharField(max_length=255, unique=True)
+    event_type = models.CharField(max_length=100)
+    object_id = models.CharField(max_length=255, blank=True)
+    payment_intent_id = models.CharField(max_length=255, blank=True)
+    payment = models.ForeignKey(
+        Payment,
+        on_delete=models.SET_NULL,
+        related_name="stripe_events",
+        blank=True,
+        null=True,
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.PENDING,
+    )
+    attempt_count = models.PositiveIntegerField(default=1)
+    error_code = models.CharField(max_length=100, blank=True)
+    received_at = models.DateTimeField(auto_now_add=True)
+    last_attempt_at = models.DateTimeField(default=timezone.now)
+    processed_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        ordering = ("status", "-last_attempt_at", "-pk")
+        indexes = [
+            models.Index(fields=("status", "last_attempt_at")),
+            models.Index(fields=("payment_intent_id",)),
+        ]
+
+    def __str__(self):
+        return f"{self.event_type} ({self.event_id}): {self.status}"
 
 
 class DocumentDelivery(models.Model):

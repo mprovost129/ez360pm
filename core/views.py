@@ -4,13 +4,13 @@ from decimal import Decimal
 
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db import connection
-from django.db.models import DecimalField, F, Sum
+from django.db.models import Sum
 from django.http import JsonResponse
 from django.utils import timezone
 from django.views import View
 from django.views.generic import ListView, TemplateView
 
-from documents.models import Document, Payment
+from documents.models import Document, Payment, PaymentRefund
 
 from .dashboard import dashboard_context
 
@@ -51,35 +51,43 @@ class RevenueView(LoginRequiredMixin, ListView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context["selected_month"] = self.month
-        context["revenue_total"] = self.object_list.aggregate(
-            value=Sum(
-                F("amount") - F("refunded_amount"),
-                output_field=DecimalField(max_digits=12, decimal_places=2),
-            )
-        )["value"] or Decimal("0.00")
-        context["refund_total"] = self.object_list.aggregate(
-            value=Sum("refunded_amount")
-        )["value"] or Decimal("0.00")
+        month_end = self.month.replace(day=monthrange(self.month.year, self.month.month)[1])
+        refunds = PaymentRefund.objects.filter(
+            payment__document__company=self.request.user.company,
+            effective_at__range=(self.month, month_end),
+        ).select_related(
+            "payment__document",
+            "payment__document__project",
+            "payment__document__project__client",
+        )
+        context["refunds"] = refunds
+        context["receipt_total"] = self.object_list.aggregate(value=Sum("amount"))[
+            "value"
+        ] or Decimal("0.00")
+        context["refund_total"] = refunds.aggregate(value=Sum("amount"))["value"] or Decimal(
+            "0.00"
+        )
+        context["revenue_total"] = context["receipt_total"] - context["refund_total"]
         context["fee_total"] = self.object_list.aggregate(value=Sum("fee_amount"))[
             "value"
         ] or Decimal("0.00")
         context["net_total"] = context["revenue_total"] - context["fee_total"]
         context["pending_fee_count"] = self.object_list.filter(fee_pending=True).count()
-        context["method_totals"] = self.object_list.values("method").annotate(
-            total=Sum(
-                F("amount") - F("refunded_amount"),
-                output_field=DecimalField(max_digits=12, decimal_places=2),
-            )
-        )
+        method_totals = {
+            row["method"]: row["total"]
+            for row in self.object_list.values("method").annotate(total=Sum("amount"))
+        }
+        for row in refunds.values("payment__method").annotate(total=Sum("amount")):
+            method = row["payment__method"]
+            method_totals[method] = method_totals.get(method, Decimal("0.00")) - row["total"]
         context["method_totals"] = [
             {
-                "label": Payment.Method(row["method"]).label,
-                "total": row["total"],
+                "label": Payment.Method(method).label,
+                "total": total,
             }
-            for row in context["method_totals"]
+            for method, total in sorted(method_totals.items())
         ]
         context["previous_month"] = (self.month - timedelta(days=1)).replace(day=1)
-        month_end = self.month.replace(day=monthrange(self.month.year, self.month.month)[1])
         context["next_month"] = (month_end + timedelta(days=1)).replace(day=1)
         return context
 

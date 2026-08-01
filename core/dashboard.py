@@ -4,7 +4,7 @@ from decimal import Decimal
 from django.db.models import Count, DurationField, ExpressionWrapper, F, Min, Q, Sum
 from django.utils import timezone
 
-from documents.models import Document, Payment
+from documents.models import Document, Payment, PaymentRefund
 from documents.reporting import outstanding_invoices
 from intake.models import ActivityItem, Note
 from projects.models import Project, TimeEntry
@@ -59,7 +59,7 @@ def dashboard_context(company):
     follow_up_cutoff = today + timedelta(days=7)
     month_start = today.replace(day=1)
     next_month = (month_start.replace(day=28) + timedelta(days=4)).replace(day=1)
-    revenue = (
+    receipts = (
         Payment.objects.filter(
             document__company=company,
             received_at__gte=month_start,
@@ -67,6 +67,15 @@ def dashboard_context(company):
         ).aggregate(value=Sum("amount"))["value"]
         or Decimal("0.00")
     )
+    refunds = (
+        PaymentRefund.objects.filter(
+            payment__document__company=company,
+            effective_at__gte=month_start,
+            effective_at__lt=next_month,
+        ).aggregate(value=Sum("amount"))["value"]
+        or Decimal("0.00")
+    )
+    revenue = receipts - refunds
     unbilled = TimeEntry.objects.filter(
         company=company,
         end_time__isnull=False,

@@ -30,6 +30,12 @@ network request.
 | Stripe fees, pending fees, later fee reconciliation, gross, and net revenue | Provider and reporting tests | `documents/tests/test_automation.py`, `core/tests/test_reporting.py` |
 | Payment remains recorded if the internal notification email fails | Failure-path test | `documents/tests/test_payment_system.py` |
 | Stripe payments cannot be edited or deleted through manual-payment views | Financial-history protection test | `documents/tests/test_payment_system.py` |
+| Manual refunds append dated records and cannot edit or delete prior history | Ledger and immutability tests | `documents/tests/test_payment_system.py` |
+| Applied retainer credits cannot be underfunded by a manual refund | Cross-invoice invariant test | `documents/tests/test_payment_system.py` |
+| A Stripe refund arriving before its payment is retained and succeeds on replay | Out-of-order webhook test | `documents/tests/test_payment_system.py` |
+| Stripe disputes are retained as operator-review events without raw payloads | Durable review-state test | `documents/tests/test_payment_system.py`, `core/tests/test_data_audit.py` |
+| Refunds affect revenue on their effective date and reconcile dashboard/report/AI totals | Cash-basis reporting tests | `core/tests/test_reporting.py`, `assistant/tests/test_assistant.py` |
+| Refund ledger/cache drift blocks the data audit | Deployment integrity test | `core/tests/test_data_audit.py` |
 | Company-scoped invoice, payment, revenue, and dashboard data | Tenant-isolation/reporting tests | `documents/tests/test_billing.py`, `core/tests/test_reporting.py`, `clients/tests/test_client_detail.py` |
 
 Run the focused payment boundary suite with:
@@ -60,8 +66,6 @@ live Stripe account. The following remain controlled operational checks:
 - an actual settlement, payout, refund, dispute, or Stripe Dashboard setting
   behaves as configured by Stripe.
 
-Refunds, disputes, chargebacks, and payout reconciliation are not active EZ360PM
-workflows. They must not be inferred as covered merely because Stripe can emit
-those events. Add the product workflow and its tests before relying on EZ360PM
-to account for them.
-
+EZ360PM records manual and Stripe refunds and flags Stripe disputes for review.
+It does not initiate refunds, adjudicate disputes, or reconcile Stripe payouts
+to bank deposits; those remain provider-level and accounting acceptance checks.

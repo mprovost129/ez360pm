@@ -2,14 +2,14 @@ from datetime import date, datetime, timedelta
 from decimal import Decimal
 
 from django.core.exceptions import ValidationError
-from django.db.models import Q, Sum
+from django.db.models import DecimalField, F, Q, Sum
 from django.urls import reverse
 from django.utils import timezone
 
 from clients.models import Client, Contact
 from core.dashboard import dashboard_context
 from core.reporting import payment_queryset, payment_totals
-from documents.models import Document, Payment
+from documents.models import Document, Payment, PaymentRefund
 from documents.reporting import outstanding_invoices
 from intake.forms import QuickNoteForm
 from intake.models import ActivityEvent, ActivityItem, Note
@@ -251,7 +251,10 @@ def project_summary(context, arguments):
     invoices = [item for item in documents if item.doc_type == Document.Type.INVOICE]
     proposals = [item for item in documents if item.doc_type == Document.Type.PROPOSAL]
     received = Payment.objects.filter(document__project=project).aggregate(
-        value=Sum("amount")
+        value=Sum(
+            F("amount") - F("refunded_amount"),
+            output_field=DecimalField(max_digits=12, decimal_places=2),
+        )
     )["value"] or Decimal("0.00")
     outstanding = sum((item.outstanding_balance for item in invoices), Decimal("0.00"))
     unbilled = list(
@@ -522,7 +525,13 @@ def revenue_summary(context, arguments):
         end_date=end,
         method=method,
     )
-    totals = payment_totals(queryset)
+    refunds = PaymentRefund.objects.filter(
+        payment__document__company=context.company,
+        effective_at__range=(start, end),
+    )
+    if method != "all":
+        refunds = refunds.filter(payment__method=method)
+    totals = payment_totals(queryset, refund_queryset=refunds)
     gross = totals["gross"]
     fees = totals["fees"]
     by_method = totals["methods"]
@@ -530,6 +539,7 @@ def revenue_summary(context, arguments):
         "period": {"start": start.isoformat(), "end": end.isoformat()},
         "method_filter": method,
         "gross_revenue": _money(gross),
+        "refunds": _money(totals["refunds"]),
         "processing_fees": _money(fees),
         "net_revenue": _money(gross - fees),
         "payment_count": totals["payment_count"],
@@ -538,6 +548,7 @@ def revenue_summary(context, arguments):
             {
                 "method": Payment.Method(row["method"]).label,
                 "gross": _money(row["gross"]),
+                "refunds": _money(row["refunds"]),
                 "fees": _money(row["fees"]),
                 "net": _money(row["gross"] - row["fees"]),
             }
@@ -957,6 +968,8 @@ def search_payments(context, arguments):
                 "project": payment.document.project.name,
                 "method": payment.get_method_display(),
                 "gross": _money(payment.amount),
+                "refunded": _money(payment.refunded_amount),
+                "collected": _money(payment.collected_amount),
                 "fee": None if payment.fee_pending else _money(payment.fee_amount),
                 "fee_pending": payment.fee_pending,
                 "net": None if payment.fee_pending else _money(payment.net_amount),

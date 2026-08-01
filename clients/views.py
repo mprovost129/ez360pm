@@ -4,7 +4,7 @@ from decimal import ROUND_HALF_UP, Decimal
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import ValidationError
-from django.db.models import Q, Sum
+from django.db.models import DecimalField, F, Q, Sum
 from django.db.models.deletion import ProtectedError
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse, reverse_lazy
@@ -111,7 +111,12 @@ class ClientDetailView(LoginRequiredMixin, CompanyScopedQuerysetMixin, DetailVie
         total_invoiced = invoices.exclude(
             status__in=(Document.Status.DRAFT, Document.Status.VOID)
         ).aggregate(value=Sum("total"))["value"] or Decimal("0.00")
-        total_received = payments.aggregate(value=Sum("amount"))["value"] or Decimal("0.00")
+        total_received = payments.aggregate(
+            value=Sum(
+                F("amount") - F("refunded_amount"),
+                output_field=DecimalField(max_digits=12, decimal_places=2),
+            )
+        )["value"] or Decimal("0.00")
         outstanding_total = (
             outstanding_invoices(company)
             .filter(project__client=client)

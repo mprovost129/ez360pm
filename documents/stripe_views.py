@@ -14,6 +14,7 @@ from .models import Document
 from .public_security import public_action_rate_limited
 from .public_views import public_document
 from .stripe_services import (
+    StripeEventDependencyMissing,
     create_checkout_session,
     process_stripe_event,
     stripe_configuration_status,
@@ -66,6 +67,9 @@ def stripe_webhook(request):
         return HttpResponse(status=400)
     try:
         process_stripe_event(event=event)
+    except StripeEventDependencyMissing:
+        logger.warning("Stripe event is waiting for an earlier payment event")
+        return HttpResponse(status=409)
     except ValidationError as exc:
         logger.warning("Stripe reconciliation rejected error=%s", exc.__class__.__name__)
         return HttpResponse(status=400)

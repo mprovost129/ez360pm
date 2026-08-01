@@ -11,7 +11,7 @@ from django.utils import timezone
 from accounts.models import Company
 from projects.models import Project, TimeEntry
 
-from .models import Document, DocumentNumberSequence, LineItem, Payment
+from .models import Document, DocumentNumberSequence, LineItem, Payment, PaymentRefund
 
 CENT = Decimal("0.01")
 
@@ -421,7 +421,12 @@ def record_payment(*, invoice, payment_data, allow_overpayment=False):
 def update_payment(*, payment, payment_data):
     payment = Payment.objects.select_for_update().select_related("document").get(pk=payment.pk)
     invoice = Document.objects.select_for_update().get(pk=payment.document_id)
-    other_paid = invoice.payments.exclude(pk=payment.pk).aggregate(value=Sum("amount"))["value"] or Decimal("0")
+    other_paid = invoice.payments.exclude(pk=payment.pk).aggregate(
+        value=Sum(
+            F("amount") - F("refunded_amount"),
+            output_field=DecimalField(max_digits=12, decimal_places=2),
+        )
+    )["value"] or Decimal("0")
     amount = money(payment_data["amount"])
     if other_paid + amount > invoice.amount_due:
         raise ValidationError("Payments cannot exceed the amount due.")
@@ -440,25 +445,78 @@ def update_payment(*, payment, payment_data):
 @transaction.atomic
 def delete_payment(*, payment):
     payment = Payment.objects.select_for_update().select_related("document").get(pk=payment.pk)
+    if payment.refunds.exists():
+        raise ValidationError("A payment with refund history cannot be removed.")
     invoice = payment.document
     payment.delete()
     recalculate_payment_status(invoice=invoice)
 
 
 @transaction.atomic
-def record_refund(*, payment, refunded_amount):
-    """Set the cumulative amount refunded against a payment.
+def record_refund(
+    *,
+    payment,
+    amount,
+    effective_at=None,
+    reference="",
+    provider=PaymentRefund.Provider.MANUAL,
+    provider_ref="",
+    actor=None,
+    protect_applied_credit=True,
+):
+    """Append one refund and keep Payment.refunded_amount as a derived cache."""
 
-    `refunded_amount` is the total refunded to date, not an incremental
-    amount, matching how Stripe reports `charge.refunded`.
-    """
-    payment = Payment.objects.select_for_update().select_related("document").get(pk=payment.pk)
-    refunded_amount = money(refunded_amount)
-    if refunded_amount > payment.amount:
-        raise ValidationError("Refund cannot exceed the payment amount.")
-    if payment.refunded_amount != refunded_amount:
-        payment.refunded_amount = refunded_amount
-        payment.full_clean()
-        payment.save(update_fields=["refunded_amount"])
-        recalculate_payment_status(invoice=payment.document)
-    return payment
+    payment = (
+        Payment.objects.select_for_update()
+        .select_related("document")
+        .get(pk=payment.pk)
+    )
+    amount = money(amount)
+    effective_at = effective_at or timezone.localdate()
+    if amount <= 0:
+        raise ValidationError("Refund amount must be greater than zero.")
+    if effective_at < payment.received_at:
+        raise ValidationError("Refund date cannot be before the payment date.")
+    if effective_at > timezone.localdate():
+        raise ValidationError("Refund date cannot be in the future.")
+    if actor is not None and actor.company_id != payment.document.company_id:
+        raise ValidationError("Refund recorder must belong to the payment company.")
+    if provider_ref:
+        existing = PaymentRefund.objects.filter(
+            provider=provider,
+            provider_ref=provider_ref,
+        ).first()
+        if existing:
+            if existing.payment_id != payment.pk or existing.amount != amount:
+                raise ValidationError("Refund provider reference conflicts with another refund.")
+            return existing
+    new_total = money(payment.refunded_amount + amount)
+    if new_total > payment.amount:
+        raise ValidationError("Refund cannot exceed the unrefunded payment amount.")
+
+    invoice = payment.document
+    if protect_applied_credit and invoice.invoice_kind == Document.InvoiceKind.RETAINER:
+        applied = invoice.credits_given.aggregate(value=Sum("amount"))["value"] or Decimal("0")
+        collected_after = money(invoice.amount_paid - amount)
+        if collected_after < applied:
+            raise ValidationError(
+                "This refund would return retainer money already applied to a final invoice. "
+                "Remove or correct that credit first."
+            )
+
+    refund = PaymentRefund(
+        payment=payment,
+        amount=amount,
+        effective_at=effective_at,
+        reference=reference,
+        provider=provider,
+        provider_ref=provider_ref,
+        created_by=actor,
+    )
+    refund.full_clean()
+    refund.save()
+    payment.refunded_amount = new_total
+    payment.full_clean()
+    payment.save(update_fields=["refunded_amount"])
+    recalculate_payment_status(invoice=invoice)
+    return refund

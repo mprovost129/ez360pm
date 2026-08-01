@@ -12,6 +12,7 @@ from documents.services import (
     create_invoice,
     issue_document,
     record_payment,
+    record_refund,
     save_line_item,
 )
 from documents.tests.test_billing import invoice_data
@@ -172,6 +173,39 @@ class DashboardAndReportingTests(TestCase):
         self.assertContains(response, "own")
         self.assertNotContains(response, "other-reference-unique")
         self.assertNotContains(response, "$400.00")
+
+    def test_refund_is_recognized_on_its_effective_date(self):
+        project = self.make_project("REFUND-DATE", Project.Status.ACTIVE)
+        invoice = self.make_invoice(project, amount="100.00")
+        today = timezone.localdate()
+        prior_month = today.replace(day=1) - timedelta(days=1)
+        payment = record_payment(
+            invoice=invoice,
+            payment_data={
+                "amount": Decimal("100.00"),
+                "method": Payment.Method.CHECK,
+                "received_at": prior_month,
+                "reference": "Original receipt",
+            },
+        )
+        record_refund(
+            payment=payment,
+            amount=Decimal("25.00"),
+            effective_at=today,
+            reference="Current-month refund",
+        )
+
+        revenue = self.client.get(
+            reverse("core:revenue"),
+            {"month": today.strftime("%Y-%m")},
+        )
+        dashboard = self.client.get(reverse("core:home"))
+
+        self.assertEqual(revenue.context["receipt_total"], Decimal("0.00"))
+        self.assertEqual(revenue.context["refund_total"], Decimal("25.00"))
+        self.assertEqual(revenue.context["revenue_total"], Decimal("-25.00"))
+        self.assertContains(revenue, "Current-month refund")
+        self.assertEqual(dashboard.context["month_revenue"], Decimal("-25.00"))
 
     def test_outstanding_and_draft_views_reconcile_balances(self):
         project = self.make_project("AR-1", Project.Status.ACTIVE)

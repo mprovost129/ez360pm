@@ -15,6 +15,7 @@ from assistant.tool_routing import select_tool_plan
 from clients.models import Client
 from clients.tests.test_clients import create_client
 from documents.models import Document, Payment
+from documents.services import record_refund
 from intake.models import ActivityEvent, ActivityItem, Note
 from projects.models import TimeEntry
 from projects.services import create_project
@@ -324,12 +325,17 @@ class AssistantServiceTests(TestCase):
             due_date=date(2026, 7, 31),
             total=Decimal("500.00"),
         )
-        Payment.objects.create(
+        payment = Payment.objects.create(
             document=invoice,
             amount=Decimal("500.00"),
             fee_amount=Decimal("15.00"),
             method=Payment.Method.STRIPE,
             received_at=date(2026, 7, 15),
+        )
+        record_refund(
+            payment=payment,
+            amount=Decimal("100.00"),
+            effective_at=date(2026, 8, 1),
         )
         interaction = AIInteraction.objects.create(
             company=self.company,
@@ -348,9 +354,10 @@ class AssistantServiceTests(TestCase):
             },
         ).data
 
-        self.assertEqual(result["gross_revenue"], "500.00")
+        self.assertEqual(result["gross_revenue"], "400.00")
+        self.assertEqual(result["refunds"], "100.00")
         self.assertEqual(result["processing_fees"], "15.00")
-        self.assertEqual(result["net_revenue"], "485.00")
+        self.assertEqual(result["net_revenue"], "385.00")
 
     def test_ambiguous_project_reference_stops_timer_preparation(self):
         create_project(

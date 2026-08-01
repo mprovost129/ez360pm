@@ -1,126 +1,64 @@
-# Revenue and Fee Reporting — V1.1 Status
+# Revenue and Refund Reporting Status
 
-> **STATUS: shelved, not implemented (2026-08-01).** This document describes a
-> `PaymentAdjustment`/`Company.books_closed_through` reporting layer and
-> `documents/revenue_reporting.py` service that were built and then reverted;
-> neither exists in the current schema or codebase. It is kept only as a
-> historical record of the design. The live revenue report is the simpler
-> `core.views.RevenueView` (`/revenue/`), which aggregates `Payment` rows
-> directly, including refunds via `Payment.refunded_amount` (see
-> [DECISIONS.md](DECISIONS.md)). Do not treat the checklist below as current
-> behavior.
+> **Current as of 2026-08-01.** This file describes the live implementation.
 
-## Purpose
+## Current accounting behavior
 
-This milestone is the reporting and audit layer required before EZ360PM becomes
-the sole record of received business revenue. It uses cash-basis dates:
+- `Payment` is the source record for money received, dated by `received_at`.
+- `PaymentRefund` is an append-only record for money returned, dated by
+  `effective_at`.
+- `Payment.refunded_amount` is a transactionally maintained cache used for fast
+  invoice balance calculations. The deployment data audit verifies it against
+  the refund ledger.
+- Cash-basis revenue for a period is payments received in the period minus
+  refunds effective in the period.
+- Confirmed processing fees reduce net deposited revenue. A pending Stripe fee
+  remains visibly pending rather than being treated as confirmed.
+- Manual refund entries only record money already returned outside EZ360PM.
+  EZ360PM does not initiate a refund with Stripe or a bank.
 
-- payments are reported on `Payment.received_at`;
-- refunds, chargebacks, fee corrections, and other adjustments are reported on
-  `PaymentAdjustment.effective_at`; and
-- net is `gross received - net processing fees + refunds/other signed adjustments`.
+## Implemented safeguards
 
-A pending Stripe fee is never presented as a confirmed zero-dollar fee. Any net
-total containing a pending fee is labeled provisional.
+- Refund amount database constraints and transactional row locking.
+- Multiple partial refunds without rewriting earlier history.
+- Application-level prevention of edits, bulk updates, and deletion of refund
+  history.
+- Manual refund protection when retainer funds are already applied to a final
+  invoice.
+- Durable Stripe event IDs and processing states without storing raw webhook
+  payloads.
+- Retryable out-of-order Stripe refund events.
+- Durable operator-review state for disputes and invalid reconciliation events.
+- Company-scoped dashboard, revenue, CRM, and AI summaries using refund-aware
+  totals.
+- Tests for refund replay, ledger/cache drift, effective dates, retainer credit
+  protection, and dispute visibility.
 
-## Implemented
+## Operational acceptance still required
 
-### Reporting service and filters
+Deterministic tests do not prove live-provider configuration. Before relying on
+EZ360PM as the sole financial record:
 
-- [x] One company-scoped service in `documents.revenue_reporting` supplies HTML,
-  print, and CSV output.
-- [x] Presets: this month, last month, this year, last year, calendar year, and
-  custom inclusive dates.
-- [x] Payment-method filters: all, Stripe, check, cash, and other.
-- [x] Backward compatibility for the original `month=YYYY-MM` links.
-- [x] Stable ledger ordering and full-report totals independent of pagination.
-- [x] Invalid filter values fall back safely without widening company scope.
+1. Confirm Stripe sends the enabled event types to the production webhook and
+   receives successful responses.
+2. Perform one controlled live payment and compare amount, fee, invoice status,
+   and internal notification with Stripe.
+3. If a real refund occurs, confirm its effective date and amount appear in the
+   revenue report and invoice history.
+4. Review every `stripe_event_attention` warning from `data_audit` against the
+   Stripe Dashboard.
+5. Compare a full calendar period by payment method with bank/check records and
+   Stripe exports.
+6. Complete and document a database backup/restore drill.
 
-### Report experience
+## Deliberately deferred
 
-- [x] Page renamed **Revenue & Fees**.
-- [x] Gross, confirmed processing fees, signed refunds/adjustments, provisional
-  or final net, transaction count, and unresolved-fee count.
-- [x] Predictable method summary including zero-value methods.
-- [x] Transaction ledger with client, project, invoice, method, reference, gross,
-  fee, adjustment, net, and fee status.
-- [x] Print mode loads the complete filtered ledger without app navigation.
-- [x] CSV export uses the same filters and service, includes a report summary,
-  emits UTF-8, uses deterministic names, and protects text cells against
-  spreadsheet formula injection.
+- Initiating refunds from EZ360PM.
+- Dispute evidence submission or automatic chargeback accounting.
+- Stripe payout-to-bank reconciliation.
+- Expense accounting, closed accounting periods, tax filings, and general-ledger
+  integration.
+- Full CSV/print accounting ledger exports.
 
-### Financial history
-
-- [x] Append-only `PaymentAdjustment` records for refunds, fee refunds,
-  disputes, dispute reversals, corrections, and other adjustments.
-- [x] Manual adjustment form; original payments remain unchanged.
-- [x] Invoice balances and statuses include only adjustments marked as affecting
-  the customer balance.
-- [x] Stripe refund and dispute webhooks import idempotently by provider ID.
-- [x] Stripe fee changes post signed adjustments rather than hiding history.
-- [x] Company ownership is validated on every adjustment.
-- [x] A company-level `books_closed_through` date blocks ordinary creation,
-  editing, and deletion in closed periods.
-- [x] Late provider events remain importable. When a fee is first resolved after
-  its receipt period is closed, EZ360PM posts the fee as a current dated
-  adjustment instead of rewriting the closed report.
-
-### Stripe fee reconciliation
-
-- [x] Pending fees are visible and can be retried for the selected report period.
-- [x] `charge.succeeded` and `charge.updated` can reconcile fee information.
-- [x] Provider API failures are logged without exposing Stripe secrets.
-- [x] Persist an append-only history of every reconciliation attempt, including
-  resolved, still-pending, and provider-error outcomes; show the latest attempt
-  beside an unresolved fee in the ledger.
-- [x] Record failed Stripe refund, dispute, and fee-adjustment imports in an
-  operator queue without storing raw webhook payloads. Group provider retries by
-  event ID and automatically resolve a failure after successful replay.
-
-## Deliberately separate milestone
-
-### Stripe payout-to-bank reconciliation
-
-The V1.1 report is a payment-level revenue and fee ledger. It does not yet model
-Stripe payouts or prove which Stripe balance transactions were grouped into each
-bank deposit.
-
-Add payout reconciliation only if exact bank-deposit matching is required:
-
-- Stripe payout ID, status, arrival date, gross, fees, adjustments, and net;
-- imported balance transactions associated with each payout;
-- matched and unmatched totals; and
-- payout replay/idempotency tests.
-
-## Automated coverage added
-
-- [x] Annual, custom-range, and payment-method filtering.
-- [x] Inclusive dates, invalid filters, and company isolation.
-- [x] Gross, fee, adjustment, and net calculations using Decimal values.
-- [x] Pending fee display semantics, pending-only filtering, and latest-attempt
-  audit details.
-- [x] CSV rows, totals, and formula-injection protection.
-- [x] Refund and dispute webhook replay/idempotency.
-- [x] Invoice balance changes after refunds and reversals.
-- [x] Closed-period safeguards and late-provider adjustment behavior.
-
-## Manual year-end acceptance drill
-
-Complete this before retiring FreshBooks:
-
-1. Use a full calendar year containing Stripe, check, cash, and other receipts,
-   partial payments, at least one refund/adjustment, and a reconciled fee.
-2. Select the year and compare gross to the payment ledger.
-3. Filter each method and verify the method totals sum to All methods.
-4. Compare every Stripe gross amount and fee to Stripe's transaction export.
-5. Compare check and cash rows to deposit/check records.
-6. Export CSV and confirm its rows and summary equal the screen.
-7. Confirm `gross - net fees + refunds/other signed adjustments = net` with no unexplained
-   difference.
-8. Resolve every pending Stripe fee. The settings form will reject a close
-   date that includes an unresolved Stripe fee.
-9. Set **Financial records locked through** to the accepted year-end date.
-10. Store the CSV outside EZ360PM and complete a database backup/restore drill.
-
-The milestone is operationally complete only when this drill succeeds without a
-spreadsheet repair or direct database edit.
+These should be added only with explicit product rules and acceptance tests;
+they must not be inferred from the presence of Stripe webhook events.

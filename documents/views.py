@@ -135,7 +135,7 @@ class InvoiceDetailView(LoginRequiredMixin, CompanyScopedQuerysetMixin, DetailVi
             .prefetch_related(
                 "project__client__contacts",
                 "line_items__time_entries",
-                "payments",
+                "payments__refunds",
                 "credits_received__source_invoice",
                 "follow_up_invoices",
                 "deliveries",
@@ -488,15 +488,32 @@ class PaymentUpdateView(PaymentViewMixin, UpdateView):
         return self.invoice.payments.exclude(method=Payment.Method.STRIPE)
 
 
-class PaymentRefundView(PaymentViewMixin, UpdateView):
-    model = Payment
+class PaymentRefundView(PaymentViewMixin, FormView):
     form_class = PaymentRefundForm
     template_name = "shared/form.html"
-    pk_url_kwarg = "payment_pk"
-    extra_context = {"page_title": "Record refund", "submit_label": "Save refund"}
+    extra_context = {"page_title": "Record refund", "submit_label": "Record refund"}
 
-    def get_queryset(self):
-        return self.invoice.payments.exclude(method=Payment.Method.STRIPE)
+    def get_payment(self):
+        if not hasattr(self, "payment"):
+            self.payment = get_object_or_404(
+                self.invoice.payments.exclude(method=Payment.Method.STRIPE),
+                pk=self.kwargs["payment_pk"],
+            )
+        return self.payment
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["payment"] = self.get_payment()
+        return kwargs
+
+    def form_valid(self, form):
+        try:
+            form.save(actor=self.request.user)
+        except ValidationError as exc:
+            form.add_error(None, "; ".join(exc.messages))
+            return self.form_invalid(form)
+        messages.success(self.request, "Refund recorded and invoice balance recalculated.")
+        return super().form_valid(form)
 
 
 class PaymentDeleteView(LoginRequiredMixin, View):
@@ -506,8 +523,12 @@ class PaymentDeleteView(LoginRequiredMixin, View):
             invoice.payments.exclude(method=Payment.Method.STRIPE),
             pk=payment_pk,
         )
-        delete_payment(payment=payment)
-        messages.success(request, "Payment removed and invoice status recalculated.")
+        try:
+            delete_payment(payment=payment)
+        except ValidationError as exc:
+            messages.error(request, "; ".join(exc.messages))
+        else:
+            messages.success(request, "Payment removed and invoice status recalculated.")
         return redirect("documents:invoice-detail", pk=invoice.pk)
 
 

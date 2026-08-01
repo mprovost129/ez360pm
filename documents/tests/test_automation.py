@@ -13,7 +13,7 @@ from django.urls import reverse
 from accounts.models import Company, User
 from clients.tests.test_clients import create_client
 from documents.delivery_services import send_document_email
-from documents.models import Document, DocumentDelivery, Payment
+from documents.models import Document, DocumentDelivery, Payment, StripeWebhookEvent
 from documents.proposal_services import create_proposal
 from documents.services import (
     create_invoice,
@@ -21,7 +21,11 @@ from documents.services import (
     record_payment,
     save_line_item,
 )
-from documents.stripe_services import create_checkout_session, process_stripe_event
+from documents.stripe_services import (
+    StripeEventDependencyMissing,
+    create_checkout_session,
+    process_stripe_event,
+)
 from projects.services import create_project
 from projects.tests.test_projects import project_data
 
@@ -704,7 +708,6 @@ class DeliveryAndStripeTests(TestCase):
         self.assertNotContains(response, "whsec_test_configured")
 
 
-class StripeRefundTests(DeliveryAndStripeTests):
     def test_refund_reopens_invoice_and_reduces_revenue(self):
         invoice = self.make_invoice()
         payment = process_stripe_event(event=self.stripe_event(invoice, intent="pi_refund"))
@@ -741,12 +744,14 @@ class StripeRefundTests(DeliveryAndStripeTests):
         self.assertEqual(revenue.context["revenue_total"], Decimal("0.00"))
         self.assertEqual(revenue.context["refund_total"], Decimal("100.00"))
 
-    def test_refund_for_unknown_intent_is_ignored(self):
-        self.assertIsNone(
+    def test_refund_for_unknown_intent_is_retained_for_retry(self):
+        with self.assertRaises(StripeEventDependencyMissing):
             process_stripe_event(
                 event={
+                    "id": "evt_refund_before_payment",
                     "type": "charge.refunded",
                     "data": {"object": {"payment_intent": "pi_nope", "amount_refunded": 500}},
                 }
             )
-        )
+        event = StripeWebhookEvent.objects.get(event_id="evt_refund_before_payment")
+        self.assertEqual(event.status, StripeWebhookEvent.Status.FAILED)

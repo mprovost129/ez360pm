@@ -8,10 +8,14 @@ from django.db import transaction
 from django.utils import timezone
 
 from .delivery_services import send_payment_notification
-from .models import Document, Payment
+from .models import Document, Payment, PaymentRefund, StripeWebhookEvent
 from .services import money, record_payment, record_refund
 
 logger = logging.getLogger(__name__)
+
+
+class StripeEventDependencyMissing(Exception):
+    """A valid event arrived before the local record it depends on."""
 
 
 def stripe_configuration_status():
@@ -144,22 +148,35 @@ def _payment_intent_id(source):
 
 
 @transaction.atomic
-def _apply_charge_refund(charge):
-    """Mirror Stripe's refunded total onto the local payment row."""
+def _apply_charge_refund(charge, *, event_id=""):
+    """Append the difference between Stripe's cumulative total and our cache."""
     payment_intent_id = _payment_intent_id(charge)
     if not payment_intent_id:
-        return None
+        raise ValidationError("Stripe refund is missing its Payment Intent.")
     payment = (
         Payment.objects.select_for_update()
         .filter(stripe_payment_intent_id=payment_intent_id)
         .first()
     )
     if payment is None:
-        return None
+        raise StripeEventDependencyMissing(
+            f"Payment Intent {payment_intent_id} has not been recorded yet."
+        )
     refunded_cents = _value(charge, "amount_refunded") or 0
-    refunded = min(money(Decimal(refunded_cents) / Decimal("100")), payment.amount)
-    if payment.refunded_amount != refunded:
-        payment = record_refund(payment=payment, refunded_amount=refunded)
+    refunded = money(Decimal(refunded_cents) / Decimal("100"))
+    if refunded > payment.amount:
+        raise ValidationError("Stripe refund exceeds the recorded payment amount.")
+    delta = money(refunded - payment.refunded_amount)
+    if delta > 0:
+        record_refund(
+            payment=payment,
+            amount=delta,
+            provider=PaymentRefund.Provider.STRIPE,
+            provider_ref=event_id,
+            reference=f"Stripe cumulative refund {refunded}",
+            protect_applied_credit=False,
+        )
+        payment.refresh_from_db()
         logger.info(
             "Stripe refund applied intent=%s refunded=%s",
             payment_intent_id,
@@ -179,7 +196,9 @@ def _reconcile_charge_fee(charge):
         stripe_payment_intent_id=payment_intent_id,
     ).first()
     if payment is None:
-        return None
+        raise StripeEventDependencyMissing(
+            f"Payment Intent {payment_intent_id} has not been recorded yet."
+        )
     fee_amount = _fee_from_charge(charge)
     if fee_amount is not None and (
         payment.fee_amount != fee_amount or payment.fee_pending
@@ -190,11 +209,28 @@ def _reconcile_charge_fee(charge):
     return payment
 
 
-def process_stripe_event(*, event):
+def _event_details(event):
+    event_object = _value(_value(event, "data", {}), "object", {}) or {}
+    return {
+        "event_id": (_value(event, "id", "") or "")[:255],
+        "event_type": (_value(event, "type", "") or "")[:100],
+        "object_id": (_value(event_object, "id", "") or "")[:255],
+        "payment_intent_id": (_payment_intent_id(event_object) or "")[:255],
+    }
+
+
+def _safe_error_code(exc):
+    if isinstance(exc, ValidationError):
+        errors = getattr(exc, "error_list", ())
+        return ((errors[0].code if errors else "") or "validation_error")[:100]
+    return exc.__class__.__name__.lower()[:100]
+
+
+def _process_stripe_event(*, event, event_id=""):
     event_type = _value(event, "type")
     event_object = _value(_value(event, "data", {}), "object", {})
     if event_type == "charge.refunded":
-        return _apply_charge_refund(event_object)
+        return _apply_charge_refund(event_object, event_id=event_id)
     if event_type == "charge.dispute.created":
         logger.warning(
             "Stripe dispute opened charge=%s amount=%s - reconcile manually",
@@ -254,3 +290,92 @@ def process_stripe_event(*, event):
     )
     send_payment_notification(payment=payment)
     return payment
+
+
+def process_stripe_event(*, event):
+    """Process a verified event once and retain safe retry/review state."""
+
+    details = _event_details(event)
+    event_row = None
+    known_payment = None
+    if details["payment_intent_id"]:
+        known_payment = Payment.objects.filter(
+            stripe_payment_intent_id=details["payment_intent_id"]
+        ).first()
+    if details["event_id"]:
+        event_row, created = StripeWebhookEvent.objects.get_or_create(
+            event_id=details["event_id"],
+            defaults={
+                "event_type": details["event_type"],
+                "object_id": details["object_id"],
+                "payment_intent_id": details["payment_intent_id"],
+                "payment": known_payment,
+            },
+        )
+        if not created and event_row.status in {
+            StripeWebhookEvent.Status.PROCESSED,
+            StripeWebhookEvent.Status.IGNORED,
+        }:
+            return event_row.payment
+        if not created and event_row.status == StripeWebhookEvent.Status.REQUIRES_REVIEW:
+            if event_row.event_type == "charge.dispute.created":
+                return event_row.payment
+            raise ValidationError("Stripe event requires manual review.")
+        if not created:
+            event_row.attempt_count += 1
+            event_row.status = StripeWebhookEvent.Status.PENDING
+            event_row.error_code = ""
+            event_row.last_attempt_at = timezone.now()
+            if known_payment and event_row.payment_id is None:
+                event_row.payment = known_payment
+            event_row.save(
+                update_fields=(
+                    "attempt_count",
+                    "status",
+                    "error_code",
+                    "last_attempt_at",
+                    "payment",
+                )
+            )
+
+    try:
+        result = _process_stripe_event(
+            event=event,
+            event_id=details["event_id"],
+        )
+    except StripeEventDependencyMissing as exc:
+        if event_row:
+            event_row.status = StripeWebhookEvent.Status.FAILED
+            event_row.error_code = _safe_error_code(exc)
+            event_row.save(update_fields=("status", "error_code"))
+        raise
+    except ValidationError as exc:
+        if event_row:
+            event_row.status = StripeWebhookEvent.Status.REQUIRES_REVIEW
+            event_row.error_code = _safe_error_code(exc)
+            event_row.processed_at = timezone.now()
+            event_row.save(update_fields=("status", "error_code", "processed_at"))
+        raise
+    except Exception as exc:
+        if event_row:
+            event_row.status = StripeWebhookEvent.Status.FAILED
+            event_row.error_code = _safe_error_code(exc)
+            event_row.save(update_fields=("status", "error_code"))
+        raise
+
+    if event_row:
+        if details["event_type"] == "charge.dispute.created":
+            status = StripeWebhookEvent.Status.REQUIRES_REVIEW
+        elif result is None:
+            status = StripeWebhookEvent.Status.IGNORED
+        else:
+            status = StripeWebhookEvent.Status.PROCESSED
+        event_row.status = status
+        event_row.error_code = ""
+        event_row.processed_at = timezone.now()
+        if isinstance(result, Payment):
+            event_row.payment = result
+        event_row.save(
+            update_fields=("status", "error_code", "processed_at", "payment")
+        )
+    return result
