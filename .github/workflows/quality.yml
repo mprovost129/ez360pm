@@ -123,7 +123,7 @@ jobs:
       - run: python manage.py test browser_tests.critical_workflows -v 1
       - name: Upload browser traces after a failure
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: playwright-traces
           path: test-results/
