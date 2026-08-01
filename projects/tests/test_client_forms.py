@@ -130,6 +130,8 @@ class ClientFormWorkflowTests(TestCase):
 
         opened = self.client.get(public_url)
         self.assertContains(opened, "Help us prepare for your project.")
+        self.assertContains(opened, 'class="checkbox-group"')
+        self.assertContains(opened, "<legend>Preferred styles</legend>", html=True)
         project_form.refresh_from_db()
         self.assertEqual(project_form.status, ProjectClientForm.Status.VIEWED)
 

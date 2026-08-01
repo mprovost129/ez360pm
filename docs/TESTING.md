@@ -4,6 +4,10 @@ EZ360PM separates fast deterministic backend checks from opt-in rendered-browser
 checks. Neither suite uses Render secrets, sends customer email, calls OpenAI, or
 creates a real Stripe charge.
 
+The browser suite currently covers project-routed change capture, the visible
+manual payment/refund lifecycle, and the full owner-to-anonymous-client form
+submission/upload workflow through project specifications.
+
 ## Backend suite
 
 ```powershell

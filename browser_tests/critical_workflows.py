@@ -1,9 +1,11 @@
 import os
+import tempfile
 from datetime import timedelta
 from decimal import Decimal
 from pathlib import Path
 
 from django.contrib.staticfiles.testing import StaticLiveServerTestCase
+from django.test import override_settings
 from django.utils import timezone
 from playwright.sync_api import expect, sync_playwright
 
@@ -12,7 +14,13 @@ from clients.services import create_client_with_primary_contact
 from documents.models import Document, Payment
 from documents.services import create_invoice, issue_document, save_line_item
 from intake.models import Note
-from projects.models import Project
+from projects.models import (
+    ClientFormQuestion,
+    ClientFormTemplate,
+    Project,
+    ProjectClientForm,
+    ProjectFormUpload,
+)
 from projects.services import create_project
 
 # Playwright's synchronous driver runs an event loop in this test process. The
@@ -22,6 +30,12 @@ from projects.services import create_project
 os.environ.setdefault("DJANGO_ALLOW_ASYNC_UNSAFE", "true")
 
 
+@override_settings(
+    EMAIL_PROVIDER="django",
+    EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",
+    DEFAULT_FROM_EMAIL="browser-tests@example.test",
+    PUBLIC_BASE_URL="http://localhost",
+)
 class CriticalWorkflowBrowserTests(StaticLiveServerTestCase):
     """Rendered-browser proof for workflows where several UI layers interact."""
 
@@ -29,21 +43,32 @@ class CriticalWorkflowBrowserTests(StaticLiveServerTestCase):
 
     @classmethod
     def setUpClass(cls):
+        cls._media_directory = tempfile.TemporaryDirectory()
+        cls._media_settings = override_settings(MEDIA_ROOT=cls._media_directory.name)
+        cls._media_settings.enable()
         super().setUpClass()
-        cls.playwright = sync_playwright().start()
-        launch_options = {
-            "headless": os.environ.get("PLAYWRIGHT_HEADLESS", "1") != "0"
-        }
-        browser_channel = os.environ.get("PLAYWRIGHT_BROWSER_CHANNEL", "").strip()
-        if browser_channel:
-            launch_options["channel"] = browser_channel
-        cls.browser = cls.playwright.chromium.launch(**launch_options)
+        try:
+            cls.playwright = sync_playwright().start()
+            launch_options = {
+                "headless": os.environ.get("PLAYWRIGHT_HEADLESS", "1") != "0"
+            }
+            browser_channel = os.environ.get("PLAYWRIGHT_BROWSER_CHANNEL", "").strip()
+            if browser_channel:
+                launch_options["channel"] = browser_channel
+            cls.browser = cls.playwright.chromium.launch(**launch_options)
+        except Exception:
+            super().tearDownClass()
+            cls._media_settings.disable()
+            cls._media_directory.cleanup()
+            raise
 
     @classmethod
     def tearDownClass(cls):
         cls.browser.close()
         cls.playwright.stop()
         super().tearDownClass()
+        cls._media_settings.disable()
+        cls._media_directory.cleanup()
 
     def setUp(self):
         self.company = Company.objects.create(
@@ -85,22 +110,32 @@ class CriticalWorkflowBrowserTests(StaticLiveServerTestCase):
                 "estimated_hours": Decimal("1.00"),
             },
         )
-        self.context = self.browser.new_context(
-            viewport={"width": 1600, "height": 1000}
-        )
-        self.context.tracing.start(screenshots=True, snapshots=True, sources=True)
-        self.page = self.context.new_page()
-        self.page.set_default_timeout(10_000)
-        self.addCleanup(self._close_browser_context)
+        self._browser_contexts = []
+        self.context, self.page = self._new_browser_context("owner")
+        self.addCleanup(self._close_browser_contexts)
         self._login()
 
-    def _close_browser_context(self):
-        if getattr(self, "context", None) is None:
+    def _new_browser_context(self, trace_label):
+        context = self.browser.new_context(
+            viewport={"width": 1600, "height": 1000}
+        )
+        context.tracing.start(screenshots=True, snapshots=True, sources=True)
+        page = context.new_page()
+        page.set_default_timeout(10_000)
+        self._browser_contexts.append((context, trace_label))
+        return context, page
+
+    def _close_browser_contexts(self):
+        if not getattr(self, "_browser_contexts", None):
             return
         results = Path("test-results")
         results.mkdir(exist_ok=True)
-        self.context.tracing.stop(path=results / f"{self._testMethodName}.zip")
-        self.context.close()
+        for context, trace_label in reversed(self._browser_contexts):
+            context.tracing.stop(
+                path=results / f"{self._testMethodName}-{trace_label}.zip"
+            )
+            context.close()
+        self._browser_contexts = []
         self.context = None
 
     def _login(self):
@@ -187,3 +222,89 @@ class CriticalWorkflowBrowserTests(StaticLiveServerTestCase):
         payment = invoice.payments.get()
         self.assertEqual(payment.refunded_amount, Decimal("25.00"))
         self.assertEqual(payment.refunds.count(), 1)
+
+    def test_client_form_submission_and_upload_populate_project_specifications(self):
+        template = ClientFormTemplate.objects.create(
+            company=self.company,
+            name="Initial project questionnaire",
+            welcome_message="Help us prepare for your project.",
+            estimated_minutes=10,
+        )
+        ClientFormQuestion.objects.create(
+            template=template,
+            section="Owner information",
+            label="Legal owner name",
+            field_type=ClientFormQuestion.FieldType.SHORT_TEXT,
+            required=True,
+            order=1,
+        )
+        ClientFormQuestion.objects.create(
+            template=template,
+            section="Design",
+            label="Preferred styles",
+            field_type=ClientFormQuestion.FieldType.MULTI_SELECT,
+            options=["Traditional", "Modern", "Farmhouse"],
+            order=2,
+        )
+        ClientFormQuestion.objects.create(
+            template=template,
+            section="Existing conditions",
+            label="Plans or site photos",
+            field_type=ClientFormQuestion.FieldType.FILE,
+            required=True,
+            order=3,
+        )
+
+        self.page.goto(f"{self.live_server_url}/projects/{self.project.pk}/")
+        self.page.get_by_role("link", name="New form").first.click()
+        send_form = self.page.locator("form.structured-form")
+        send_form.get_by_label("Template").select_option(str(template.pk))
+        send_form.get_by_label("Email subject").fill("Your project questionnaire")
+        send_form.get_by_label("Email message").fill(
+            "Please complete this before our next meeting."
+        )
+        send_form.get_by_role("button", name="Create & email form").click()
+
+        expect(
+            self.page.get_by_role("heading", name="Initial project questionnaire")
+        ).to_be_visible()
+        expect(self.page.locator(".page-heading .eyebrow")).to_contain_text("Sent")
+        project_form = ProjectClientForm.objects.get(project=self.project)
+        self.assertEqual(project_form.status, ProjectClientForm.Status.SENT)
+
+        client_context, client_page = self._new_browser_context("client")
+        self.assertNotEqual(client_context, self.context)
+        client_page.goto(
+            f"{self.live_server_url}/f/{project_form.public_token}/"
+        )
+        expect(
+            client_page.get_by_role("heading", name="Initial project questionnaire")
+        ).to_be_visible()
+        expect(client_page.get_by_text("Help us prepare for your project.")).to_be_visible()
+        client_page.get_by_label("Legal owner name").fill("Alex and Jamie Smith")
+        client_page.get_by_label("Modern").check()
+        client_page.get_by_label("Farmhouse").check()
+        client_page.get_by_label("Plans or site photos").set_input_files(
+            {
+                "name": "Plans Final.pdf",
+                "mimeType": "application/pdf",
+                "buffer": b"%PDF-1.4 browser test plan",
+            }
+        )
+        client_page.get_by_role("button", name="Submit completed form").click()
+        expect(client_page.get_by_role("heading", name="Thank you")).to_be_visible()
+
+        self.page.goto(
+            f"{self.live_server_url}/projects/{self.project.pk}/specifications/"
+        )
+        expect(self.page.get_by_role("heading", name="Project specifications")).to_be_visible()
+        expect(self.page.get_by_text("Alex and Jamie Smith")).to_be_visible()
+        expect(self.page.get_by_text("Modern, Farmhouse")).to_be_visible()
+        expect(self.page.get_by_role("link", name="Plans Final.pdf")).to_be_visible()
+
+        project_form.refresh_from_db()
+        self.assertEqual(project_form.status, ProjectClientForm.Status.SUBMITTED)
+        upload = ProjectFormUpload.objects.get(
+            question__project_form=project_form
+        )
+        self.assertEqual(upload.original_name, "Plans Final.pdf")

@@ -654,6 +654,10 @@ button[type="submit"]:not(.btn):active {
 .form-field--error input, .form-field--error select, .form-field--error textarea { border-color: var(--bs-danger); }
 .errorlist { margin: 0.35rem 0 0; padding: 0; color: var(--bs-danger); list-style: none; font-size: 0.85rem; }
 .checkbox-label { display: flex !important; align-items: center; gap: 0.5rem; }
+.checkbox-group { min-width: 0; margin: 0; padding: 0; border: 0; }
+.checkbox-group legend { margin-bottom: 0.3rem; font-size: inherit; font-weight: 600; }
+.checkbox-group > div { display: grid; gap: 0.35rem; }
+.checkbox-group label { display: flex; align-items: center; gap: 0.5rem; margin: 0; font-weight: 400; }
 .form-actions { grid-column: 1 / -1; display: flex; gap: 0.5rem; padding-top: 0.5rem; }
 address { font-style: normal; }
 

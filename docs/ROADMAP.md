@@ -478,10 +478,11 @@ disputes can no longer disappear silently; and the deployment data audit detects
 refund/cache drift and unresolved Stripe attention items.
 
 Browser/test-governance foundation completed on 2026-08-01: a pinned, opt-in
-Playwright suite now proves project change capture and the manual
-payment-to-refund lifecycle in rendered Chromium; backend and browser jobs run
-independently in GitHub Actions; failure traces are retained briefly; and
-`FEATURE_TEST_MATRIX.md` records existing evidence and remaining gaps.
+Playwright suite now proves project change capture, the manual payment-to-refund
+lifecycle, and the owner-to-public-client form submission/upload workflow in
+rendered Chromium; backend and browser jobs run independently in GitHub Actions;
+failure traces are retained briefly; and `FEATURE_TEST_MATRIX.md` records existing
+evidence and remaining gaps.
 
 - [x] Maintain a feature-to-test matrix covering normal behavior, validation,
   permissions, failure paths, and regression history for every key workflow.
@@ -491,11 +492,15 @@ independently in GitHub Actions; failure traces are retained briefly; and
 - [ ] Add Playwright browser journeys for inquiry-to-project conversion, project
   change capture, client-form submission and upload, proposal-to-deposit-to-final
   invoicing, time tracking, and payment completion.
+  Completed so far: project change capture, client-form submission/upload, and
+  the visible manual payment/refund lifecycle.
 - Keep provider behavior deterministic in ordinary CI. Use mocked Stripe,
   Resend, and OpenAI boundaries, with separately invoked live smoke tests that
   cannot send customer mail or create charges accidentally.
 - [ ] Split backend, AI, and browser checks into parallel GitHub Actions jobs while
   preserving the complete pull-request gate and a convenient fast local suite.
+  Browser checks now run independently; AI remains covered inside the backend
+  gate until a separate job can reduce runtime without duplicating blind spots.
 - Add automated accessibility checks to the critical browser journeys and retain
   manual responsive, print/PDF, backup, restore, and production-provider drills
   where automation cannot establish the real outcome.

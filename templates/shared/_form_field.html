@@ -1,5 +1,10 @@
 <div class="form-field{% if field.errors %} form-field--error{% endif %}">
-    {% if field.field.widget.input_type == 'checkbox' %}
+    {% if field.field.widget.input_type == 'checkbox' and field.field.widget.allow_multiple_selected %}
+    <fieldset class="checkbox-group">
+        <legend>{{ field.label }}{% if field.field.required %}<span class="required-marker" aria-hidden="true">*</span>{% endif %}</legend>
+        {{ field }}
+    </fieldset>
+    {% elif field.field.widget.input_type == 'checkbox' %}
     <label class="checkbox-label">{{ field }} {{ field.label }}{% if field.field.required %}<span class="required-marker" aria-hidden="true">*</span>{% endif %}</label>
     {% else %}
     <label for="{{ field.id_for_label }}">{{ field.label }}{% if field.field.required %}<span class="required-marker" aria-hidden="true">*</span>{% endif %}</label>

@@ -10,7 +10,7 @@ or provider check that automated tests intentionally cannot prove.
 | Intake and quick notes | `intake/tests/test_intake.py` | Client change routes to selected project activity | Mobile capture usability | Add inquiry-to-client/project conversion |
 | Clients and contacts | `clients/tests` | Indirect fixture/navigation coverage | Real-data import review | Add create/edit/primary-contact journey |
 | Projects and lifecycle | `projects/tests/test_projects.py` | Project activity is visibly updated | Real project closeout review | Add lead → approved → active → complete journey |
-| Client forms and uploads | `projects/tests/test_client_forms.py` and upload repair tests | Not yet | Resend link and object-storage download | Add public submission/upload journey |
+| Client forms and uploads | `projects/tests/test_client_forms.py` and upload repair tests | Owner creates/emails a form; anonymous client answers and uploads a PDF; owner sees project specifications | Resend link and object-storage download | Add save-progress, revoke-link, and storage-download browser cases |
 | Time tracking | `projects/tests/test_time.py` | Not yet | Mobile timer interruption/recovery | Add start, pause, resume, stop, and manual-entry journey |
 | Proposals and public acceptance | `documents/tests/test_proposals.py` | Not yet | PDF/print and real client device review | Add proposal send/public acceptance journey |
 | Retainer and final invoice | Proposal/payment workflow tests | Not yet | Real invoice/PDF review | Add proposal → retainer → final-credit journey |
