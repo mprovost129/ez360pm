@@ -36,6 +36,7 @@ network request.
 | Stripe disputes are retained as operator-review events without raw payloads | Durable review-state test | `documents/tests/test_payment_system.py`, `core/tests/test_data_audit.py` |
 | Refunds affect revenue on their effective date and reconcile dashboard/report/AI totals | Cash-basis reporting tests | `core/tests/test_reporting.py`, `assistant/tests/test_assistant.py` |
 | Refund ledger/cache drift blocks the data audit | Deployment integrity test | `core/tests/test_data_audit.py` |
+| Manual payment and dated refund visibly move an invoice from paid to partially paid | Rendered Chromium workflow | `browser_tests/critical_workflows.py` |
 | Company-scoped invoice, payment, revenue, and dashboard data | Tenant-isolation/reporting tests | `documents/tests/test_billing.py`, `core/tests/test_reporting.py`, `clients/tests/test_client_detail.py` |
 
 Run the focused payment boundary suite with:

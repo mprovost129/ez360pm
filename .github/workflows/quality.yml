@@ -78,3 +78,54 @@ jobs:
         env:
           DJANGO_SETTINGS_MODULE: config.Settings.prod
       - run: docker build --tag ez360pm:ci .
+
+  browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: ez360pm
+          POSTGRES_USER: ez360pm
+          POSTGRES_PASSWORD: ez360pm
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ez360pm"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      SECRET_KEY: ci-browser-only-secret-key-1234567890-abcdefghij
+      DB_HOST: 127.0.0.1
+      DB_PORT: 5432
+      DB_NAME: ez360pm
+      DB_USER: ez360pm
+      DB_PASSWORD: ez360pm
+      ALLOWED_HOSTS: localhost,127.0.0.1
+      CSRF_TRUSTED_ORIGINS: http://localhost
+      PUBLIC_BASE_URL: http://localhost
+      EMAIL_PROVIDER: django
+      EMAIL_BACKEND: django.core.mail.backends.locmem.EmailBackend
+      DEFAULT_FROM_EMAIL: EZ360PM Browser CI <noreply@example.test>
+      PLAYWRIGHT_HEADLESS: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: requirements-browser.txt
+      - run: pip install -r requirements-browser.txt
+      - run: python -m playwright install --with-deps chromium
+      - run: python manage.py migrate --noinput
+      - run: python manage.py test browser_tests.critical_workflows -v 1
+      - name: Upload browser traces after a failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-traces
+          path: test-results/
+          if-no-files-found: ignore
+          retention-days: 7

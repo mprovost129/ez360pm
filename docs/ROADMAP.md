@@ -457,7 +457,7 @@ in the business delivery ledger. Development and tests cannot send real email
 accidentally, and a documented production smoke test plus rollback drill pass on
 Render Basic.
 
-### Phase 9 - End-to-end verification and test governance (planned)
+### Phase 9 - End-to-end verification and test governance (in progress)
 
 **Goal:** make every prominent product behavior traceable to an expected result
 and add real-browser proof for the workflows that server-side tests cannot fully
@@ -477,18 +477,24 @@ idempotent processed, retry, ignored, and review states; out-of-order refunds an
 disputes can no longer disappear silently; and the deployment data audit detects
 refund/cache drift and unresolved Stripe attention items.
 
-- Maintain a feature-to-test matrix covering normal behavior, validation,
+Browser/test-governance foundation completed on 2026-08-01: a pinned, opt-in
+Playwright suite now proves project change capture and the manual
+payment-to-refund lifecycle in rendered Chromium; backend and browser jobs run
+independently in GitHub Actions; failure traces are retained briefly; and
+`FEATURE_TEST_MATRIX.md` records existing evidence and remaining gaps.
+
+- [x] Maintain a feature-to-test matrix covering normal behavior, validation,
   permissions, failure paths, and regression history for every key workflow.
 - Establish measured statement and branch-coverage baselines, then prevent
   unreviewed coverage regressions without treating 100 percent coverage as the
   product goal.
-- Add Playwright browser journeys for inquiry-to-project conversion, project
+- [ ] Add Playwright browser journeys for inquiry-to-project conversion, project
   change capture, client-form submission and upload, proposal-to-deposit-to-final
   invoicing, time tracking, and payment completion.
 - Keep provider behavior deterministic in ordinary CI. Use mocked Stripe,
   Resend, and OpenAI boundaries, with separately invoked live smoke tests that
   cannot send customer mail or create charges accidentally.
-- Split backend, AI, and browser checks into parallel GitHub Actions jobs while
+- [ ] Split backend, AI, and browser checks into parallel GitHub Actions jobs while
   preserving the complete pull-request gate and a convenient fast local suite.
 - Add automated accessibility checks to the critical browser journeys and retain
   manual responsive, print/PDF, backup, restore, and production-provider drills
